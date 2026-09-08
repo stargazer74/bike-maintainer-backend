@@ -30,7 +30,7 @@ src/
 - **Java Version**: 21
 - **Framework**: Spring Boot 4.1.1
 - **Build Tool**: Maven Wrapper (`./mvnw`)
-- **Key Libraries**: Lombok, Spring Boot Docker Compose, Spring Boot Test
+- **Key Libraries**: Lombok, Spring Boot Docker Compose, Spring Boot Test, Cucumber, MapStruct
 
 ## Build & Configuration
 - **Build Command**: `./mvnw clean compile` or `./mvnw clean package`
