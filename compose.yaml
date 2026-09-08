@@ -8,3 +8,13 @@ services:
       - 'MARIADB_ROOT_PASSWORD=root'
     ports:
       - '3306:3306'
+  phpmyadmin:
+    image: 'phpmyadmin:5'
+    environment:
+      - 'PMA_HOST=mariadb'
+      - 'PMA_USER=maintenance'
+      - 'PMA_PASSWORD=maintenance'
+    ports:
+      - '8081:80'
+    depends_on:
+      - mariadb
