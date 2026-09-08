@@ -44,8 +44,10 @@ src/
 - Skip tests: `./mvnw package -DskipTests`
 
 ### Adding New Tests
-- **Integration Tests**: Use `@SpringBootTest`. Conventionally placed in `src/test/java/de/chriswohlbrecht/maintenance/service/` or `src/test/java/de/chriswohlbrecht/maintenance/controller/` (e.g. `MaintenanceApplicationTests`).
-- **Unit Tests**: Standard JUnit 5 / AssertJ tests placed in `src/test/java/de/chriswohlbrecht/maintenance/`.
+- **Integration Tests**: Use `Cucumber` for integration tests.
+- **Unit Tests**: Do not use `@SpringBootTest` if not neccessary. Standard JUnit 5 / AssertJ tests.
+- **Architectural Tests**: The project uses **ArchUnit** to enforce layer dependencies. See `ArchitecturalLayerTest` for existing rules.
+  - *Note*: Ensure the package name in `@AnalyzeClasses` matches the project structure.
 
 ### Sample Test Process
 1. Create a test class in `src/test/java/...`.
