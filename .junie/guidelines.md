@@ -14,6 +14,7 @@ src/
 │   │   ├── service/               # Intermediate services
 │   │   ├── controller/            # REST Controllers
 │   │   ├── configuration/         # Spring Configuration
+│   │   ├── persistance/           # Persistance layer JPA models etc.
 │   │   └── api/ (generated)       # Generated OpenAPI clients and models
 │   └── resources/
 │       └── config/                # Application properties
@@ -44,7 +45,7 @@ src/
 - Skip tests: `./mvnw package -DskipTests`
 
 ### Adding New Tests
-- **Integration Tests**: Use `Cucumber` for integration tests.
+- **Integration Tests**: Use `Cucumber` for integration/bdd tests.
 - **Unit Tests**: Do not use `@SpringBootTest` if not neccessary. Standard JUnit 5 / AssertJ tests.
 - **Architectural Tests**: The project uses **ArchUnit** to enforce layer dependencies. See `ArchitecturalLayerTest` for existing rules.
   - *Note*: Ensure the package name in `@AnalyzeClasses` matches the project structure.
@@ -54,20 +55,6 @@ src/
 2. Annotate with `@SpringBootTest` for integration tests.
 3. Use `@Autowired` to inject dependencies.
 4. Run with `./mvnw test -Dtest=YourTestClass`.
-
-Example:
-```java
-@SpringBootTest
-class MaintenanceServiceTest {
-    @Autowired
-    private MaintenanceService maintenanceService;
-
-    @Test
-    void shouldFetchMaintenanceData() {
-        assertNotNull(maintenanceService.getMaintenanceData());
-    }
-}
-```
 
 ## Development Guidelines
 - **Code Style**:
@@ -85,3 +72,5 @@ class MaintenanceServiceTest {
 - Always reference source code locations
 - Ask when uncertain or unclear
 - Respect test structure: use @Order for ordered test execution
+- Never use `var` for variable declarations.
+- Use builder pattern for object creation in tests.
