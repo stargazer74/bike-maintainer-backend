@@ -1,1 +1,10 @@
-services: { }
+services:
+  mariadb:
+    image: 'mariadb:11'
+    environment:
+      - 'MARIADB_DATABASE=maintenance'
+      - 'MARIADB_USER=maintenance'
+      - 'MARIADB_PASSWORD=maintenance'
+      - 'MARIADB_ROOT_PASSWORD=root'
+    ports:
+      - '3306:3306'
