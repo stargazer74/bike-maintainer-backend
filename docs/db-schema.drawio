@@ -1,0 +1,120 @@
+<mxfile host="drawio-plugin" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" modified="2026-09-09T08:18:54.728Z" version="22.1.22" etag="RnJ4IInBeVkNQTj9hYf5" type="embed">
+  <diagram id="db-schema" name="DB Schema">
+    <mxGraphModel dx="1173" dy="585" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="vehicle" value="vehicle" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParentMax=0;resizeParent=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="40" y="40" width="240" height="264" as="geometry" />
+        </mxCell>
+        <mxCell id="vehicle-id" value="id : BIGINT (PK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=4;" parent="vehicle" vertex="1">
+          <mxGeometry y="30" width="240" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="vehicle-name" value="name : VARCHAR(255) NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+          <mxGeometry y="56" width="240" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="vehicle-type" value="type : VARCHAR(20) NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+          <mxGeometry y="82" width="240" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="vehicle-make" value="make : VARCHAR(100)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+          <mxGeometry y="108" width="240" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="vehicle-model" value="model : VARCHAR(100)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+          <mxGeometry y="134" width="240" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="vehicle-model_year" value="model_year : INT" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+          <mxGeometry y="160" width="240" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="vehicle-current_mileage" value="current_mileage : INT NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+          <mxGeometry y="186" width="240" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="vehicle-created_at" value="created_at : TIMESTAMP NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+          <mxGeometry y="212" width="240" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="vehicle-updated_at" value="updated_at : TIMESTAMP NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+          <mxGeometry y="238" width="240" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="task" value="maintenance_task" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParentMax=0;resizeParent=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+          <mxGeometry x="400" y="40" width="280" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="task-id" value="id : BIGINT (PK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=4;" parent="task" vertex="1">
+          <mxGeometry y="30" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="task-vehicle_id" value="vehicle_id : BIGINT NOT NULL (FK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=2;" parent="task" vertex="1">
+          <mxGeometry y="56" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="task-name" value="name : VARCHAR(255) NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="task" vertex="1">
+          <mxGeometry y="82" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="task-description" value="description : VARCHAR(1000)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="task" vertex="1">
+          <mxGeometry y="108" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="task-interval_km" value="interval_km : INT" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="task" vertex="1">
+          <mxGeometry y="134" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="task-interval_months" value="interval_months : INT" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="task" vertex="1">
+          <mxGeometry y="160" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="task-first_due_km" value="first_due_km : INT" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="task" vertex="1">
+          <mxGeometry y="186" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="task-first_due_months" value="first_due_months : INT" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="task" vertex="1">
+          <mxGeometry y="212" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="task-one_time" value="one_time : BOOLEAN NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="task" vertex="1">
+          <mxGeometry y="238" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="task-active" value="active : BOOLEAN NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="task" vertex="1">
+          <mxGeometry y="264" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="log" value="maintenance_log" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParentMax=0;resizeParent=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
+          <mxGeometry x="40" y="400" width="280" height="186" as="geometry" />
+        </mxCell>
+        <mxCell id="log-id" value="id : BIGINT (PK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=4;" parent="log" vertex="1">
+          <mxGeometry y="30" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="log-vehicle_id" value="vehicle_id : BIGINT NOT NULL (FK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=2;" parent="log" vertex="1">
+          <mxGeometry y="56" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="log-performed_at" value="performed_at : DATE NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="log" vertex="1">
+          <mxGeometry y="82" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="log-mileage_at_performed" value="mileage_at_performed : INT NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="log" vertex="1">
+          <mxGeometry y="108" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="log-notes" value="notes : VARCHAR(1000)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="log" vertex="1">
+          <mxGeometry y="134" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="log-created_at" value="created_at : TIMESTAMP NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="log" vertex="1">
+          <mxGeometry y="160" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="logtask" value="maintenance_log_task" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParentMax=0;resizeParent=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" parent="1" vertex="1">
+          <mxGeometry x="400" y="400" width="280" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="logtask-log_id" value="log_id : BIGINT (PK, FK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=6;" parent="logtask" vertex="1">
+          <mxGeometry y="30" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="logtask-task_id" value="task_id : BIGINT (PK, FK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=6;" parent="logtask" vertex="1">
+          <mxGeometry y="56" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-vehicle-task" style="edgeStyle=entityRelationEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;exitX=1;exitY=0.75;entryX=0;entryY=0;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" parent="1" source="vehicle-model" target="task-interval_months" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="390" y="210" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="390" y="210" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-vehicle-log" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" parent="1" source="vehicle-updated_at" target="log" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-log-logtask" style="edgeStyle=entityRelationEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" parent="1" source="log-id" target="logtask-log_id" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-task-logtask" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" parent="1" source="task-active" target="logtask" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
