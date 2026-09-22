@@ -3,7 +3,7 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.MaintenanceLogsApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
-import de.chriswohlbrecht.maintenance.component.MaintenanceLogComponent;
+import de.chriswohlbrecht.maintenance.component.IMaintenanceLogComponent;
 import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
 import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
@@ -40,7 +40,7 @@ class MaintenanceLogControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private MaintenanceLogComponent maintenanceLogComponent;
+    private IMaintenanceLogComponent maintenanceLogComponent;
 
     /**
      * Test case for listMaintenanceLogs.

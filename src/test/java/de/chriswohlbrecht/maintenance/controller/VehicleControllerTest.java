@@ -3,7 +3,7 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.VehiclesApi;
 import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
-import de.chriswohlbrecht.maintenance.component.VehicleComponent;
+import de.chriswohlbrecht.maintenance.component.IVehicleComponent;
 import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
 import org.junit.jupiter.api.Test;
@@ -39,7 +39,7 @@ class VehicleControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private VehicleComponent vehicleComponent;
+    private IVehicleComponent vehicleComponent;
 
     /**
      * Test case for listVehicles.

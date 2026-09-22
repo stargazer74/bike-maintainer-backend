@@ -3,7 +3,7 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.MaintenanceTasksApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
-import de.chriswohlbrecht.maintenance.component.MaintenanceTaskComponent;
+import de.chriswohlbrecht.maintenance.component.IMaintenanceTaskComponent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +15,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class MaintenanceTaskController implements MaintenanceTasksApi {
 
-    private final MaintenanceTaskComponent maintenanceTaskComponent;
+    private final IMaintenanceTaskComponent maintenanceTaskComponent;
 
     @Override
     public ResponseEntity<List<MaintenanceTaskResponse>> listMaintenanceTasks(Long vehicleId) {
