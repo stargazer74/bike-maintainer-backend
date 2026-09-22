@@ -9,7 +9,6 @@ import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -22,6 +21,8 @@ import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -57,7 +58,7 @@ class MaintenanceLogControllerTest {
                 .andExpect(jsonPath("$[0].vehicleId").value(1))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceLogComponent, Mockito.times(1)).listMaintenanceLogs(1L);
+        verify(maintenanceLogComponent, times(1)).listMaintenanceLogs(1L);
     }
 
     /**
@@ -72,7 +73,7 @@ class MaintenanceLogControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceLogComponent, Mockito.times(1)).listMaintenanceLogs(99L);
+        verify(maintenanceLogComponent, times(1)).listMaintenanceLogs(99L);
     }
 
     /**
@@ -93,7 +94,7 @@ class MaintenanceLogControllerTest {
                 .andExpect(jsonPath("$.performedTaskIds[0]").value(10))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceLogComponent, Mockito.times(1)).getMaintenanceLog(1L, 20L);
+        verify(maintenanceLogComponent, times(1)).getMaintenanceLog(1L, 20L);
     }
 
     /**
@@ -108,7 +109,7 @@ class MaintenanceLogControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceLogComponent, Mockito.times(1)).getMaintenanceLog(1L, 99L);
+        verify(maintenanceLogComponent, times(1)).getMaintenanceLog(1L, 99L);
     }
 
     /**
@@ -131,7 +132,7 @@ class MaintenanceLogControllerTest {
                 .andExpect(jsonPath("$.id").value(20))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceLogComponent, Mockito.times(1))
+        verify(maintenanceLogComponent, times(1))
                 .createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class));
     }
 
@@ -151,7 +152,7 @@ class MaintenanceLogControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceLogComponent, Mockito.times(1))
+        verify(maintenanceLogComponent, times(1))
                 .createMaintenanceLog(eq(99L), any(MaintenanceLogRequest.class));
     }
 
@@ -173,7 +174,46 @@ class MaintenanceLogControllerTest {
                 .andExpect(status().isBadRequest())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceLogComponent, Mockito.times(1))
+        verify(maintenanceLogComponent, times(1))
+                .createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class));
+    }
+
+    /**
+     * Test case for createMaintenanceLog.
+     * Verifies that a 400 BAD REQUEST is returned when mileage is negative (@Min validation).
+     */
+    @Test
+    void testCreateMaintenanceLogWithNegativeMileageShouldReturnBadRequest() throws Exception {
+        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+                .mileageAtPerformed(-100);
+
+        mockMvc.perform(post(MaintenanceLogsApi.PATH_CREATE_MAINTENANCE_LOG, 1L)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(MockMvcResultHandlers.print());
+
+        verify(maintenanceLogComponent, times(0))
+                .createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class));
+    }
+
+    /**
+     * Test case for createMaintenanceLog.
+     * Verifies that a 400 BAD REQUEST is returned when notes exceed max length (@Size validation).
+     */
+    @Test
+    void testCreateMaintenanceLogWithTooLongNotesShouldReturnBadRequest() throws Exception {
+        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+                .mileageAtPerformed(12000)
+                .notes("a".repeat(1001)); // maxLength is 1000
+
+        mockMvc.perform(post(MaintenanceLogsApi.PATH_CREATE_MAINTENANCE_LOG, 1L)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(MockMvcResultHandlers.print());
+
+        verify(maintenanceLogComponent, times(0))
                 .createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class));
     }
 
@@ -195,7 +235,7 @@ class MaintenanceLogControllerTest {
                 .andExpect(jsonPath("$.id").value(20))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceLogComponent, Mockito.times(1))
+        verify(maintenanceLogComponent, times(1))
                 .updateMaintenanceLog(eq(1L), eq(20L), any(MaintenanceLogRequest.class));
     }
 
@@ -215,7 +255,7 @@ class MaintenanceLogControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceLogComponent, Mockito.times(1))
+        verify(maintenanceLogComponent, times(1))
                 .updateMaintenanceLog(eq(1L), eq(99L), any(MaintenanceLogRequest.class));
     }
 
@@ -231,7 +271,7 @@ class MaintenanceLogControllerTest {
                 .andExpect(status().isNoContent())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceLogComponent, Mockito.times(1)).deleteMaintenanceLog(1L, 20L);
+        verify(maintenanceLogComponent, times(1)).deleteMaintenanceLog(1L, 20L);
     }
 
     /**
@@ -246,6 +286,6 @@ class MaintenanceLogControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceLogComponent, Mockito.times(1)).deleteMaintenanceLog(1L, 99L);
+        verify(maintenanceLogComponent, times(1)).deleteMaintenanceLog(1L, 99L);
     }
 }
