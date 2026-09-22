@@ -4,7 +4,6 @@ import de.chriswohlbrecht.maintenance.api.handler.VehiclesApi;
 import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
 import de.chriswohlbrecht.maintenance.component.VehicleComponent;
-import de.chriswohlbrecht.maintenance.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +26,7 @@ public class VehicleController implements VehiclesApi {
     public ResponseEntity<VehicleResponse> getVehicle(Long vehicleId) {
         return vehicleComponent.getVehicle(vehicleId)
                 .map(ResponseEntity::ok)
-                .orElseThrow(() -> notFound(vehicleId));
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Override
@@ -39,18 +38,14 @@ public class VehicleController implements VehiclesApi {
     public ResponseEntity<VehicleResponse> updateVehicle(Long vehicleId, VehicleRequest vehicleRequest) {
         return vehicleComponent.updateVehicle(vehicleId, vehicleRequest)
                 .map(ResponseEntity::ok)
-                .orElseThrow(() -> notFound(vehicleId));
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Override
     public ResponseEntity<Void> deleteVehicle(Long vehicleId) {
         if (!vehicleComponent.deleteVehicle(vehicleId)) {
-            throw notFound(vehicleId);
+            return ResponseEntity.notFound().build();
         }
         return ResponseEntity.noContent().build();
-    }
-
-    private ResourceNotFoundException notFound(Long vehicleId) {
-        return new ResourceNotFoundException("Vehicle " + vehicleId + " not found");
     }
 }

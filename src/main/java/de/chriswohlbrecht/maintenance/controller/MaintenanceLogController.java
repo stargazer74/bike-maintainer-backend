@@ -4,7 +4,7 @@ import de.chriswohlbrecht.maintenance.api.handler.MaintenanceLogsApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.MaintenanceLogComponent;
-import de.chriswohlbrecht.maintenance.exception.ResourceNotFoundException;
+import de.chriswohlbrecht.maintenance.component.model.MaintenanceLogOutcome;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,45 +22,43 @@ public class MaintenanceLogController implements MaintenanceLogsApi {
     public ResponseEntity<List<MaintenanceLogResponse>> listMaintenanceLogs(Long vehicleId) {
         return maintenanceLogComponent.listMaintenanceLogs(vehicleId)
                 .map(ResponseEntity::ok)
-                .orElseThrow(() -> vehicleNotFound(vehicleId));
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Override
     public ResponseEntity<MaintenanceLogResponse> getMaintenanceLog(Long vehicleId, Long logId) {
         return maintenanceLogComponent.getMaintenanceLog(vehicleId, logId)
                 .map(ResponseEntity::ok)
-                .orElseThrow(() -> logNotFound(vehicleId, logId));
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Override
     public ResponseEntity<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId,
                                                                          MaintenanceLogRequest maintenanceLogRequest) {
-        return maintenanceLogComponent.createMaintenanceLog(vehicleId, maintenanceLogRequest)
-                .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
-                .orElseThrow(() -> vehicleNotFound(vehicleId));
+        MaintenanceLogOutcome outcome = maintenanceLogComponent.createMaintenanceLog(vehicleId, maintenanceLogRequest);
+        return switch (outcome) {
+            case MaintenanceLogOutcome.Saved saved -> ResponseEntity.status(HttpStatus.CREATED).body(saved.response());
+            case MaintenanceLogOutcome.NotFound notFound -> ResponseEntity.notFound().build();
+            case MaintenanceLogOutcome.InvalidTaskReference invalid -> ResponseEntity.badRequest().build();
+        };
     }
 
     @Override
     public ResponseEntity<MaintenanceLogResponse> updateMaintenanceLog(Long vehicleId, Long logId,
                                                                          MaintenanceLogRequest maintenanceLogRequest) {
-        return maintenanceLogComponent.updateMaintenanceLog(vehicleId, logId, maintenanceLogRequest)
-                .map(ResponseEntity::ok)
-                .orElseThrow(() -> logNotFound(vehicleId, logId));
+        MaintenanceLogOutcome outcome = maintenanceLogComponent.updateMaintenanceLog(vehicleId, logId, maintenanceLogRequest);
+        return switch (outcome) {
+            case MaintenanceLogOutcome.Saved saved -> ResponseEntity.ok(saved.response());
+            case MaintenanceLogOutcome.NotFound notFound -> ResponseEntity.notFound().build();
+            case MaintenanceLogOutcome.InvalidTaskReference invalid -> ResponseEntity.badRequest().build();
+        };
     }
 
     @Override
     public ResponseEntity<Void> deleteMaintenanceLog(Long vehicleId, Long logId) {
         if (!maintenanceLogComponent.deleteMaintenanceLog(vehicleId, logId)) {
-            throw logNotFound(vehicleId, logId);
+            return ResponseEntity.notFound().build();
         }
         return ResponseEntity.noContent().build();
-    }
-
-    private ResourceNotFoundException vehicleNotFound(Long vehicleId) {
-        return new ResourceNotFoundException("Vehicle " + vehicleId + " not found");
-    }
-
-    private ResourceNotFoundException logNotFound(Long vehicleId, Long logId) {
-        return new ResourceNotFoundException("Maintenance log " + logId + " not found for vehicle " + vehicleId);
     }
 }

@@ -69,7 +69,6 @@ class MaintenanceTaskControllerTest {
 
         mockMvc.perform(get(MaintenanceTasksApi.PATH_LIST_MAINTENANCE_TASKS, 99L))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(maintenanceTaskComponent, Mockito.times(1)).listMaintenanceTasks(99L);
@@ -102,7 +101,6 @@ class MaintenanceTaskControllerTest {
 
         mockMvc.perform(get(MaintenanceTasksApi.PATH_GET_MAINTENANCE_TASK, 1L, 99L))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(maintenanceTaskComponent, Mockito.times(1)).getMaintenanceTask(1L, 99L);
@@ -144,7 +142,6 @@ class MaintenanceTaskControllerTest {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(maintenanceTaskComponent, Mockito.times(1))
@@ -187,7 +184,6 @@ class MaintenanceTaskControllerTest {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(maintenanceTaskComponent, Mockito.times(1))
@@ -219,7 +215,6 @@ class MaintenanceTaskControllerTest {
 
         mockMvc.perform(delete(MaintenanceTasksApi.PATH_DELETE_MAINTENANCE_TASK, 1L, 99L))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(maintenanceTaskComponent, Mockito.times(1)).deleteMaintenanceTask(1L, 99L);

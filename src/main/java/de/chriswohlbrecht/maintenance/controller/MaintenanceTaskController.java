@@ -4,7 +4,6 @@ import de.chriswohlbrecht.maintenance.api.handler.MaintenanceTasksApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
 import de.chriswohlbrecht.maintenance.component.MaintenanceTaskComponent;
-import de.chriswohlbrecht.maintenance.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,14 +21,14 @@ public class MaintenanceTaskController implements MaintenanceTasksApi {
     public ResponseEntity<List<MaintenanceTaskResponse>> listMaintenanceTasks(Long vehicleId) {
         return maintenanceTaskComponent.listMaintenanceTasks(vehicleId)
                 .map(ResponseEntity::ok)
-                .orElseThrow(() -> vehicleNotFound(vehicleId));
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Override
     public ResponseEntity<MaintenanceTaskResponse> getMaintenanceTask(Long vehicleId, Long taskId) {
         return maintenanceTaskComponent.getMaintenanceTask(vehicleId, taskId)
                 .map(ResponseEntity::ok)
-                .orElseThrow(() -> taskNotFound(vehicleId, taskId));
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Override
@@ -37,7 +36,7 @@ public class MaintenanceTaskController implements MaintenanceTasksApi {
                                                                            MaintenanceTaskRequest maintenanceTaskRequest) {
         return maintenanceTaskComponent.createMaintenanceTask(vehicleId, maintenanceTaskRequest)
                 .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
-                .orElseThrow(() -> vehicleNotFound(vehicleId));
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Override
@@ -45,22 +44,14 @@ public class MaintenanceTaskController implements MaintenanceTasksApi {
                                                                            MaintenanceTaskRequest maintenanceTaskRequest) {
         return maintenanceTaskComponent.updateMaintenanceTask(vehicleId, taskId, maintenanceTaskRequest)
                 .map(ResponseEntity::ok)
-                .orElseThrow(() -> taskNotFound(vehicleId, taskId));
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Override
     public ResponseEntity<Void> deleteMaintenanceTask(Long vehicleId, Long taskId) {
         if (!maintenanceTaskComponent.deleteMaintenanceTask(vehicleId, taskId)) {
-            throw taskNotFound(vehicleId, taskId);
+            return ResponseEntity.notFound().build();
         }
         return ResponseEntity.noContent().build();
-    }
-
-    private ResourceNotFoundException vehicleNotFound(Long vehicleId) {
-        return new ResourceNotFoundException("Vehicle " + vehicleId + " not found");
-    }
-
-    private ResourceNotFoundException taskNotFound(Long vehicleId, Long taskId) {
-        return new ResourceNotFoundException("Maintenance task " + taskId + " not found for vehicle " + vehicleId);
     }
 }

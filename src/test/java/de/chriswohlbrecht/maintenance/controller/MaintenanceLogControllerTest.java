@@ -4,7 +4,7 @@ import de.chriswohlbrecht.maintenance.api.handler.MaintenanceLogsApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.MaintenanceLogComponent;
-import de.chriswohlbrecht.maintenance.exception.InvalidRequestException;
+import de.chriswohlbrecht.maintenance.component.model.MaintenanceLogOutcome;
 import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
 import org.junit.jupiter.api.Test;
@@ -70,7 +70,6 @@ class MaintenanceLogControllerTest {
 
         mockMvc.perform(get(MaintenanceLogsApi.PATH_LIST_MAINTENANCE_LOGS, 99L))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(maintenanceLogComponent, Mockito.times(1)).listMaintenanceLogs(99L);
@@ -107,7 +106,6 @@ class MaintenanceLogControllerTest {
 
         mockMvc.perform(get(MaintenanceLogsApi.PATH_GET_MAINTENANCE_LOG, 1L, 99L))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(maintenanceLogComponent, Mockito.times(1)).getMaintenanceLog(1L, 99L);
@@ -124,7 +122,7 @@ class MaintenanceLogControllerTest {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
         MaintenanceLogResponse response = Instancio.create(MaintenanceLogResponse.class).id(20L).vehicleId(1L);
         when(maintenanceLogComponent.createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class)))
-                .thenReturn(Optional.of(response));
+                .thenReturn(new MaintenanceLogOutcome.Saved(response));
 
         mockMvc.perform(post(MaintenanceLogsApi.PATH_CREATE_MAINTENANCE_LOG, 1L)
                         .contentType("application/json")
@@ -145,13 +143,12 @@ class MaintenanceLogControllerTest {
     void testCreateMaintenanceLogWithUnknownVehicleIdShouldReturnNotFound() throws Exception {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
         when(maintenanceLogComponent.createMaintenanceLog(eq(99L), any(MaintenanceLogRequest.class)))
-                .thenReturn(Optional.empty());
+                .thenReturn(new MaintenanceLogOutcome.NotFound());
 
         mockMvc.perform(post(MaintenanceLogsApi.PATH_CREATE_MAINTENANCE_LOG, 99L)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(maintenanceLogComponent, Mockito.times(1))
@@ -168,13 +165,12 @@ class MaintenanceLogControllerTest {
                 .mileageAtPerformed(12000)
                 .performedTaskIds(List.of(999L));
         when(maintenanceLogComponent.createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class)))
-                .thenThrow(new InvalidRequestException("Maintenance task 999 not found for vehicle 1"));
+                .thenReturn(new MaintenanceLogOutcome.InvalidTaskReference());
 
         mockMvc.perform(post(MaintenanceLogsApi.PATH_CREATE_MAINTENANCE_LOG, 1L)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(maintenanceLogComponent, Mockito.times(1))
@@ -190,7 +186,7 @@ class MaintenanceLogControllerTest {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
         MaintenanceLogResponse response = Instancio.create(MaintenanceLogResponse.class).id(20L).vehicleId(1L);
         when(maintenanceLogComponent.updateMaintenanceLog(eq(1L), eq(20L), any(MaintenanceLogRequest.class)))
-                .thenReturn(Optional.of(response));
+                .thenReturn(new MaintenanceLogOutcome.Saved(response));
 
         mockMvc.perform(put(MaintenanceLogsApi.PATH_UPDATE_MAINTENANCE_LOG, 1L, 20L)
                         .contentType("application/json")
@@ -211,13 +207,12 @@ class MaintenanceLogControllerTest {
     void testUpdateMaintenanceLogWithUnknownIdShouldReturnNotFound() throws Exception {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
         when(maintenanceLogComponent.updateMaintenanceLog(eq(1L), eq(99L), any(MaintenanceLogRequest.class)))
-                .thenReturn(Optional.empty());
+                .thenReturn(new MaintenanceLogOutcome.NotFound());
 
         mockMvc.perform(put(MaintenanceLogsApi.PATH_UPDATE_MAINTENANCE_LOG, 1L, 99L)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(maintenanceLogComponent, Mockito.times(1))
@@ -249,7 +244,6 @@ class MaintenanceLogControllerTest {
 
         mockMvc.perform(delete(MaintenanceLogsApi.PATH_DELETE_MAINTENANCE_LOG, 1L, 99L))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(maintenanceLogComponent, Mockito.times(1)).deleteMaintenanceLog(1L, 99L);
