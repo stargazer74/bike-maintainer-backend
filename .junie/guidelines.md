@@ -11,7 +11,7 @@ src/
 ├── main/
 │   ├── java/de/publik/dataproxyservice/
 │   │   ├── component/             # Business logic
-│   │   ├── service/               # Intermediate services
+│   │   ├── service/               # Services only for communication with other services
 │   │   ├── controller/            # REST Controllers
 │   │   ├── configuration/         # Spring Configuration
 │   │   ├── persistance/           # Persistance layer JPA models etc.
@@ -74,3 +74,4 @@ src/
 - Respect test structure: use @Order for ordered test execution
 - Never use `var` for variable declarations.
 - Use builder pattern for object creation in tests.
+- Write version numbers in the pom.xml in the properties section.
