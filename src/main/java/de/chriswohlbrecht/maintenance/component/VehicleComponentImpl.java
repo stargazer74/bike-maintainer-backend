@@ -13,7 +13,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class VehicleComponentImpl implements VehicleComponent {
+public class VehicleComponentImpl implements IVehicleComponent {
 
     private final VehicleRepository vehicleRepository;
     private final VehicleMapper vehicleMapper;

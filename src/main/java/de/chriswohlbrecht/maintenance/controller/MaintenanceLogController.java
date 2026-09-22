@@ -3,7 +3,7 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.MaintenanceLogsApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
-import de.chriswohlbrecht.maintenance.component.MaintenanceLogComponent;
+import de.chriswohlbrecht.maintenance.component.IMaintenanceLogComponent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +15,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class MaintenanceLogController implements MaintenanceLogsApi {
 
-    private final MaintenanceLogComponent maintenanceLogComponent;
+    private final IMaintenanceLogComponent maintenanceLogComponent;
 
     @Override
     public ResponseEntity<List<MaintenanceLogResponse>> listMaintenanceLogs(Long vehicleId) {

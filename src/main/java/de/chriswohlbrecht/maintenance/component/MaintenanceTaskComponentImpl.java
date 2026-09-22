@@ -14,7 +14,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class MaintenanceTaskComponentImpl implements MaintenanceTaskComponent {
+public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
 
     private final VehicleRepository vehicleRepository;
     private final MaintenanceTaskRepository maintenanceTaskRepository;

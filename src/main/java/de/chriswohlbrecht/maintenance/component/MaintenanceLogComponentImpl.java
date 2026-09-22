@@ -23,7 +23,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class MaintenanceLogComponentImpl implements MaintenanceLogComponent {
+public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
 
     private final VehicleRepository vehicleRepository;
     private final MaintenanceLogRepository maintenanceLogRepository;

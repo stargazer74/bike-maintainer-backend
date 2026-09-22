@@ -3,7 +3,7 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.VehiclesApi;
 import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
-import de.chriswohlbrecht.maintenance.component.VehicleComponent;
+import de.chriswohlbrecht.maintenance.component.IVehicleComponent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +15,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class VehicleController implements VehiclesApi {
 
-    private final VehicleComponent vehicleComponent;
+    private final IVehicleComponent vehicleComponent;
 
     @Override
     public ResponseEntity<List<VehicleResponse>> listVehicles() {
