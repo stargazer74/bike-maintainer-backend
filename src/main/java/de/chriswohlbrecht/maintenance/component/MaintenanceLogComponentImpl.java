@@ -2,7 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
-import de.chriswohlbrecht.maintenance.component.model.MaintenanceLogOutcome;
+import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceLogMapper;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLog;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLogTask;
@@ -48,54 +48,46 @@ public class MaintenanceLogComponentImpl implements MaintenanceLogComponent {
 
     @Override
     @Transactional
-    public MaintenanceLogOutcome createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request) {
-        Optional<Vehicle> vehicle = vehicleRepository.findById(vehicleId);
-        if (vehicle.isEmpty()) {
-            return new MaintenanceLogOutcome.NotFound();
-        }
-
-        List<MaintenanceTask> performedTasks = new ArrayList<>();
-        for (Long taskId : performedTaskIds(request)) {
-            Optional<MaintenanceTask> task = maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId);
-            if (task.isEmpty()) {
-                return new MaintenanceLogOutcome.InvalidTaskReference();
+    public Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request) {
+        return vehicleRepository.findById(vehicleId).map(vehicle -> {
+            List<MaintenanceTask> performedTasks = new ArrayList<>();
+            for (Long taskId : performedTaskIds(request)) {
+                Optional<MaintenanceTask> task = maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId);
+                if (task.isEmpty()) {
+                    throw new InvalidTaskReferenceException("Task with id " + taskId + " not found for vehicle " + vehicleId);
+                }
+                performedTasks.add(task.get());
             }
-            performedTasks.add(task.get());
-        }
 
-        MaintenanceLog log = maintenanceLogMapper.toEntity(request);
-        log.setVehicle(vehicle.get());
-        MaintenanceLog savedLog = maintenanceLogRepository.save(log);
-        linkTasks(savedLog, performedTasks);
-        return new MaintenanceLogOutcome.Saved(toResponse(savedLog));
+            MaintenanceLog log = maintenanceLogMapper.toEntity(request);
+            log.setVehicle(vehicle);
+            MaintenanceLog savedLog = maintenanceLogRepository.save(log);
+            linkTasks(savedLog, performedTasks);
+            return toResponse(savedLog);
+        });
     }
 
     @Override
     @Transactional
-    public MaintenanceLogOutcome updateMaintenanceLog(Long vehicleId, Long logId, MaintenanceLogRequest request) {
-        if (vehicleRepository.findById(vehicleId).isEmpty()) {
-            return new MaintenanceLogOutcome.NotFound();
-        }
-        Optional<MaintenanceLog> existingLog = maintenanceLogRepository.findByIdAndVehicle_Id(logId, vehicleId);
-        if (existingLog.isEmpty()) {
-            return new MaintenanceLogOutcome.NotFound();
-        }
+    public Optional<MaintenanceLogResponse> updateMaintenanceLog(Long vehicleId, Long logId, MaintenanceLogRequest request) {
+        return vehicleRepository.findById(vehicleId)
+                .flatMap(vehicle -> maintenanceLogRepository.findByIdAndVehicle_Id(logId, vehicleId))
+                .map(log -> {
+                    List<MaintenanceTask> performedTasks = new ArrayList<>();
+                    for (Long taskId : performedTaskIds(request)) {
+                        Optional<MaintenanceTask> task = maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId);
+                        if (task.isEmpty()) {
+                            throw new InvalidTaskReferenceException("Task with id " + taskId + " not found for vehicle " + vehicleId);
+                        }
+                        performedTasks.add(task.get());
+                    }
 
-        List<MaintenanceTask> performedTasks = new ArrayList<>();
-        for (Long taskId : performedTaskIds(request)) {
-            Optional<MaintenanceTask> task = maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId);
-            if (task.isEmpty()) {
-                return new MaintenanceLogOutcome.InvalidTaskReference();
-            }
-            performedTasks.add(task.get());
-        }
-
-        MaintenanceLog log = existingLog.get();
-        maintenanceLogMapper.updateEntityFromRequest(request, log);
-        MaintenanceLog savedLog = maintenanceLogRepository.save(log);
-        maintenanceLogTaskRepository.deleteAllByLog_Id(savedLog.getId());
-        linkTasks(savedLog, performedTasks);
-        return new MaintenanceLogOutcome.Saved(toResponse(savedLog));
+                    maintenanceLogMapper.updateEntityFromRequest(request, log);
+                    MaintenanceLog savedLog = maintenanceLogRepository.save(log);
+                    maintenanceLogTaskRepository.deleteAllByLog_Id(savedLog.getId());
+                    linkTasks(savedLog, performedTasks);
+                    return toResponse(savedLog);
+                });
     }
 
     @Override

@@ -4,7 +4,6 @@ import de.chriswohlbrecht.maintenance.api.handler.MaintenanceLogsApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.MaintenanceLogComponent;
-import de.chriswohlbrecht.maintenance.component.model.MaintenanceLogOutcome;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,23 +34,17 @@ public class MaintenanceLogController implements MaintenanceLogsApi {
     @Override
     public ResponseEntity<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId,
                                                                          MaintenanceLogRequest maintenanceLogRequest) {
-        MaintenanceLogOutcome outcome = maintenanceLogComponent.createMaintenanceLog(vehicleId, maintenanceLogRequest);
-        return switch (outcome) {
-            case MaintenanceLogOutcome.Saved saved -> ResponseEntity.status(HttpStatus.CREATED).body(saved.response());
-            case MaintenanceLogOutcome.NotFound notFound -> ResponseEntity.notFound().build();
-            case MaintenanceLogOutcome.InvalidTaskReference invalid -> ResponseEntity.badRequest().build();
-        };
+        return maintenanceLogComponent.createMaintenanceLog(vehicleId, maintenanceLogRequest)
+                .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Override
     public ResponseEntity<MaintenanceLogResponse> updateMaintenanceLog(Long vehicleId, Long logId,
                                                                          MaintenanceLogRequest maintenanceLogRequest) {
-        MaintenanceLogOutcome outcome = maintenanceLogComponent.updateMaintenanceLog(vehicleId, logId, maintenanceLogRequest);
-        return switch (outcome) {
-            case MaintenanceLogOutcome.Saved saved -> ResponseEntity.ok(saved.response());
-            case MaintenanceLogOutcome.NotFound notFound -> ResponseEntity.notFound().build();
-            case MaintenanceLogOutcome.InvalidTaskReference invalid -> ResponseEntity.badRequest().build();
-        };
+        return maintenanceLogComponent.updateMaintenanceLog(vehicleId, logId, maintenanceLogRequest)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Override

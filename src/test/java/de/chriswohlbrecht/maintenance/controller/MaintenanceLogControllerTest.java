@@ -4,7 +4,7 @@ import de.chriswohlbrecht.maintenance.api.handler.MaintenanceLogsApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.MaintenanceLogComponent;
-import de.chriswohlbrecht.maintenance.component.model.MaintenanceLogOutcome;
+import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
 import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
 import org.junit.jupiter.api.Test;
@@ -122,7 +122,7 @@ class MaintenanceLogControllerTest {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
         MaintenanceLogResponse response = Instancio.create(MaintenanceLogResponse.class).id(20L).vehicleId(1L);
         when(maintenanceLogComponent.createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class)))
-                .thenReturn(new MaintenanceLogOutcome.Saved(response));
+                .thenReturn(Optional.of(response));
 
         mockMvc.perform(post(MaintenanceLogsApi.PATH_CREATE_MAINTENANCE_LOG, 1L)
                         .contentType("application/json")
@@ -143,7 +143,7 @@ class MaintenanceLogControllerTest {
     void testCreateMaintenanceLogWithUnknownVehicleIdShouldReturnNotFound() throws Exception {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
         when(maintenanceLogComponent.createMaintenanceLog(eq(99L), any(MaintenanceLogRequest.class)))
-                .thenReturn(new MaintenanceLogOutcome.NotFound());
+                .thenReturn(Optional.empty());
 
         mockMvc.perform(post(MaintenanceLogsApi.PATH_CREATE_MAINTENANCE_LOG, 99L)
                         .contentType("application/json")
@@ -165,7 +165,7 @@ class MaintenanceLogControllerTest {
                 .mileageAtPerformed(12000)
                 .performedTaskIds(List.of(999L));
         when(maintenanceLogComponent.createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class)))
-                .thenReturn(new MaintenanceLogOutcome.InvalidTaskReference());
+                .thenThrow(new InvalidTaskReferenceException("Task with id 999 not found for vehicle 1"));
 
         mockMvc.perform(post(MaintenanceLogsApi.PATH_CREATE_MAINTENANCE_LOG, 1L)
                         .contentType("application/json")
@@ -186,7 +186,7 @@ class MaintenanceLogControllerTest {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
         MaintenanceLogResponse response = Instancio.create(MaintenanceLogResponse.class).id(20L).vehicleId(1L);
         when(maintenanceLogComponent.updateMaintenanceLog(eq(1L), eq(20L), any(MaintenanceLogRequest.class)))
-                .thenReturn(new MaintenanceLogOutcome.Saved(response));
+                .thenReturn(Optional.of(response));
 
         mockMvc.perform(put(MaintenanceLogsApi.PATH_UPDATE_MAINTENANCE_LOG, 1L, 20L)
                         .contentType("application/json")
@@ -207,7 +207,7 @@ class MaintenanceLogControllerTest {
     void testUpdateMaintenanceLogWithUnknownIdShouldReturnNotFound() throws Exception {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
         when(maintenanceLogComponent.updateMaintenanceLog(eq(1L), eq(99L), any(MaintenanceLogRequest.class)))
-                .thenReturn(new MaintenanceLogOutcome.NotFound());
+                .thenReturn(Optional.empty());
 
         mockMvc.perform(put(MaintenanceLogsApi.PATH_UPDATE_MAINTENANCE_LOG, 1L, 99L)
                         .contentType("application/json")
