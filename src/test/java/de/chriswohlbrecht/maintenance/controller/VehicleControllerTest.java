@@ -8,7 +8,6 @@ import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -21,6 +20,8 @@ import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -56,7 +57,7 @@ class VehicleControllerTest {
                 .andExpect(jsonPath("$[0].name").value("Bike"))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(vehicleComponent, Mockito.times(1)).listVehicles();
+        verify(vehicleComponent, times(1)).listVehicles();
     }
 
     /**
@@ -74,7 +75,7 @@ class VehicleControllerTest {
                 .andExpect(jsonPath("$.name").value("Bike"))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(vehicleComponent, Mockito.times(1)).getVehicle(1L);
+        verify(vehicleComponent, times(1)).getVehicle(1L);
     }
 
     /**
@@ -89,7 +90,7 @@ class VehicleControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(vehicleComponent, Mockito.times(1)).getVehicle(99L);
+        verify(vehicleComponent, times(1)).getVehicle(99L);
     }
 
     /**
@@ -111,7 +112,7 @@ class VehicleControllerTest {
                 .andExpect(jsonPath("$.id").value(1))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(vehicleComponent, Mockito.times(1)).createVehicle(any(VehicleRequest.class));
+        verify(vehicleComponent, times(1)).createVehicle(any(VehicleRequest.class));
     }
 
     /**
@@ -127,7 +128,44 @@ class VehicleControllerTest {
                         .content(objectMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest());
 
-        Mockito.verify(vehicleComponent, Mockito.times(0)).createVehicle(any(VehicleRequest.class));
+        verify(vehicleComponent, times(0)).createVehicle(any(VehicleRequest.class));
+    }
+
+    /**
+     * Test case for createVehicle.
+     * Verifies that a 400 BAD REQUEST is returned when name exceeds max length (@Size validation).
+     */
+    @Test
+    void testCreateVehicleWithTooLongNameShouldReturnBadRequest() throws Exception {
+        VehicleRequest invalidRequest = Instancio.create(VehicleRequest.class)
+                .currentMileage(500)
+                .name("a".repeat(256)); // maxLength is 255
+
+        mockMvc.perform(post(VehiclesApi.PATH_CREATE_VEHICLE)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                .andExpect(status().isBadRequest())
+                .andDo(MockMvcResultHandlers.print());
+
+        verify(vehicleComponent, times(0)).createVehicle(any(VehicleRequest.class));
+    }
+
+    /**
+     * Test case for createVehicle.
+     * Verifies that a 400 BAD REQUEST is returned when currentMileage is negative (@Min validation).
+     */
+    @Test
+    void testCreateVehicleWithNegativeMileageShouldReturnBadRequest() throws Exception {
+        VehicleRequest invalidRequest = Instancio.create(VehicleRequest.class)
+                .currentMileage(-100);
+
+        mockMvc.perform(post(VehiclesApi.PATH_CREATE_VEHICLE)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                .andExpect(status().isBadRequest())
+                .andDo(MockMvcResultHandlers.print());
+
+        verify(vehicleComponent, times(0)).createVehicle(any(VehicleRequest.class));
     }
 
     /**
@@ -147,7 +185,7 @@ class VehicleControllerTest {
                 .andExpect(jsonPath("$.id").value(1))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(vehicleComponent, Mockito.times(1)).updateVehicle(eq(1L), any(VehicleRequest.class));
+        verify(vehicleComponent, times(1)).updateVehicle(eq(1L), any(VehicleRequest.class));
     }
 
     /**
@@ -165,7 +203,7 @@ class VehicleControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(vehicleComponent, Mockito.times(1)).updateVehicle(eq(99L), any(VehicleRequest.class));
+        verify(vehicleComponent, times(1)).updateVehicle(eq(99L), any(VehicleRequest.class));
     }
 
     /**
@@ -180,7 +218,7 @@ class VehicleControllerTest {
                 .andExpect(status().isNoContent())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(vehicleComponent, Mockito.times(1)).deleteVehicle(1L);
+        verify(vehicleComponent, times(1)).deleteVehicle(1L);
     }
 
     /**
@@ -195,6 +233,6 @@ class VehicleControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(vehicleComponent, Mockito.times(1)).deleteVehicle(99L);
+        verify(vehicleComponent, times(1)).deleteVehicle(99L);
     }
 }

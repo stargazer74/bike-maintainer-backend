@@ -8,7 +8,6 @@ import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -21,6 +20,8 @@ import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -56,7 +57,7 @@ class MaintenanceTaskControllerTest {
                 .andExpect(jsonPath("$[0].vehicleId").value(1))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceTaskComponent, Mockito.times(1)).listMaintenanceTasks(1L);
+        verify(maintenanceTaskComponent, times(1)).listMaintenanceTasks(1L);
     }
 
     /**
@@ -71,7 +72,7 @@ class MaintenanceTaskControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceTaskComponent, Mockito.times(1)).listMaintenanceTasks(99L);
+        verify(maintenanceTaskComponent, times(1)).listMaintenanceTasks(99L);
     }
 
     /**
@@ -88,7 +89,7 @@ class MaintenanceTaskControllerTest {
                 .andExpect(jsonPath("$.id").value(10))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceTaskComponent, Mockito.times(1)).getMaintenanceTask(1L, 10L);
+        verify(maintenanceTaskComponent, times(1)).getMaintenanceTask(1L, 10L);
     }
 
     /**
@@ -103,7 +104,7 @@ class MaintenanceTaskControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceTaskComponent, Mockito.times(1)).getMaintenanceTask(1L, 99L);
+        verify(maintenanceTaskComponent, times(1)).getMaintenanceTask(1L, 99L);
     }
 
     /**
@@ -124,7 +125,7 @@ class MaintenanceTaskControllerTest {
                 .andExpect(jsonPath("$.id").value(10))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceTaskComponent, Mockito.times(1))
+        verify(maintenanceTaskComponent, times(1))
                 .createMaintenanceTask(eq(1L), any(MaintenanceTaskRequest.class));
     }
 
@@ -144,8 +145,64 @@ class MaintenanceTaskControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceTaskComponent, Mockito.times(1))
+        verify(maintenanceTaskComponent, times(1))
                 .createMaintenanceTask(eq(99L), any(MaintenanceTaskRequest.class));
+    }
+
+    /**
+     * Test case for createMaintenanceTask.
+     * Verifies that a 400 BAD REQUEST is returned when required field name is missing (@NotNull validation).
+     */
+    @Test
+    void testCreateMaintenanceTaskWithMissingNameShouldReturnBadRequest() throws Exception {
+        MaintenanceTaskRequest request = new MaintenanceTaskRequest();
+
+        mockMvc.perform(post(MaintenanceTasksApi.PATH_CREATE_MAINTENANCE_TASK, 1L)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(MockMvcResultHandlers.print());
+
+        verify(maintenanceTaskComponent, times(0))
+                .createMaintenanceTask(eq(1L), any(MaintenanceTaskRequest.class));
+    }
+
+    /**
+     * Test case for createMaintenanceTask.
+     * Verifies that a 400 BAD REQUEST is returned when name exceeds max length (@Size validation).
+     */
+    @Test
+    void testCreateMaintenanceTaskWithTooLongNameShouldReturnBadRequest() throws Exception {
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class)
+                .name("a".repeat(256)); // maxLength is 255
+
+        mockMvc.perform(post(MaintenanceTasksApi.PATH_CREATE_MAINTENANCE_TASK, 1L)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(MockMvcResultHandlers.print());
+
+        verify(maintenanceTaskComponent, times(0))
+                .createMaintenanceTask(eq(1L), any(MaintenanceTaskRequest.class));
+    }
+
+    /**
+     * Test case for createMaintenanceTask.
+     * Verifies that a 400 BAD REQUEST is returned when description exceeds max length (@Size validation).
+     */
+    @Test
+    void testCreateMaintenanceTaskWithTooLongDescriptionShouldReturnBadRequest() throws Exception {
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class)
+                .description("a".repeat(1001)); // maxLength is 1000
+
+        mockMvc.perform(post(MaintenanceTasksApi.PATH_CREATE_MAINTENANCE_TASK, 1L)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(MockMvcResultHandlers.print());
+
+        verify(maintenanceTaskComponent, times(0))
+                .createMaintenanceTask(eq(1L), any(MaintenanceTaskRequest.class));
     }
 
     /**
@@ -166,7 +223,7 @@ class MaintenanceTaskControllerTest {
                 .andExpect(jsonPath("$.id").value(10))
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceTaskComponent, Mockito.times(1))
+        verify(maintenanceTaskComponent, times(1))
                 .updateMaintenanceTask(eq(1L), eq(10L), any(MaintenanceTaskRequest.class));
     }
 
@@ -186,7 +243,7 @@ class MaintenanceTaskControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceTaskComponent, Mockito.times(1))
+        verify(maintenanceTaskComponent, times(1))
                 .updateMaintenanceTask(eq(1L), eq(99L), any(MaintenanceTaskRequest.class));
     }
 
@@ -202,7 +259,7 @@ class MaintenanceTaskControllerTest {
                 .andExpect(status().isNoContent())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceTaskComponent, Mockito.times(1)).deleteMaintenanceTask(1L, 10L);
+        verify(maintenanceTaskComponent, times(1)).deleteMaintenanceTask(1L, 10L);
     }
 
     /**
@@ -217,6 +274,6 @@ class MaintenanceTaskControllerTest {
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        Mockito.verify(maintenanceTaskComponent, Mockito.times(1)).deleteMaintenanceTask(1L, 99L);
+        verify(maintenanceTaskComponent, times(1)).deleteMaintenanceTask(1L, 99L);
     }
 }
