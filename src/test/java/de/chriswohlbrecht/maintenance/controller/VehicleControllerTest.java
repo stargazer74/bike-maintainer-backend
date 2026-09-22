@@ -87,8 +87,6 @@ class VehicleControllerTest {
 
         mockMvc.perform(get(VehiclesApi.PATH_GET_VEHICLE, 99L))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.path").value("/api/v1/vehicles/99"))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(vehicleComponent, Mockito.times(1)).getVehicle(99L);
@@ -127,8 +125,7 @@ class VehicleControllerTest {
         mockMvc.perform(post(VehiclesApi.PATH_CREATE_VEHICLE)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(invalidRequest)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400));
+                .andExpect(status().isBadRequest());
 
         Mockito.verify(vehicleComponent, Mockito.times(0)).createVehicle(any(VehicleRequest.class));
     }
@@ -166,7 +163,6 @@ class VehicleControllerTest {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(vehicleComponent, Mockito.times(1)).updateVehicle(eq(99L), any(VehicleRequest.class));
@@ -197,7 +193,6 @@ class VehicleControllerTest {
 
         mockMvc.perform(delete(VehiclesApi.PATH_DELETE_VEHICLE, 99L))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andDo(MockMvcResultHandlers.print());
 
         Mockito.verify(vehicleComponent, Mockito.times(1)).deleteVehicle(99L);

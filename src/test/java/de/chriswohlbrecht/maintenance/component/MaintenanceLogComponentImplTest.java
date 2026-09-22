@@ -2,7 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
-import de.chriswohlbrecht.maintenance.exception.InvalidRequestException;
+import de.chriswohlbrecht.maintenance.component.model.MaintenanceLogOutcome;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceLogMapperImpl;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLog;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLogTask;
@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
@@ -128,11 +127,12 @@ class MaintenanceLogComponentImplTest {
         });
         when(maintenanceLogTaskRepository.findAllByLog_Id(20L)).thenReturn(List.of());
 
-        Optional<MaintenanceLogResponse> result = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
+        MaintenanceLogOutcome outcome = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
 
-        assertThat(result).isPresent();
-        assertThat(result.get().getId()).isEqualTo(20L);
-        assertThat(result.get().getVehicleId()).isEqualTo(vehicle.getId());
+        assertThat(outcome).isInstanceOf(MaintenanceLogOutcome.Saved.class);
+        MaintenanceLogResponse response = ((MaintenanceLogOutcome.Saved) outcome).response();
+        assertThat(response.getId()).isEqualTo(20L);
+        assertThat(response.getVehicleId()).isEqualTo(vehicle.getId());
         verify(maintenanceLogTaskRepository, never()).save(any());
         verify(maintenanceLogTaskRepository, never()).deleteAllByLog_Id(any());
     }
@@ -153,15 +153,15 @@ class MaintenanceLogComponentImplTest {
         });
         when(maintenanceLogTaskRepository.findAllByLog_Id(20L)).thenReturn(List.of());
 
-        Optional<MaintenanceLogResponse> result = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
+        MaintenanceLogOutcome outcome = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
 
-        assertThat(result).isPresent();
+        assertThat(outcome).isInstanceOf(MaintenanceLogOutcome.Saved.class);
         verify(maintenanceLogTaskRepository).save(argThat(link ->
                 link.getTask().equals(task) && link.getLog().getId().equals(20L)));
     }
 
     @Test
-    void createMaintenanceLog_withUnknownTaskId_throwsInvalidRequestExceptionAndDoesNotSave() {
+    void createMaintenanceLog_withUnknownTaskId_returnsInvalidTaskReferenceAndDoesNotSave() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
@@ -169,20 +169,20 @@ class MaintenanceLogComponentImplTest {
         when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(999L, vehicle.getId())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request))
-                .isInstanceOf(InvalidRequestException.class);
+        MaintenanceLogOutcome outcome = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
 
+        assertThat(outcome).isInstanceOf(MaintenanceLogOutcome.InvalidTaskReference.class);
         verify(maintenanceLogRepository, never()).save(any());
     }
 
     @Test
-    void createMaintenanceLog_vehicleNotFound_returnsEmptyOptionalAndDoesNotSave() {
+    void createMaintenanceLog_vehicleNotFound_returnsNotFoundAndDoesNotSave() {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
         when(vehicleRepository.findById(99L)).thenReturn(Optional.empty());
 
-        Optional<MaintenanceLogResponse> result = maintenanceLogComponent.createMaintenanceLog(99L, request);
+        MaintenanceLogOutcome outcome = maintenanceLogComponent.createMaintenanceLog(99L, request);
 
-        assertThat(result).isEmpty();
+        assertThat(outcome).isInstanceOf(MaintenanceLogOutcome.NotFound.class);
         verify(maintenanceLogRepository, never()).save(any());
     }
 
@@ -199,24 +199,44 @@ class MaintenanceLogComponentImplTest {
         when(maintenanceLogRepository.save(existing)).thenReturn(existing);
         when(maintenanceLogTaskRepository.findAllByLog_Id(existing.getId())).thenReturn(List.of());
 
-        Optional<MaintenanceLogResponse> result =
+        MaintenanceLogOutcome outcome =
                 maintenanceLogComponent.updateMaintenanceLog(vehicle.getId(), existing.getId(), request);
 
-        assertThat(result).isPresent();
-        assertThat(result.get().getMileageAtPerformed()).isEqualTo(12000);
+        assertThat(outcome).isInstanceOf(MaintenanceLogOutcome.Saved.class);
+        MaintenanceLogResponse response = ((MaintenanceLogOutcome.Saved) outcome).response();
+        assertThat(response.getMileageAtPerformed()).isEqualTo(12000);
         verify(maintenanceLogTaskRepository).deleteAllByLog_Id(existing.getId());
     }
 
     @Test
-    void updateMaintenanceLog_notFound_returnsEmptyOptionalAndDoesNotSave() {
+    void updateMaintenanceLog_notFound_returnsNotFoundAndDoesNotSave() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
         when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(99L, vehicle.getId())).thenReturn(Optional.empty());
 
-        Optional<MaintenanceLogResponse> result = maintenanceLogComponent.updateMaintenanceLog(vehicle.getId(), 99L, request);
+        MaintenanceLogOutcome outcome = maintenanceLogComponent.updateMaintenanceLog(vehicle.getId(), 99L, request);
 
-        assertThat(result).isEmpty();
+        assertThat(outcome).isInstanceOf(MaintenanceLogOutcome.NotFound.class);
+        verify(maintenanceLogRepository, never()).save(any());
+    }
+
+    @Test
+    void updateMaintenanceLog_withUnknownTaskId_returnsInvalidTaskReferenceAndDoesNotSave() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLog existing = Instancio.create(MaintenanceLog.class);
+        existing.setVehicle(vehicle);
+        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+                .mileageAtPerformed(12000)
+                .performedTaskIds(List.of(999L));
+        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findByIdAndVehicle_Id(existing.getId(), vehicle.getId())).thenReturn(Optional.of(existing));
+        when(maintenanceTaskRepository.findByIdAndVehicle_Id(999L, vehicle.getId())).thenReturn(Optional.empty());
+
+        MaintenanceLogOutcome outcome =
+                maintenanceLogComponent.updateMaintenanceLog(vehicle.getId(), existing.getId(), request);
+
+        assertThat(outcome).isInstanceOf(MaintenanceLogOutcome.InvalidTaskReference.class);
         verify(maintenanceLogRepository, never()).save(any());
     }
 
