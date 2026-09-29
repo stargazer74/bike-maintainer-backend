@@ -5,7 +5,12 @@ import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.IMaintenanceLogComponent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -53,5 +58,18 @@ public class MaintenanceLogController implements MaintenanceLogsApi {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<Resource> downloadMaintenanceReport(Long vehicleId) {
+        return maintenanceLogComponent.generateMaintenanceReport(vehicleId)
+                .map(report -> ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_PDF)
+                        .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                                .filename("maintenance-report-vehicle-" + vehicleId + ".pdf")
+                                .build()
+                                .toString())
+                        .body((Resource) new ByteArrayResource(report)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

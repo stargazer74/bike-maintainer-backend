@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
+import de.chriswohlbrecht.maintenance.exception.InvalidMaintenanceIntervalException;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceTaskMapper;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceTask;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
@@ -38,6 +39,7 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
     @Override
     public Optional<MaintenanceTaskResponse> createMaintenanceTask(Long vehicleId, MaintenanceTaskRequest request) {
         return vehicleRepository.findById(vehicleId).map(vehicle -> {
+            validateInterval(request);
             MaintenanceTask task = maintenanceTaskMapper.toEntity(request);
             task.setVehicle(vehicle);
             return maintenanceTaskMapper.toResponse(maintenanceTaskRepository.save(task));
@@ -49,9 +51,18 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
         return vehicleRepository.findById(vehicleId)
                 .flatMap(vehicle -> maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId))
                 .map(task -> {
+                    validateInterval(request);
                     maintenanceTaskMapper.updateEntityFromRequest(request, task);
                     return maintenanceTaskMapper.toResponse(maintenanceTaskRepository.save(task));
                 });
+    }
+
+    private static void validateInterval(MaintenanceTaskRequest request) {
+        boolean oneTime = Boolean.TRUE.equals(request.getOneTime());
+        if (!oneTime && request.getIntervalKm() == null && request.getIntervalMonths() == null) {
+            throw new InvalidMaintenanceIntervalException(
+                    "At least one of intervalKm or intervalMonths must be provided unless oneTime is true");
+        }
     }
 
     @Override

@@ -18,6 +18,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -28,6 +29,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -164,7 +167,7 @@ class MaintenanceLogControllerTest {
     void testCreateMaintenanceLogWithInvalidTaskIdShouldReturnBadRequest() throws Exception {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
-                .performedTaskIds(List.of(999L));
+                .performedTaskIds(Set.of(999L));
         when(maintenanceLogComponent.createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class)))
                 .thenThrow(new InvalidTaskReferenceException("Task with id 999 not found for vehicle 1"));
 
@@ -287,5 +290,40 @@ class MaintenanceLogControllerTest {
                 .andDo(MockMvcResultHandlers.print());
 
         verify(maintenanceLogComponent, times(1)).deleteMaintenanceLog(1L, 99L);
+    }
+
+    /**
+     * Test case for downloadMaintenanceReport.
+     * Verifies that the generated PDF is returned as a downloadable file with a 200 OK response.
+     */
+    @Test
+    void testDownloadMaintenanceReportWithKnownVehicleIdShouldReturnPdf() throws Exception {
+        byte[] pdfBytes = {1, 2, 3};
+        when(maintenanceLogComponent.generateMaintenanceReport(1L)).thenReturn(Optional.of(pdfBytes));
+
+        mockMvc.perform(get(MaintenanceLogsApi.PATH_DOWNLOAD_MAINTENANCE_REPORT, 1L))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition",
+                        org.hamcrest.Matchers.containsString("maintenance-report-vehicle-1.pdf")))
+                .andExpect(content().contentType("application/pdf"))
+                .andExpect(content().bytes(pdfBytes))
+                .andDo(MockMvcResultHandlers.print());
+
+        verify(maintenanceLogComponent, times(1)).generateMaintenanceReport(1L);
+    }
+
+    /**
+     * Test case for downloadMaintenanceReport.
+     * Verifies that a 404 NOT FOUND is returned when the vehicle does not exist.
+     */
+    @Test
+    void testDownloadMaintenanceReportWithUnknownVehicleIdShouldReturnNotFound() throws Exception {
+        when(maintenanceLogComponent.generateMaintenanceReport(99L)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get(MaintenanceLogsApi.PATH_DOWNLOAD_MAINTENANCE_REPORT, 99L))
+                .andExpect(status().isNotFound())
+                .andDo(MockMvcResultHandlers.print());
+
+        verify(maintenanceLogComponent, times(1)).generateMaintenanceReport(99L);
     }
 }

@@ -2,6 +2,8 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
+import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportEntry;
+import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportPdfHelper;
 import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceLogMapper;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLog;
@@ -18,8 +20,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
@@ -30,6 +34,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     private final MaintenanceLogTaskRepository maintenanceLogTaskRepository;
     private final MaintenanceTaskRepository maintenanceTaskRepository;
     private final MaintenanceLogMapper maintenanceLogMapper;
+    private final MaintenanceReportPdfHelper maintenanceReportPdfHelper;
 
     @Override
     public Optional<List<MaintenanceLogResponse>> listMaintenanceLogs(Long vehicleId) {
@@ -103,8 +108,28 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
                 .orElse(false);
     }
 
-    private static List<Long> performedTaskIds(MaintenanceLogRequest request) {
-        return request.getPerformedTaskIds() == null ? List.of() : request.getPerformedTaskIds();
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<byte[]> generateMaintenanceReport(Long vehicleId) {
+        return vehicleRepository.findById(vehicleId).map(vehicle -> {
+            List<MaintenanceLog> logs = maintenanceLogRepository.findAllByVehicle_Id(vehicleId).stream()
+                    .sorted(Comparator.comparing(MaintenanceLog::getPerformedAt))
+                    .toList();
+            List<MaintenanceReportEntry> entries = logs.stream()
+                    .map(log -> new MaintenanceReportEntry(
+                            log.getPerformedAt(),
+                            log.getMileageAtPerformed(),
+                            log.getNotes(),
+                            maintenanceLogTaskRepository.findAllByLog_Id(log.getId()).stream()
+                                    .map(link -> link.getTask().getName())
+                                    .toList()))
+                    .toList();
+            return maintenanceReportPdfHelper.generate(vehicle, entries);
+        });
+    }
+
+    private static Set<Long> performedTaskIds(MaintenanceLogRequest request) {
+        return request.getPerformedTaskIds() == null ? Set.of() : request.getPerformedTaskIds();
     }
 
     private void linkTasks(MaintenanceLog log, List<MaintenanceTask> tasks) {

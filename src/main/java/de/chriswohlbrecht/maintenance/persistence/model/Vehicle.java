@@ -45,7 +45,7 @@ public class Vehicle {
     @Column(length = 100)
     private String model;
 
-    @Column(name = "model_year")
+    @Column(name = "model_year", nullable = false)
     private Integer modelYear;
 
     @Builder.Default

@@ -17,4 +17,6 @@ public interface IMaintenanceLogComponent {
     Optional<MaintenanceLogResponse> updateMaintenanceLog(Long vehicleId, Long logId, MaintenanceLogRequest request);
 
     boolean deleteMaintenanceLog(Long vehicleId, Long logId);
+
+    Optional<byte[]> generateMaintenanceReport(Long vehicleId);
 }

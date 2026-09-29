@@ -8,6 +8,11 @@ services:
       - 'MARIADB_ROOT_PASSWORD=root'
     ports:
       - '3306:3306'
+    healthcheck:
+      test: [ 'CMD', 'healthcheck.sh', '--connect', '--innodb_initialized' ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
   phpmyadmin:
     image: 'phpmyadmin:5'
     environment:
@@ -18,3 +23,17 @@ services:
       - '8081:80'
     depends_on:
       - mariadb
+  backend:
+    build:
+      context: .
+    environment:
+      - 'DB_HOST=mariadb'
+      - 'DB_PORT=3306'
+      - 'DB_NAME=maintenance'
+      - 'DB_USERNAME=maintenance'
+      - 'DB_PASSWORD=maintenance'
+    ports:
+      - '${BACKEND_PORT:-8090}:8080'
+    depends_on:
+      mariadb:
+        condition: service_healthy

@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
+import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportPdfHelper;
 import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceLogMapperImpl;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLog;
@@ -23,10 +24,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,13 +49,16 @@ class MaintenanceLogComponentImplTest {
     @Mock
     private MaintenanceTaskRepository maintenanceTaskRepository;
 
+    @Mock
+    private MaintenanceReportPdfHelper maintenanceReportPdfHelper;
+
     private MaintenanceLogComponentImpl maintenanceLogComponent;
 
     @BeforeEach
     void setUp() {
         maintenanceLogComponent = new MaintenanceLogComponentImpl(
                 vehicleRepository, maintenanceLogRepository, maintenanceLogTaskRepository,
-                maintenanceTaskRepository, new MaintenanceLogMapperImpl());
+                maintenanceTaskRepository, new MaintenanceLogMapperImpl(), maintenanceReportPdfHelper);
     }
 
     @Test
@@ -118,7 +124,7 @@ class MaintenanceLogComponentImplTest {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
-                .performedTaskIds(List.of());
+                .performedTaskIds(Set.of());
         when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.save(any(MaintenanceLog.class))).thenAnswer(invocation -> {
             MaintenanceLog toSave = invocation.getArgument(0);
@@ -142,7 +148,7 @@ class MaintenanceLogComponentImplTest {
         MaintenanceTask task = Instancio.create(MaintenanceTask.class);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
-                .performedTaskIds(List.of(task.getId()));
+                .performedTaskIds(Set.of(task.getId()));
         when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(task.getId(), vehicle.getId())).thenReturn(Optional.of(task));
         when(maintenanceLogRepository.save(any(MaintenanceLog.class))).thenAnswer(invocation -> {
@@ -164,7 +170,7 @@ class MaintenanceLogComponentImplTest {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
-                .performedTaskIds(List.of(999L));
+                .performedTaskIds(Set.of(999L));
         when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(999L, vehicle.getId())).thenReturn(Optional.empty());
 
@@ -194,7 +200,7 @@ class MaintenanceLogComponentImplTest {
         existing.setVehicle(vehicle);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
-                .performedTaskIds(List.of());
+                .performedTaskIds(Set.of());
         when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(existing.getId(), vehicle.getId())).thenReturn(Optional.of(existing));
         when(maintenanceLogRepository.save(existing)).thenReturn(existing);
@@ -228,7 +234,7 @@ class MaintenanceLogComponentImplTest {
         existing.setVehicle(vehicle);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
-                .performedTaskIds(List.of(999L));
+                .performedTaskIds(Set.of(999L));
         when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(existing.getId(), vehicle.getId())).thenReturn(Optional.of(existing));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(999L, vehicle.getId())).thenReturn(Optional.empty());
@@ -266,5 +272,32 @@ class MaintenanceLogComponentImplTest {
 
         assertThat(result).isFalse();
         verify(maintenanceLogRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void generateMaintenanceReport_vehicleFound_returnsGeneratedPdfBytes() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLog log = Instancio.create(MaintenanceLog.class);
+        log.setVehicle(vehicle);
+        byte[] pdfBytes = {1, 2, 3};
+        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(log));
+        when(maintenanceLogTaskRepository.findAllByLog_Id(log.getId())).thenReturn(List.of());
+        when(maintenanceReportPdfHelper.generate(eq(vehicle), any())).thenReturn(pdfBytes);
+
+        Optional<byte[]> result = maintenanceLogComponent.generateMaintenanceReport(vehicle.getId());
+
+        assertThat(result).isPresent();
+        assertThat(result.get()).isEqualTo(pdfBytes);
+    }
+
+    @Test
+    void generateMaintenanceReport_vehicleNotFound_returnsEmptyOptional() {
+        when(vehicleRepository.findById(99L)).thenReturn(Optional.empty());
+
+        Optional<byte[]> result = maintenanceLogComponent.generateMaintenanceReport(99L);
+
+        assertThat(result).isEmpty();
+        verify(maintenanceReportPdfHelper, never()).generate(any(), any());
     }
 }
