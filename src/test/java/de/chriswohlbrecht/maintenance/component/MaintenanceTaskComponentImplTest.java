@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
+import de.chriswohlbrecht.maintenance.exception.InvalidMaintenanceIntervalException;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceTaskMapperImpl;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceTask;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
@@ -133,6 +134,43 @@ class MaintenanceTaskComponentImplTest {
     }
 
     @Test
+    void createMaintenanceTask_withoutIntervalAndNotOneTime_throwsInvalidMaintenanceIntervalException() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class)
+                .intervalKm(null)
+                .intervalMonths(null)
+                .oneTime(false);
+        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+
+        assertThat(org.junit.jupiter.api.Assertions.assertThrows(
+                InvalidMaintenanceIntervalException.class,
+                () -> maintenanceTaskComponent.createMaintenanceTask(vehicle.getId(), request)
+        )).hasMessageContaining("intervalKm or intervalMonths");
+
+        verify(maintenanceTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void createMaintenanceTask_oneTimeWithoutInterval_savesAndReturnsMappedResponse() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class)
+                .intervalKm(null)
+                .intervalMonths(null)
+                .oneTime(true);
+        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(maintenanceTaskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> {
+            MaintenanceTask toSave = invocation.getArgument(0);
+            toSave.setId(10L);
+            return toSave;
+        });
+
+        Optional<MaintenanceTaskResponse> result = maintenanceTaskComponent.createMaintenanceTask(vehicle.getId(), request);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getId()).isEqualTo(10L);
+    }
+
+    @Test
     void updateMaintenanceTask_found_updatesEntityAndReturnsMappedResponse() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceTask existing = Instancio.create(MaintenanceTask.class);
@@ -148,6 +186,26 @@ class MaintenanceTaskComponentImplTest {
         assertThat(result).isPresent();
         assertThat(result.get().getName()).isEqualTo(request.getName());
         assertThat(existing.getName()).isEqualTo(request.getName());
+    }
+
+    @Test
+    void updateMaintenanceTask_withoutIntervalAndNotOneTime_throwsInvalidMaintenanceIntervalException() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceTask existing = Instancio.create(MaintenanceTask.class);
+        existing.setVehicle(vehicle);
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class)
+                .intervalKm(null)
+                .intervalMonths(null)
+                .oneTime(false);
+        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(maintenanceTaskRepository.findByIdAndVehicle_Id(existing.getId(), vehicle.getId())).thenReturn(Optional.of(existing));
+
+        assertThat(org.junit.jupiter.api.Assertions.assertThrows(
+                InvalidMaintenanceIntervalException.class,
+                () -> maintenanceTaskComponent.updateMaintenanceTask(vehicle.getId(), existing.getId(), request)
+        )).hasMessageContaining("intervalKm or intervalMonths");
+
+        verify(maintenanceTaskRepository, never()).save(any());
     }
 
     @Test

@@ -94,14 +94,27 @@ class VehicleControllerTest {
     }
 
     /**
+     * Test case for getVehicle.
+     * Verifies that a 400 BAD REQUEST is returned for a non-positive vehicle id (@Min(1) path validation).
+     */
+    @Test
+    void testGetVehicleWithNonPositiveIdShouldReturnBadRequest() throws Exception {
+        mockMvc.perform(get(VehiclesApi.PATH_GET_VEHICLE, 0L))
+                .andExpect(status().isBadRequest())
+                .andDo(MockMvcResultHandlers.print());
+
+        verify(vehicleComponent, times(0)).getVehicle(any());
+    }
+
+    /**
      * Test case for createVehicle.
      * Verifies that a new vehicle is created with a 201 CREATED response.
      */
     @Test
     void testCreateVehicleWithValidDataShouldReturnCreatedResponse() throws Exception {
-        // currentMileage is overridden because of the @Min(0) constraint; Instancio's default
-        // Integer range may otherwise produce a negative value and fail bean validation.
-        VehicleRequest request = Instancio.create(VehicleRequest.class).currentMileage(500);
+        // currentMileage/modelYear are overridden because of the @Min/@Max constraints; Instancio's
+        // default Integer range may otherwise produce a value outside the allowed bounds.
+        VehicleRequest request = Instancio.create(VehicleRequest.class).currentMileage(500).modelYear(2020);
         VehicleResponse response = Instancio.create(VehicleResponse.class).id(1L);
         when(vehicleComponent.createVehicle(any(VehicleRequest.class))).thenReturn(response);
 
@@ -139,6 +152,7 @@ class VehicleControllerTest {
     void testCreateVehicleWithTooLongNameShouldReturnBadRequest() throws Exception {
         VehicleRequest invalidRequest = Instancio.create(VehicleRequest.class)
                 .currentMileage(500)
+                .modelYear(2020)
                 .name("a".repeat(256)); // maxLength is 255
 
         mockMvc.perform(post(VehiclesApi.PATH_CREATE_VEHICLE)
@@ -157,7 +171,8 @@ class VehicleControllerTest {
     @Test
     void testCreateVehicleWithNegativeMileageShouldReturnBadRequest() throws Exception {
         VehicleRequest invalidRequest = Instancio.create(VehicleRequest.class)
-                .currentMileage(-100);
+                .currentMileage(-100)
+                .modelYear(2020);
 
         mockMvc.perform(post(VehiclesApi.PATH_CREATE_VEHICLE)
                         .contentType("application/json")
@@ -174,7 +189,7 @@ class VehicleControllerTest {
      */
     @Test
     void testUpdateVehicleWithKnownIdShouldReturnOkResponse() throws Exception {
-        VehicleRequest request = Instancio.create(VehicleRequest.class).currentMileage(500);
+        VehicleRequest request = Instancio.create(VehicleRequest.class).currentMileage(500).modelYear(2020);
         VehicleResponse response = Instancio.create(VehicleResponse.class).id(1L);
         when(vehicleComponent.updateVehicle(eq(1L), any(VehicleRequest.class))).thenReturn(Optional.of(response));
 
@@ -194,7 +209,7 @@ class VehicleControllerTest {
      */
     @Test
     void testUpdateVehicleWithUnknownIdShouldReturnNotFound() throws Exception {
-        VehicleRequest request = Instancio.create(VehicleRequest.class).currentMileage(500);
+        VehicleRequest request = Instancio.create(VehicleRequest.class).currentMileage(500).modelYear(2020);
         when(vehicleComponent.updateVehicle(eq(99L), any(VehicleRequest.class))).thenReturn(Optional.empty());
 
         mockMvc.perform(put(VehiclesApi.PATH_UPDATE_VEHICLE, 99L)

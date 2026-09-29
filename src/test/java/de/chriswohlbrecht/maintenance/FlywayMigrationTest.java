@@ -22,12 +22,14 @@ class FlywayMigrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void appliesTheInitSchemaMigrationSuccessfully() {
+    void appliesAllMigrationsSuccessfully() {
         MigrationInfo[] appliedMigrations = flyway.info().applied();
 
-        assertThat(appliedMigrations).hasSize(1);
+        assertThat(appliedMigrations).hasSize(2);
         assertThat(appliedMigrations[0].getDescription()).isEqualTo("init schema");
         assertThat(appliedMigrations[0].getState()).isEqualTo(MigrationState.SUCCESS);
+        assertThat(appliedMigrations[1].getDescription()).isEqualTo("vehicle model year required");
+        assertThat(appliedMigrations[1].getState()).isEqualTo(MigrationState.SUCCESS);
     }
 
     @Test

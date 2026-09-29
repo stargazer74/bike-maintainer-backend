@@ -113,7 +113,10 @@ class MaintenanceTaskControllerTest {
      */
     @Test
     void testCreateMaintenanceTaskWithKnownVehicleIdShouldReturnCreatedResponse() throws Exception {
-        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
+        // interval fields are overridden because of the @Min constraints; Instancio's default
+        // Integer range may otherwise produce a value outside the allowed bounds.
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class)
+                .intervalKm(5000).intervalMonths(12).firstDueKm(1000).firstDueMonths(6);
         MaintenanceTaskResponse response = Instancio.create(MaintenanceTaskResponse.class).id(10L).vehicleId(1L);
         when(maintenanceTaskComponent.createMaintenanceTask(eq(1L), any(MaintenanceTaskRequest.class)))
                 .thenReturn(Optional.of(response));
@@ -135,7 +138,8 @@ class MaintenanceTaskControllerTest {
      */
     @Test
     void testCreateMaintenanceTaskWithUnknownVehicleIdShouldReturnNotFound() throws Exception {
-        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class)
+                .intervalKm(5000).intervalMonths(12).firstDueKm(1000).firstDueMonths(6);
         when(maintenanceTaskComponent.createMaintenanceTask(eq(99L), any(MaintenanceTaskRequest.class)))
                 .thenReturn(Optional.empty());
 
@@ -211,7 +215,8 @@ class MaintenanceTaskControllerTest {
      */
     @Test
     void testUpdateMaintenanceTaskWithKnownIdShouldReturnOkResponse() throws Exception {
-        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class)
+                .intervalKm(5000).intervalMonths(12).firstDueKm(1000).firstDueMonths(6);
         MaintenanceTaskResponse response = Instancio.create(MaintenanceTaskResponse.class).id(10L).vehicleId(1L);
         when(maintenanceTaskComponent.updateMaintenanceTask(eq(1L), eq(10L), any(MaintenanceTaskRequest.class)))
                 .thenReturn(Optional.of(response));
@@ -233,7 +238,8 @@ class MaintenanceTaskControllerTest {
      */
     @Test
     void testUpdateMaintenanceTaskWithUnknownIdShouldReturnNotFound() throws Exception {
-        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class)
+                .intervalKm(5000).intervalMonths(12).firstDueKm(1000).firstDueMonths(6);
         when(maintenanceTaskComponent.updateMaintenanceTask(eq(1L), eq(99L), any(MaintenanceTaskRequest.class)))
                 .thenReturn(Optional.empty());
 
