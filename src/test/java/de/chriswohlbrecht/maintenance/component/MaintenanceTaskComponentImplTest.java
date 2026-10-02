@@ -2,10 +2,15 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
+import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskStatus;
+import de.chriswohlbrecht.maintenance.component.helper.MaintenanceTaskStatusHelper;
+import de.chriswohlbrecht.maintenance.component.helper.MaintenanceTaskStatusResult;
 import de.chriswohlbrecht.maintenance.exception.InvalidMaintenanceIntervalException;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceTaskMapperImpl;
+import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLogTask;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceTask;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
+import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
 import org.instancio.Instancio;
@@ -21,6 +26,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,18 +35,30 @@ import static org.mockito.Mockito.when;
 @ExtendWith({MockitoExtension.class, InstancioExtension.class})
 class MaintenanceTaskComponentImplTest {
 
+    private static final MaintenanceTaskStatusResult DUMMY_STATUS =
+            new MaintenanceTaskStatusResult(MaintenanceTaskStatus.OK, null, null, null, null, null, null);
+
     @Mock
     private VehicleRepository vehicleRepository;
 
     @Mock
     private MaintenanceTaskRepository maintenanceTaskRepository;
 
+    @Mock
+    private MaintenanceLogTaskRepository maintenanceLogTaskRepository;
+
+    @Mock
+    private MaintenanceTaskStatusHelper maintenanceTaskStatusHelper;
+
     private MaintenanceTaskComponentImpl maintenanceTaskComponent;
 
     @BeforeEach
     void setUp() {
         maintenanceTaskComponent = new MaintenanceTaskComponentImpl(
-                vehicleRepository, maintenanceTaskRepository, new MaintenanceTaskMapperImpl());
+                vehicleRepository, maintenanceTaskRepository, maintenanceLogTaskRepository,
+                new MaintenanceTaskMapperImpl(), maintenanceTaskStatusHelper);
+        lenient().when(maintenanceLogTaskRepository.findAllByLog_Vehicle_Id(any())).thenReturn(List.<MaintenanceLogTask>of());
+        lenient().when(maintenanceTaskStatusHelper.compute(any(), anyInt(), any(), any())).thenReturn(DUMMY_STATUS);
     }
 
     @Test
@@ -56,6 +75,7 @@ class MaintenanceTaskComponentImplTest {
         assertThat(result.get()).hasSize(1);
         assertThat(result.get().get(0).getVehicleId()).isEqualTo(vehicle.getId());
         assertThat(result.get().get(0).getName()).isEqualTo(task.getName());
+        assertThat(result.get().get(0).getStatus()).isEqualTo(MaintenanceTaskStatus.OK);
     }
 
     @Test
@@ -80,6 +100,7 @@ class MaintenanceTaskComponentImplTest {
 
         assertThat(result).isPresent();
         assertThat(result.get().getId()).isEqualTo(task.getId());
+        assertThat(result.get().getStatus()).isEqualTo(MaintenanceTaskStatus.OK);
     }
 
     @Test
@@ -120,6 +141,7 @@ class MaintenanceTaskComponentImplTest {
         assertThat(result.get().getId()).isEqualTo(10L);
         assertThat(result.get().getVehicleId()).isEqualTo(vehicle.getId());
         assertThat(result.get().getName()).isEqualTo(request.getName());
+        assertThat(result.get().getStatus()).isEqualTo(MaintenanceTaskStatus.OK);
     }
 
     @Test

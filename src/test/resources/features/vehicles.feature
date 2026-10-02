@@ -8,7 +8,7 @@ Feature: Vehicle management
         "type": "MOTORCYCLE",
         "make": "KTM",
         "model": "450 EXC-F",
-        "modelYear": 2023,
+        "modelYear": 2023, "firstRegistrationDate": "2023-01-01",
         "currentMileage": 1500
       }
       """
@@ -34,7 +34,7 @@ Feature: Vehicle management
         "type": "CAR",
         "make": "VW",
         "model": "Caddy",
-        "modelYear": 2020,
+        "modelYear": 2020, "firstRegistrationDate": "2020-01-01",
         "currentMileage": 45000
       }
       """
@@ -54,7 +54,7 @@ Feature: Vehicle management
   Scenario: List all vehicles includes previously created vehicles
     Given a vehicle "listed" exists with body:
       """
-      { "name": "Listed Bike", "type": "MOTORCYCLE", "modelYear": 2021, "currentMileage": 3000 }
+      { "name": "Listed Bike", "type": "MOTORCYCLE", "modelYear": 2021, "firstRegistrationDate": "2021-01-01", "currentMileage": 3000 }
       """
     When a GET request is sent to "/api/v1/vehicles"
     Then the response status code is 200
@@ -63,11 +63,11 @@ Feature: Vehicle management
   Scenario: Update an existing vehicle
     Given a vehicle "toUpdate" exists with body:
       """
-      { "name": "Old Name", "type": "CAR", "modelYear": 2015, "currentMileage": 1000 }
+      { "name": "Old Name", "type": "CAR", "modelYear": 2015, "firstRegistrationDate": "2015-01-01", "currentMileage": 1000 }
       """
     When a PUT request is sent to "/api/v1/vehicles/{toUpdate}" with body:
       """
-      { "name": "New Name", "type": "CAR", "modelYear": 2015, "currentMileage": 2000 }
+      { "name": "New Name", "type": "CAR", "modelYear": 2015, "firstRegistrationDate": "2015-01-01", "currentMileage": 2000 }
       """
     Then the response status code is 200
     And the JSON response field "name" equals "New Name"
@@ -76,14 +76,14 @@ Feature: Vehicle management
   Scenario: Update a vehicle that does not exist
     When a PUT request is sent to "/api/v1/vehicles/999999" with body:
       """
-      { "name": "Ghost", "type": "CAR", "modelYear": 2015, "currentMileage": 1000 }
+      { "name": "Ghost", "type": "CAR", "modelYear": 2015, "firstRegistrationDate": "2015-01-01", "currentMileage": 1000 }
       """
     Then the response status code is 404
 
   Scenario: Delete an existing vehicle
     Given a vehicle "toDelete" exists with body:
       """
-      { "name": "Disposable", "type": "MOTORCYCLE", "modelYear": 2019, "currentMileage": 500 }
+      { "name": "Disposable", "type": "MOTORCYCLE", "modelYear": 2019, "firstRegistrationDate": "2019-01-01", "currentMileage": 500 }
       """
     When a DELETE request is sent to "/api/v1/vehicles/{toDelete}"
     Then the response status code is 204

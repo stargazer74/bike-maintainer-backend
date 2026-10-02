@@ -3,7 +3,7 @@ Feature: Maintenance log management
   Background:
     Given a vehicle "bike" exists with body:
       """
-      { "name": "Adventure Bike", "type": "MOTORCYCLE", "modelYear": 2022, "currentMileage": 8000 }
+      { "name": "Adventure Bike", "type": "MOTORCYCLE", "modelYear": 2022, "firstRegistrationDate": "2022-01-01", "currentMileage": 8000 }
       """
     And a maintenance task "oilChange" exists for vehicle "bike" with body:
       """
