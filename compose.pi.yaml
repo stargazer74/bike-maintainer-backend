@@ -1,0 +1,62 @@
+services:
+  mariadb:
+    image: 'mariadb:11'
+    restart: unless-stopped
+    environment:
+      - 'MARIADB_DATABASE=maintenance'
+      - 'MARIADB_USER=maintenance'
+      - 'MARIADB_PASSWORD=maintenance'
+      - 'MARIADB_ROOT_PASSWORD=root'
+    ports:
+      - '3306:3306'
+    volumes:
+      - 'mariadb-data:/var/lib/mysql'
+    healthcheck:
+      test: [ 'CMD', 'healthcheck.sh', '--connect', '--innodb_initialized' ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  phpmyadmin:
+    image: 'phpmyadmin:5'
+    restart: unless-stopped
+    environment:
+      - 'PMA_HOST=mariadb'
+      - 'PMA_USER=maintenance'
+      - 'PMA_PASSWORD=maintenance'
+    ports:
+      - '8081:80'
+    depends_on:
+      - mariadb
+  bike-maintainer-backend:
+    image: 'stargazer74/bike-maintainer-backend:latest'
+    restart: unless-stopped
+    environment:
+      - 'DB_HOST=mariadb'
+      - 'DB_PORT=3306'
+      - 'DB_NAME=maintenance'
+      - 'DB_USERNAME=maintenance'
+      - 'DB_PASSWORD=maintenance'
+    depends_on:
+      mariadb:
+        condition: service_healthy
+  bike-maintainer-frontend:
+    image: 'stargazer74/bike-maintainer-frontend:latest'
+    restart: unless-stopped
+    depends_on:
+      - bike-maintainer-backend
+  nginx-proxy-manager:
+    image: 'jc21/nginx-proxy-manager:latest'
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '81:81'
+    volumes:
+      - './nginx/data:/data'
+      - './nginx/letsencrypt:/etc/letsencrypt'
+    depends_on:
+      - bike-maintainer-backend
+      - bike-maintainer-frontend
+
+volumes:
+  mariadb-data:

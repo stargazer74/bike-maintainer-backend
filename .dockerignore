@@ -1,0 +1,12 @@
+target/*
+!target/*.jar
+.idea/
+.vscode/
+.git/
+.gitignore
+.gitattributes
+*.iml
+docs/
+HELP.md
+README.md
+LICENSE
