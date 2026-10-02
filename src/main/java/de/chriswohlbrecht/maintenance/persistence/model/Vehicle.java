@@ -17,6 +17,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -26,7 +27,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Vehicle {
+public class    Vehicle {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -47,6 +48,9 @@ public class Vehicle {
 
     @Column(name = "model_year", nullable = false)
     private Integer modelYear;
+
+    @Column(name = "first_registration_date", nullable = false)
+    private LocalDate firstRegistrationDate;
 
     @Builder.Default
     @Column(name = "current_mileage", nullable = false)

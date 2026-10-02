@@ -3,7 +3,7 @@ Feature: Maintenance task management
   Background:
     Given a vehicle "bike" exists with body:
       """
-      { "name": "Trail Bike", "type": "MOTORCYCLE", "modelYear": 2021, "currentMileage": 5000 }
+      { "name": "Trail Bike", "type": "MOTORCYCLE", "modelYear": 2021, "firstRegistrationDate": "2021-01-01", "currentMileage": 5000 }
       """
 
   Scenario: Create a maintenance task for a vehicle
@@ -96,3 +96,21 @@ Feature: Maintenance task management
   Scenario: Delete a maintenance task that does not exist
     When a DELETE request is sent to "/api/v1/vehicles/{bike}/maintenance-tasks/999999"
     Then the response status code is 404
+
+  Scenario: A never-performed task is overdue once the vehicle has passed its interval
+    Given a maintenance task "overdueOil" exists for vehicle "bike" with body:
+      """
+      { "name": "Oil change", "intervalKm": 1000 }
+      """
+    When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-tasks/{overdueOil}"
+    Then the response status code is 200
+    And the JSON response field "status" equals "OVERDUE"
+
+  Scenario: A never-performed task is ok while well within its interval
+    Given a maintenance task "freshFilter" exists for vehicle "bike" with body:
+      """
+      { "name": "Air filter", "intervalKm": 20000 }
+      """
+    When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-tasks/{freshFilter}"
+    Then the response status code is 200
+    And the JSON response field "status" equals "OK"

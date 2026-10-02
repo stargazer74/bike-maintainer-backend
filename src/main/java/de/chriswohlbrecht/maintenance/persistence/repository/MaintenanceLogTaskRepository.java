@@ -10,5 +10,7 @@ public interface MaintenanceLogTaskRepository extends JpaRepository<MaintenanceL
 
     List<MaintenanceLogTask> findAllByLog_Id(Long logId);
 
+    List<MaintenanceLogTask> findAllByLog_Vehicle_Id(Long vehicleId);
+
     void deleteAllByLog_Id(Long logId);
 }

@@ -25,11 +25,13 @@ class FlywayMigrationTest {
     void appliesAllMigrationsSuccessfully() {
         MigrationInfo[] appliedMigrations = flyway.info().applied();
 
-        assertThat(appliedMigrations).hasSize(2);
+        assertThat(appliedMigrations).hasSize(3);
         assertThat(appliedMigrations[0].getDescription()).isEqualTo("init schema");
         assertThat(appliedMigrations[0].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[1].getDescription()).isEqualTo("vehicle model year required");
         assertThat(appliedMigrations[1].getState()).isEqualTo(MigrationState.SUCCESS);
+        assertThat(appliedMigrations[2].getDescription()).isEqualTo("add vehicle first registration date");
+        assertThat(appliedMigrations[2].getState()).isEqualTo(MigrationState.SUCCESS);
     }
 
     @Test
