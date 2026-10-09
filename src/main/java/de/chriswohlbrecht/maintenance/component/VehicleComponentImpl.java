@@ -17,6 +17,7 @@ public class VehicleComponentImpl implements IVehicleComponent {
 
     private final VehicleRepository vehicleRepository;
     private final VehicleMapper vehicleMapper;
+    private final ICurrentUserComponent currentUserComponent;
 
     @Override
     public List<VehicleResponse> listVehicles() {
@@ -33,6 +34,7 @@ public class VehicleComponentImpl implements IVehicleComponent {
     @Override
     public VehicleResponse createVehicle(VehicleRequest request) {
         Vehicle vehicle = vehicleMapper.toEntity(request);
+        vehicle.setUser(currentUserComponent.getCurrentUser());
         return vehicleMapper.toResponse(vehicleRepository.save(vehicle));
     }
 

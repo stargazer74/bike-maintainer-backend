@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,13 +26,15 @@ class FlywayMigrationTest {
     void appliesAllMigrationsSuccessfully() {
         MigrationInfo[] appliedMigrations = flyway.info().applied();
 
-        assertThat(appliedMigrations).hasSize(3);
+        assertThat(appliedMigrations).hasSize(4);
         assertThat(appliedMigrations[0].getDescription()).isEqualTo("init schema");
         assertThat(appliedMigrations[0].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[1].getDescription()).isEqualTo("vehicle model year required");
         assertThat(appliedMigrations[1].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[2].getDescription()).isEqualTo("add vehicle first registration date");
         assertThat(appliedMigrations[2].getState()).isEqualTo(MigrationState.SUCCESS);
+        assertThat(appliedMigrations[3].getDescription()).isEqualTo("add app user");
+        assertThat(appliedMigrations[3].getState()).isEqualTo(MigrationState.SUCCESS);
     }
 
     @Test
@@ -43,6 +46,18 @@ class FlywayMigrationTest {
                 .map(String::toLowerCase)
                 .toList();
 
-        assertThat(tableNames).contains("vehicle", "maintenance_task", "maintenance_log", "maintenance_log_task");
+        assertThat(tableNames).contains("vehicle", "maintenance_task", "maintenance_log", "maintenance_log_task",
+                "app_user");
+    }
+
+    @Test
+    void createsVerifiedInitialAdminFromPlaceholder() {
+        Map<String, Object> admin = jdbcTemplate.queryForMap(
+                "SELECT email, active, email_verified, language FROM app_user WHERE role = 'ADMIN'");
+
+        assertThat(admin.get("EMAIL")).isEqualTo("admin@localhost");
+        assertThat(admin.get("ACTIVE")).isEqualTo(true);
+        assertThat(admin.get("EMAIL_VERIFIED")).isEqualTo(true);
+        assertThat(admin.get("LANGUAGE")).isEqualTo("de");
     }
 }
