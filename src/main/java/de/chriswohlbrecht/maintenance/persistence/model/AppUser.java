@@ -1,16 +1,13 @@
 package de.chriswohlbrecht.maintenance.persistence.model;
 
-import de.chriswohlbrecht.maintenance.persistence.type.VehicleType;
+import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,44 +17,52 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "vehicle")
+@Table(name = "app_user")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class    Vehicle {
+public class AppUser {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String name;
+    /** Stored trimmed and lower-cased; unique. */
+    @Column(nullable = false, unique = true)
+    private String email;
+
+    /** Null until a password has been set (e.g. the initial admin before first startup). */
+    @Column(name = "password_hash", length = 100)
+    private String passwordHash;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private VehicleType type;
-
-    @Column(length = 100)
-    private String make;
-
-    @Column(length = 100)
-    private String model;
-
-    @Column(name = "model_year", nullable = false)
-    private Integer modelYear;
-
-    @Column(name = "first_registration_date", nullable = false)
-    private LocalDate firstRegistrationDate;
+    private UserRole role;
 
     @Builder.Default
-    @Column(name = "current_mileage", nullable = false)
-    private Integer currentMileage = 0;
+    @Column(nullable = false)
+    private Boolean active = true;
+
+    @Builder.Default
+    @Column(name = "email_verified", nullable = false)
+    private Boolean emailVerified = false;
+
+    @Builder.Default
+    @Column(name = "failed_login_attempts", nullable = false)
+    private Integer failedLoginAttempts = 0;
+
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
+
+    /** ISO 639-1 code of the preferred language ("de" or "en"). */
+    @Builder.Default
+    @Column(nullable = false, length = 5)
+    private String language = "de";
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -66,8 +71,4 @@ public class    Vehicle {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private AppUser user;
 }

@@ -3,6 +3,7 @@ package de.chriswohlbrecht.maintenance.component;
 import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
 import de.chriswohlbrecht.maintenance.mapper.VehicleMapperImpl;
+import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
 import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
 import org.instancio.Instancio;
@@ -18,6 +19,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,11 +30,14 @@ class VehicleComponentImplTest {
     @Mock
     private VehicleRepository vehicleRepository;
 
+    @Mock
+    private ICurrentUserComponent currentUserComponent;
+
     private VehicleComponentImpl vehicleComponent;
 
     @BeforeEach
     void setUp() {
-        vehicleComponent = new VehicleComponentImpl(vehicleRepository, new VehicleMapperImpl());
+        vehicleComponent = new VehicleComponentImpl(vehicleRepository, new VehicleMapperImpl(), currentUserComponent);
     }
 
     @Test
@@ -70,6 +75,8 @@ class VehicleComponentImplTest {
     @Test
     void createVehicle_savesEntityAndReturnsMappedResponse() {
         VehicleRequest request = Instancio.create(VehicleRequest.class).currentMileage(500);
+        AppUser owner = AppUser.builder().id(7L).email("owner@example.org").build();
+        when(currentUserComponent.getCurrentUser()).thenReturn(owner);
         when(vehicleRepository.save(any(Vehicle.class))).thenAnswer(invocation -> {
             Vehicle toSave = invocation.getArgument(0);
             toSave.setId(1L);
@@ -81,6 +88,7 @@ class VehicleComponentImplTest {
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getName()).isEqualTo(request.getName());
         assertThat(response.getCurrentMileage()).isEqualTo(500);
+        verify(vehicleRepository).save(argThat(saved -> saved.getUser() == owner));
     }
 
     @Test

@@ -17,6 +17,7 @@ public interface VehicleMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "user", ignore = true)
     Vehicle toEntity(VehicleRequest request);
 
     VehicleResponse toResponse(Vehicle vehicle);
@@ -24,6 +25,7 @@ public interface VehicleMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "user", ignore = true)
     void updateEntityFromRequest(VehicleRequest request, @MappingTarget Vehicle vehicle);
 
     default OffsetDateTime toOffsetDateTime(LocalDateTime value) {
