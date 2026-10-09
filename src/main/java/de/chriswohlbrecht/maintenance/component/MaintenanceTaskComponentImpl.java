@@ -31,11 +31,12 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
     private final MaintenanceLogTaskRepository maintenanceLogTaskRepository;
     private final MaintenanceTaskMapper maintenanceTaskMapper;
     private final MaintenanceTaskStatusHelper maintenanceTaskStatusHelper;
+    private final ICurrentUserComponent currentUserComponent;
 
     @Override
     @Transactional(readOnly = true)
     public Optional<List<MaintenanceTaskResponse>> listMaintenanceTasks(Long vehicleId) {
-        return vehicleRepository.findById(vehicleId).map(vehicle -> {
+        return findOwnVehicle(vehicleId).map(vehicle -> {
             Map<Long, List<MaintenanceLog>> logsByTaskId = logsByTaskId(vehicleId);
             return maintenanceTaskRepository.findAllByVehicle_Id(vehicleId).stream()
                     .map(task -> toResponseWithStatus(task, vehicle, logsByTaskId))
@@ -46,7 +47,7 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
     @Override
     @Transactional(readOnly = true)
     public Optional<MaintenanceTaskResponse> getMaintenanceTask(Long vehicleId, Long taskId) {
-        return vehicleRepository.findById(vehicleId)
+        return findOwnVehicle(vehicleId)
                 .flatMap(vehicle -> maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId)
                         .map(task -> toResponseWithStatus(task, vehicle, logsByTaskId(vehicleId))));
     }
@@ -76,7 +77,7 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
     @Override
     @Transactional
     public Optional<MaintenanceTaskResponse> createMaintenanceTask(Long vehicleId, MaintenanceTaskRequest request) {
-        return vehicleRepository.findById(vehicleId).map(vehicle -> {
+        return findOwnVehicle(vehicleId).map(vehicle -> {
             validateInterval(request);
             MaintenanceTask task = maintenanceTaskMapper.toEntity(request);
             task.setVehicle(vehicle);
@@ -88,7 +89,7 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
     @Override
     @Transactional
     public Optional<MaintenanceTaskResponse> updateMaintenanceTask(Long vehicleId, Long taskId, MaintenanceTaskRequest request) {
-        return vehicleRepository.findById(vehicleId)
+        return findOwnVehicle(vehicleId)
                 .flatMap(vehicle -> maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId)
                         .map(task -> {
                             validateInterval(request);
@@ -108,12 +109,17 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
 
     @Override
     public boolean deleteMaintenanceTask(Long vehicleId, Long taskId) {
-        return vehicleRepository.findById(vehicleId)
+        return findOwnVehicle(vehicleId)
                 .flatMap(vehicle -> maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId))
                 .map(task -> {
                     maintenanceTaskRepository.deleteById(task.getId());
                     return true;
                 })
                 .orElse(false);
+    }
+
+    /** Vehicles of other users are treated like non-existent ones (404), so foreign ids cannot be probed. */
+    private Optional<Vehicle> findOwnVehicle(Long vehicleId) {
+        return vehicleRepository.findByIdAndUser_Id(vehicleId, currentUserComponent.getCurrentUserId());
     }
 }

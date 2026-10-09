@@ -22,10 +22,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, InstancioExtension.class})
 class VehicleComponentImplTest {
+
+    private static final Long USER_ID = 99L;
 
     @Mock
     private VehicleRepository vehicleRepository;
@@ -37,13 +40,14 @@ class VehicleComponentImplTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
         vehicleComponent = new VehicleComponentImpl(vehicleRepository, new VehicleMapperImpl(), currentUserComponent);
     }
 
     @Test
     void listVehicles_returnsAllVehiclesMapped() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        when(vehicleRepository.findAll()).thenReturn(List.of(vehicle));
+        when(vehicleRepository.findAllByUser_Id(USER_ID)).thenReturn(List.of(vehicle));
 
         List<VehicleResponse> result = vehicleComponent.listVehicles();
 
@@ -55,7 +59,7 @@ class VehicleComponentImplTest {
     @Test
     void getVehicle_found_returnsMappedResponse() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
 
         Optional<VehicleResponse> result = vehicleComponent.getVehicle(vehicle.getId());
 
@@ -65,7 +69,7 @@ class VehicleComponentImplTest {
 
     @Test
     void getVehicle_notFound_returnsEmptyOptional() {
-        when(vehicleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
         Optional<VehicleResponse> result = vehicleComponent.getVehicle(99L);
 
@@ -95,7 +99,7 @@ class VehicleComponentImplTest {
     void updateVehicle_found_updatesEntityAndReturnsMappedResponse() {
         Vehicle existing = Instancio.create(Vehicle.class);
         VehicleRequest request = Instancio.create(VehicleRequest.class).currentMileage(500);
-        when(vehicleRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(vehicleRepository.findByIdAndUser_Id(existing.getId(), USER_ID)).thenReturn(Optional.of(existing));
         when(vehicleRepository.save(existing)).thenReturn(existing);
 
         Optional<VehicleResponse> result = vehicleComponent.updateVehicle(existing.getId(), request);
@@ -108,7 +112,7 @@ class VehicleComponentImplTest {
     @Test
     void updateVehicle_notFound_returnsEmptyOptionalAndDoesNotSave() {
         VehicleRequest request = Instancio.create(VehicleRequest.class).currentMileage(500);
-        when(vehicleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
         Optional<VehicleResponse> result = vehicleComponent.updateVehicle(99L, request);
 
@@ -119,7 +123,7 @@ class VehicleComponentImplTest {
     @Test
     void deleteVehicle_found_deletesEntityAndReturnsTrue() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
 
         boolean result = vehicleComponent.deleteVehicle(vehicle.getId());
 
@@ -129,7 +133,7 @@ class VehicleComponentImplTest {
 
     @Test
     void deleteVehicle_notFound_returnsFalseAndDoesNotDelete() {
-        when(vehicleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
         boolean result = vehicleComponent.deleteVehicle(99L);
 

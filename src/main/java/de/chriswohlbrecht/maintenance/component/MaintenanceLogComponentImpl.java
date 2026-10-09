@@ -35,10 +35,11 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     private final MaintenanceTaskRepository maintenanceTaskRepository;
     private final MaintenanceLogMapper maintenanceLogMapper;
     private final MaintenanceReportPdfHelper maintenanceReportPdfHelper;
+    private final ICurrentUserComponent currentUserComponent;
 
     @Override
     public Optional<List<MaintenanceLogResponse>> listMaintenanceLogs(Long vehicleId) {
-        return vehicleRepository.findById(vehicleId)
+        return findOwnVehicle(vehicleId)
                 .map(vehicle -> maintenanceLogRepository.findAllByVehicle_Id(vehicleId).stream()
                         .map(this::toResponse)
                         .toList());
@@ -46,7 +47,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
 
     @Override
     public Optional<MaintenanceLogResponse> getMaintenanceLog(Long vehicleId, Long logId) {
-        return vehicleRepository.findById(vehicleId)
+        return findOwnVehicle(vehicleId)
                 .flatMap(vehicle -> maintenanceLogRepository.findByIdAndVehicle_Id(logId, vehicleId))
                 .map(this::toResponse);
     }
@@ -54,7 +55,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     @Override
     @Transactional
     public Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request) {
-        return vehicleRepository.findById(vehicleId).map(vehicle -> {
+        return findOwnVehicle(vehicleId).map(vehicle -> {
             List<MaintenanceTask> performedTasks = new ArrayList<>();
             for (Long taskId : performedTaskIds(request)) {
                 Optional<MaintenanceTask> task = maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId);
@@ -75,7 +76,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     @Override
     @Transactional
     public Optional<MaintenanceLogResponse> updateMaintenanceLog(Long vehicleId, Long logId, MaintenanceLogRequest request) {
-        return vehicleRepository.findById(vehicleId)
+        return findOwnVehicle(vehicleId)
                 .flatMap(vehicle -> maintenanceLogRepository.findByIdAndVehicle_Id(logId, vehicleId))
                 .map(log -> {
                     List<MaintenanceTask> performedTasks = new ArrayList<>();
@@ -98,7 +99,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     @Override
     @Transactional
     public boolean deleteMaintenanceLog(Long vehicleId, Long logId) {
-        return vehicleRepository.findById(vehicleId)
+        return findOwnVehicle(vehicleId)
                 .flatMap(vehicle -> maintenanceLogRepository.findByIdAndVehicle_Id(logId, vehicleId))
                 .map(log -> {
                     maintenanceLogTaskRepository.deleteAllByLog_Id(log.getId());
@@ -111,7 +112,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     @Override
     @Transactional(readOnly = true)
     public Optional<byte[]> generateMaintenanceReport(Long vehicleId) {
-        return vehicleRepository.findById(vehicleId).map(vehicle -> {
+        return findOwnVehicle(vehicleId).map(vehicle -> {
             List<MaintenanceLog> logs = maintenanceLogRepository.findAllByVehicle_Id(vehicleId).stream()
                     .sorted(Comparator.comparing(MaintenanceLog::getPerformedAt))
                     .toList();
@@ -149,5 +150,10 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
                 .map(link -> link.getTask().getId())
                 .toList();
         return maintenanceLogMapper.toResponse(log).performedTaskIds(performedTaskIds);
+    }
+
+    /** Vehicles of other users are treated like non-existent ones (404), so foreign ids cannot be probed. */
+    private Optional<Vehicle> findOwnVehicle(Long vehicleId) {
+        return vehicleRepository.findByIdAndUser_Id(vehicleId, currentUserComponent.getCurrentUserId());
     }
 }

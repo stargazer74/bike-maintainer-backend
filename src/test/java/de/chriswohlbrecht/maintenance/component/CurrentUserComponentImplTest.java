@@ -18,6 +18,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -59,6 +60,20 @@ class CurrentUserComponentImplTest {
         when(appUserRepository.findById(7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> currentUserComponent.getCurrentUser())
+                .isInstanceOf(AuthenticationFailedException.class);
+    }
+
+    @Test
+    void getCurrentUserId_loggedIn_returnsIdWithoutDatabaseLookup() {
+        login(new SessionUser(7L, "rider@example.org"));
+
+        assertThat(currentUserComponent.getCurrentUserId()).isEqualTo(7L);
+        verifyNoInteractions(appUserRepository);
+    }
+
+    @Test
+    void getCurrentUserId_notLoggedIn_fails() {
+        assertThatThrownBy(() -> currentUserComponent.getCurrentUserId())
                 .isInstanceOf(AuthenticationFailedException.class);
     }
 

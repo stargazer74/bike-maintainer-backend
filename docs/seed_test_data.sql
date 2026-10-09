@@ -3,14 +3,19 @@
 -- damit Tests und Produktionsschema unberührt bleiben.
 -- Ausführen z. B. mit:
 --   docker compose exec -T mariadb mysql -u maintenance -pmaintenance maintenance < docs/seed_test_data.sql
+--
+-- Setzt Migration V4 voraus: Die Fahrzeuge gehören dem Initial-Admin (BM_INITIAL_ADMIN_EMAIL),
+-- sichtbar also nach dem Login mit dessen Zugangsdaten.
+
+SET @owner_id = (SELECT id FROM app_user WHERE role = 'ADMIN' ORDER BY id LIMIT 1);
 
 --
 -- Daten für Tabelle vehicle
 --
 
-INSERT INTO vehicle (id, name, type, make, model, model_year, first_registration_date, current_mileage, created_at, updated_at) VALUES
-(1, 'Kawasaki VN800 Classic', 'MOTORCYCLE', 'Kawasaki', 'VN800 Classic', 2005, '2005-01-01', 41664, '2026-10-01 11:04:53', '2026-10-01 16:06:55'),
-(2, 'Online Bestia 125', 'MOTORCYCLE', 'Online', 'Bestia 125', 2021, '2021-01-01', 11604, '2026-10-01 11:10:20', '2026-10-01 16:07:34');
+INSERT INTO vehicle (id, name, type, make, model, model_year, first_registration_date, current_mileage, created_at, updated_at, user_id) VALUES
+(1, 'Kawasaki VN800 Classic', 'MOTORCYCLE', 'Kawasaki', 'VN800 Classic', 2005, '2005-01-01', 41664, '2026-10-01 11:04:53', '2026-10-01 16:06:55', @owner_id),
+(2, 'Online Bestia 125', 'MOTORCYCLE', 'Online', 'Bestia 125', 2021, '2021-01-01', 11604, '2026-10-01 11:10:20', '2026-10-01 16:07:34', @owner_id);
 
 --
 -- Daten für Tabelle maintenance_task
