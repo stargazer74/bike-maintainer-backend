@@ -1,11 +1,11 @@
-<mxfile host="drawio-plugin" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" modified="2026-09-09T08:18:54.728Z" version="22.1.22" etag="RnJ4IInBeVkNQTj9hYf5" type="embed">
+<mxfile host="drawio-plugin" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" modified="2026-10-09T15:00:00.000Z" version="22.1.22" etag="RnJ4IInBeVkNQTj9hYf5" type="embed">
   <diagram id="db-schema" name="DB Schema">
     <mxGraphModel dx="1173" dy="585" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="vehicle" value="vehicle" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParentMax=0;resizeParent=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
-          <mxGeometry x="40" y="40" width="240" height="264" as="geometry" />
+          <mxGeometry x="40" y="40" width="240" height="316" as="geometry" />
         </mxCell>
         <mxCell id="vehicle-id" value="id : BIGINT (PK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=4;" parent="vehicle" vertex="1">
           <mxGeometry y="30" width="240" height="26" as="geometry" />
@@ -22,17 +22,23 @@
         <mxCell id="vehicle-model" value="model : VARCHAR(100)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
           <mxGeometry y="134" width="240" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="vehicle-model_year" value="model_year : INT" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+        <mxCell id="vehicle-model_year" value="model_year : INT NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
           <mxGeometry y="160" width="240" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="vehicle-current_mileage" value="current_mileage : INT NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+        <mxCell id="vehicle-first_registration_date" value="first_registration_date : DATE NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
           <mxGeometry y="186" width="240" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="vehicle-created_at" value="created_at : TIMESTAMP NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+        <mxCell id="vehicle-current_mileage" value="current_mileage : INT NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
           <mxGeometry y="212" width="240" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="vehicle-updated_at" value="updated_at : TIMESTAMP NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+        <mxCell id="vehicle-created_at" value="created_at : TIMESTAMP NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
           <mxGeometry y="238" width="240" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="vehicle-updated_at" value="updated_at : TIMESTAMP NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="vehicle" vertex="1">
+          <mxGeometry y="264" width="240" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="vehicle-user_id" value="user_id : BIGINT NOT NULL (FK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=2;" parent="vehicle" vertex="1">
+          <mxGeometry y="290" width="240" height="26" as="geometry" />
         </mxCell>
         <mxCell id="task" value="maintenance_task" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParentMax=0;resizeParent=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
           <mxGeometry x="400" y="40" width="280" height="290" as="geometry" />
@@ -105,13 +111,96 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="edge-vehicle-log" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" parent="1" source="vehicle-updated_at" target="log" edge="1">
+        <mxCell id="edge-vehicle-log" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" parent="1" source="vehicle" target="log" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="edge-log-logtask" style="edgeStyle=entityRelationEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" parent="1" source="log-id" target="logtask-log_id" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="edge-task-logtask" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" parent="1" source="task-active" target="logtask" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user" value="app_user" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParentMax=0;resizeParent=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+          <mxGeometry x="760" y="40" width="300" height="316" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user-id" value="id : BIGINT (PK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=4;" parent="app_user" vertex="1">
+          <mxGeometry y="30" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user-email" value="email : VARCHAR(255) NOT NULL (UNIQUE)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="app_user" vertex="1">
+          <mxGeometry y="56" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user-password_hash" value="password_hash : VARCHAR(100)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="app_user" vertex="1">
+          <mxGeometry y="82" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user-role" value="role : VARCHAR(20) NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="app_user" vertex="1">
+          <mxGeometry y="108" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user-active" value="active : BOOLEAN NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="app_user" vertex="1">
+          <mxGeometry y="134" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user-email_verified" value="email_verified : BOOLEAN NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="app_user" vertex="1">
+          <mxGeometry y="160" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user-failed_login_attempts" value="failed_login_attempts : INT NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="app_user" vertex="1">
+          <mxGeometry y="186" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user-locked_until" value="locked_until : TIMESTAMP" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="app_user" vertex="1">
+          <mxGeometry y="212" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user-language" value="language : VARCHAR(5) NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="app_user" vertex="1">
+          <mxGeometry y="238" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user-created_at" value="created_at : TIMESTAMP NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="app_user" vertex="1">
+          <mxGeometry y="264" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="app_user-updated_at" value="updated_at : TIMESTAMP NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="app_user" vertex="1">
+          <mxGeometry y="290" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="session" value="SPRING_SESSION (Spring Session JDBC)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParentMax=0;resizeParent=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" parent="1" vertex="1">
+          <mxGeometry x="760" y="420" width="300" height="212" as="geometry" />
+        </mxCell>
+        <mxCell id="session-primary_id" value="PRIMARY_ID : CHAR(36) (PK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=4;" parent="session" vertex="1">
+          <mxGeometry y="30" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="session-session_id" value="SESSION_ID : CHAR(36) NOT NULL (UNIQUE)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="session" vertex="1">
+          <mxGeometry y="56" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="session-creation_time" value="CREATION_TIME : BIGINT NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="session" vertex="1">
+          <mxGeometry y="82" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="session-last_access_time" value="LAST_ACCESS_TIME : BIGINT NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="session" vertex="1">
+          <mxGeometry y="108" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="session-max_inactive_interval" value="MAX_INACTIVE_INTERVAL : INT NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="session" vertex="1">
+          <mxGeometry y="134" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="session-expiry_time" value="EXPIRY_TIME : BIGINT NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="session" vertex="1">
+          <mxGeometry y="160" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="session-principal_name" value="PRINCIPAL_NAME : VARCHAR(100) = app_user.id" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="session" vertex="1">
+          <mxGeometry y="186" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="session_attr" value="SPRING_SESSION_ATTRIBUTES" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParentMax=0;resizeParent=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" parent="1" vertex="1">
+          <mxGeometry x="760" y="660" width="300" height="108" as="geometry" />
+        </mxCell>
+        <mxCell id="session_attr-session_primary_id" value="SESSION_PRIMARY_ID : CHAR(36) (PK, FK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=4;" parent="session_attr" vertex="1">
+          <mxGeometry y="30" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="session_attr-attribute_name" value="ATTRIBUTE_NAME : VARCHAR(200) (PK)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;fontStyle=4;" parent="session_attr" vertex="1">
+          <mxGeometry y="56" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="session_attr-attribute_bytes" value="ATTRIBUTE_BYTES : BLOB NOT NULL" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=4;overflow=hidden;rounded=0;" parent="session_attr" vertex="1">
+          <mxGeometry y="82" width="300" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-user-vehicle" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="app_user" target="vehicle" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="910" y="20" />
+              <mxPoint x="160" y="20" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-session-attr" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="session" target="session_attr" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
       </root>
