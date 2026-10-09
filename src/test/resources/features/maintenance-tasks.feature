@@ -1,7 +1,8 @@
 Feature: Maintenance task management
 
   Background:
-    Given a vehicle "bike" exists with body:
+    Given I am logged in as "rider@example.org"
+    And a vehicle "bike" exists with body:
       """
       { "name": "Trail Bike", "type": "MOTORCYCLE", "modelYear": 2021, "firstRegistrationDate": "2021-01-01", "currentMileage": 5000 }
       """
