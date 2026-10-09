@@ -1,7 +1,8 @@
 Feature: Maintenance log management
 
   Background:
-    Given a vehicle "bike" exists with body:
+    Given I am logged in as "rider@example.org"
+    And a vehicle "bike" exists with body:
       """
       { "name": "Adventure Bike", "type": "MOTORCYCLE", "modelYear": 2022, "firstRegistrationDate": "2022-01-01", "currentMileage": 8000 }
       """

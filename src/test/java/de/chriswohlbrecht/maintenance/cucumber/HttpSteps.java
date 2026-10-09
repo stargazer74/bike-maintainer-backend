@@ -24,6 +24,12 @@ public class HttpSteps {
                 apiClient.post(scenarioContext.resolvePath(path), scenarioContext.resolvePath(body)));
     }
 
+    @When("a POST request without CSRF token is sent to {string} with body:")
+    public void aPostRequestWithoutCsrfTokenIsSentToWithBody(String path, String body) {
+        scenarioContext.setLastResponse(
+                apiClient.postWithoutCsrfToken(scenarioContext.resolvePath(path), scenarioContext.resolvePath(body)));
+    }
+
     @When("a PUT request is sent to {string} with body:")
     public void aPutRequestIsSentToWithBody(String path, String body) {
         scenarioContext.setLastResponse(

@@ -1,5 +1,8 @@
 Feature: Vehicle management
 
+  Background:
+    Given I am logged in as "rider@example.org"
+
   Scenario: Create a new vehicle
     When a POST request is sent to "/api/v1/vehicles" with body:
       """
