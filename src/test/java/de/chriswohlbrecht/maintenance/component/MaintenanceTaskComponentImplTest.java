@@ -35,6 +35,11 @@ import static org.mockito.Mockito.when;
 @ExtendWith({MockitoExtension.class, InstancioExtension.class})
 class MaintenanceTaskComponentImplTest {
 
+    private static final Long USER_ID = 99L;
+
+    @Mock
+    private ICurrentUserComponent currentUserComponent;
+
     private static final MaintenanceTaskStatusResult DUMMY_STATUS =
             new MaintenanceTaskStatusResult(MaintenanceTaskStatus.OK, null, null, null, null, null, null);
 
@@ -54,9 +59,10 @@ class MaintenanceTaskComponentImplTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
         maintenanceTaskComponent = new MaintenanceTaskComponentImpl(
                 vehicleRepository, maintenanceTaskRepository, maintenanceLogTaskRepository,
-                new MaintenanceTaskMapperImpl(), maintenanceTaskStatusHelper);
+                new MaintenanceTaskMapperImpl(), maintenanceTaskStatusHelper, currentUserComponent);
         lenient().when(maintenanceLogTaskRepository.findAllByLog_Vehicle_Id(any())).thenReturn(List.<MaintenanceLogTask>of());
         lenient().when(maintenanceTaskStatusHelper.compute(any(), anyInt(), any(), any())).thenReturn(DUMMY_STATUS);
     }
@@ -66,7 +72,7 @@ class MaintenanceTaskComponentImplTest {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceTask task = Instancio.create(MaintenanceTask.class);
         task.setVehicle(vehicle);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(task));
 
         Optional<List<MaintenanceTaskResponse>> result = maintenanceTaskComponent.listMaintenanceTasks(vehicle.getId());
@@ -80,7 +86,7 @@ class MaintenanceTaskComponentImplTest {
 
     @Test
     void listMaintenanceTasks_vehicleNotFound_returnsEmptyOptional() {
-        when(vehicleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
         Optional<List<MaintenanceTaskResponse>> result = maintenanceTaskComponent.listMaintenanceTasks(99L);
 
@@ -93,7 +99,7 @@ class MaintenanceTaskComponentImplTest {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceTask task = Instancio.create(MaintenanceTask.class);
         task.setVehicle(vehicle);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(task.getId(), vehicle.getId())).thenReturn(Optional.of(task));
 
         Optional<MaintenanceTaskResponse> result = maintenanceTaskComponent.getMaintenanceTask(vehicle.getId(), task.getId());
@@ -105,7 +111,7 @@ class MaintenanceTaskComponentImplTest {
 
     @Test
     void getMaintenanceTask_vehicleNotFound_returnsEmptyOptionalWithoutQueryingTask() {
-        when(vehicleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
         Optional<MaintenanceTaskResponse> result = maintenanceTaskComponent.getMaintenanceTask(99L, 1L);
 
@@ -116,7 +122,7 @@ class MaintenanceTaskComponentImplTest {
     @Test
     void getMaintenanceTask_taskNotFound_returnsEmptyOptional() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(99L, vehicle.getId())).thenReturn(Optional.empty());
 
         Optional<MaintenanceTaskResponse> result = maintenanceTaskComponent.getMaintenanceTask(vehicle.getId(), 99L);
@@ -128,7 +134,7 @@ class MaintenanceTaskComponentImplTest {
     void createMaintenanceTask_vehicleFound_savesAndReturnsMappedResponse() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> {
             MaintenanceTask toSave = invocation.getArgument(0);
             toSave.setId(10L);
@@ -147,7 +153,7 @@ class MaintenanceTaskComponentImplTest {
     @Test
     void createMaintenanceTask_vehicleNotFound_returnsEmptyOptionalAndDoesNotSave() {
         MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
-        when(vehicleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
         Optional<MaintenanceTaskResponse> result = maintenanceTaskComponent.createMaintenanceTask(99L, request);
 
@@ -162,7 +168,7 @@ class MaintenanceTaskComponentImplTest {
                 .intervalKm(null)
                 .intervalMonths(null)
                 .oneTime(false);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
 
         assertThat(org.junit.jupiter.api.Assertions.assertThrows(
                 InvalidMaintenanceIntervalException.class,
@@ -179,7 +185,7 @@ class MaintenanceTaskComponentImplTest {
                 .intervalKm(null)
                 .intervalMonths(null)
                 .oneTime(true);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> {
             MaintenanceTask toSave = invocation.getArgument(0);
             toSave.setId(10L);
@@ -198,7 +204,7 @@ class MaintenanceTaskComponentImplTest {
         MaintenanceTask existing = Instancio.create(MaintenanceTask.class);
         existing.setVehicle(vehicle);
         MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(existing.getId(), vehicle.getId())).thenReturn(Optional.of(existing));
         when(maintenanceTaskRepository.save(existing)).thenReturn(existing);
 
@@ -219,7 +225,7 @@ class MaintenanceTaskComponentImplTest {
                 .intervalKm(null)
                 .intervalMonths(null)
                 .oneTime(false);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(existing.getId(), vehicle.getId())).thenReturn(Optional.of(existing));
 
         assertThat(org.junit.jupiter.api.Assertions.assertThrows(
@@ -234,7 +240,7 @@ class MaintenanceTaskComponentImplTest {
     void updateMaintenanceTask_taskNotFound_returnsEmptyOptionalAndDoesNotSave() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(99L, vehicle.getId())).thenReturn(Optional.empty());
 
         Optional<MaintenanceTaskResponse> result = maintenanceTaskComponent.updateMaintenanceTask(vehicle.getId(), 99L, request);
@@ -248,7 +254,7 @@ class MaintenanceTaskComponentImplTest {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceTask task = Instancio.create(MaintenanceTask.class);
         task.setVehicle(vehicle);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(task.getId(), vehicle.getId())).thenReturn(Optional.of(task));
 
         boolean result = maintenanceTaskComponent.deleteMaintenanceTask(vehicle.getId(), task.getId());
@@ -260,7 +266,7 @@ class MaintenanceTaskComponentImplTest {
     @Test
     void deleteMaintenanceTask_notFound_returnsFalseAndDoesNotDelete() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(99L, vehicle.getId())).thenReturn(Optional.empty());
 
         boolean result = maintenanceTaskComponent.deleteMaintenanceTask(vehicle.getId(), 99L);

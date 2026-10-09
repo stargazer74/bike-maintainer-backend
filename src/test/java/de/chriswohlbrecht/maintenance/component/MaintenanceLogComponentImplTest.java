@@ -32,10 +32,16 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, InstancioExtension.class})
 class MaintenanceLogComponentImplTest {
+
+    private static final Long USER_ID = 99L;
+
+    @Mock
+    private ICurrentUserComponent currentUserComponent;
 
     @Mock
     private VehicleRepository vehicleRepository;
@@ -56,9 +62,10 @@ class MaintenanceLogComponentImplTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
         maintenanceLogComponent = new MaintenanceLogComponentImpl(
                 vehicleRepository, maintenanceLogRepository, maintenanceLogTaskRepository,
-                maintenanceTaskRepository, new MaintenanceLogMapperImpl(), maintenanceReportPdfHelper);
+                maintenanceTaskRepository, new MaintenanceLogMapperImpl(), maintenanceReportPdfHelper, currentUserComponent);
     }
 
     @Test
@@ -66,7 +73,7 @@ class MaintenanceLogComponentImplTest {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceLog log = Instancio.create(MaintenanceLog.class);
         log.setVehicle(vehicle);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(log));
         when(maintenanceLogTaskRepository.findAllByLog_Id(log.getId())).thenReturn(List.of());
 
@@ -79,7 +86,7 @@ class MaintenanceLogComponentImplTest {
 
     @Test
     void listMaintenanceLogs_vehicleNotFound_returnsEmptyOptional() {
-        when(vehicleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
         Optional<List<MaintenanceLogResponse>> result = maintenanceLogComponent.listMaintenanceLogs(99L);
 
@@ -98,7 +105,7 @@ class MaintenanceLogComponentImplTest {
                 .log(log)
                 .task(task)
                 .build();
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(log.getId(), vehicle.getId())).thenReturn(Optional.of(log));
         when(maintenanceLogTaskRepository.findAllByLog_Id(log.getId())).thenReturn(List.of(link));
 
@@ -111,7 +118,7 @@ class MaintenanceLogComponentImplTest {
     @Test
     void getMaintenanceLog_notFound_returnsEmptyOptional() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(99L, vehicle.getId())).thenReturn(Optional.empty());
 
         Optional<MaintenanceLogResponse> result = maintenanceLogComponent.getMaintenanceLog(vehicle.getId(), 99L);
@@ -125,7 +132,7 @@ class MaintenanceLogComponentImplTest {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
                 .performedTaskIds(Set.of());
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.save(any(MaintenanceLog.class))).thenAnswer(invocation -> {
             MaintenanceLog toSave = invocation.getArgument(0);
             toSave.setId(20L);
@@ -149,7 +156,7 @@ class MaintenanceLogComponentImplTest {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
                 .performedTaskIds(Set.of(task.getId()));
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(task.getId(), vehicle.getId())).thenReturn(Optional.of(task));
         when(maintenanceLogRepository.save(any(MaintenanceLog.class))).thenAnswer(invocation -> {
             MaintenanceLog toSave = invocation.getArgument(0);
@@ -171,7 +178,7 @@ class MaintenanceLogComponentImplTest {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
                 .performedTaskIds(Set.of(999L));
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(999L, vehicle.getId())).thenReturn(Optional.empty());
 
         assertThat(org.junit.jupiter.api.Assertions.assertThrows(
@@ -185,7 +192,7 @@ class MaintenanceLogComponentImplTest {
     @Test
     void createMaintenanceLog_vehicleNotFound_returnsEmptyAndDoesNotSave() {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
-        when(vehicleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
         Optional<MaintenanceLogResponse> result = maintenanceLogComponent.createMaintenanceLog(99L, request);
 
@@ -201,7 +208,7 @@ class MaintenanceLogComponentImplTest {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
                 .performedTaskIds(Set.of());
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(existing.getId(), vehicle.getId())).thenReturn(Optional.of(existing));
         when(maintenanceLogRepository.save(existing)).thenReturn(existing);
         when(maintenanceLogTaskRepository.findAllByLog_Id(existing.getId())).thenReturn(List.of());
@@ -218,7 +225,7 @@ class MaintenanceLogComponentImplTest {
     void updateMaintenanceLog_notFound_returnsEmptyAndDoesNotSave() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(99L, vehicle.getId())).thenReturn(Optional.empty());
 
         Optional<MaintenanceLogResponse> result = maintenanceLogComponent.updateMaintenanceLog(vehicle.getId(), 99L, request);
@@ -235,7 +242,7 @@ class MaintenanceLogComponentImplTest {
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .mileageAtPerformed(12000)
                 .performedTaskIds(Set.of(999L));
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(existing.getId(), vehicle.getId())).thenReturn(Optional.of(existing));
         when(maintenanceTaskRepository.findByIdAndVehicle_Id(999L, vehicle.getId())).thenReturn(Optional.empty());
 
@@ -252,7 +259,7 @@ class MaintenanceLogComponentImplTest {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceLog log = Instancio.create(MaintenanceLog.class);
         log.setVehicle(vehicle);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(log.getId(), vehicle.getId())).thenReturn(Optional.of(log));
 
         boolean result = maintenanceLogComponent.deleteMaintenanceLog(vehicle.getId(), log.getId());
@@ -265,7 +272,7 @@ class MaintenanceLogComponentImplTest {
     @Test
     void deleteMaintenanceLog_notFound_returnsFalseAndDoesNotDelete() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(99L, vehicle.getId())).thenReturn(Optional.empty());
 
         boolean result = maintenanceLogComponent.deleteMaintenanceLog(vehicle.getId(), 99L);
@@ -280,7 +287,7 @@ class MaintenanceLogComponentImplTest {
         MaintenanceLog log = Instancio.create(MaintenanceLog.class);
         log.setVehicle(vehicle);
         byte[] pdfBytes = {1, 2, 3};
-        when(vehicleRepository.findById(vehicle.getId())).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(log));
         when(maintenanceLogTaskRepository.findAllByLog_Id(log.getId())).thenReturn(List.of());
         when(maintenanceReportPdfHelper.generate(eq(vehicle), any())).thenReturn(pdfBytes);
@@ -293,7 +300,7 @@ class MaintenanceLogComponentImplTest {
 
     @Test
     void generateMaintenanceReport_vehicleNotFound_returnsEmptyOptional() {
-        when(vehicleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
         Optional<byte[]> result = maintenanceLogComponent.generateMaintenanceReport(99L);
 

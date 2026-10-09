@@ -21,14 +21,14 @@ public class VehicleComponentImpl implements IVehicleComponent {
 
     @Override
     public List<VehicleResponse> listVehicles() {
-        return vehicleRepository.findAll().stream()
+        return vehicleRepository.findAllByUser_Id(currentUserComponent.getCurrentUserId()).stream()
                 .map(vehicleMapper::toResponse)
                 .toList();
     }
 
     @Override
     public Optional<VehicleResponse> getVehicle(Long vehicleId) {
-        return vehicleRepository.findById(vehicleId).map(vehicleMapper::toResponse);
+        return findOwnVehicle(vehicleId).map(vehicleMapper::toResponse);
     }
 
     @Override
@@ -40,7 +40,7 @@ public class VehicleComponentImpl implements IVehicleComponent {
 
     @Override
     public Optional<VehicleResponse> updateVehicle(Long vehicleId, VehicleRequest request) {
-        return vehicleRepository.findById(vehicleId).map(vehicle -> {
+        return findOwnVehicle(vehicleId).map(vehicle -> {
             vehicleMapper.updateEntityFromRequest(request, vehicle);
             return vehicleMapper.toResponse(vehicleRepository.save(vehicle));
         });
@@ -48,11 +48,16 @@ public class VehicleComponentImpl implements IVehicleComponent {
 
     @Override
     public boolean deleteVehicle(Long vehicleId) {
-        return vehicleRepository.findById(vehicleId)
+        return findOwnVehicle(vehicleId)
                 .map(vehicle -> {
                     vehicleRepository.delete(vehicle);
                     return true;
                 })
                 .orElse(false);
+    }
+
+    /** Vehicles of other users are treated like non-existent ones (404), so foreign ids cannot be probed. */
+    private Optional<Vehicle> findOwnVehicle(Long vehicleId) {
+        return vehicleRepository.findByIdAndUser_Id(vehicleId, currentUserComponent.getCurrentUserId());
     }
 }

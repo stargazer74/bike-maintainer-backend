@@ -50,6 +50,12 @@ public class ResponseAssertionSteps {
                 .contains(scenarioContext.resolvePath(expectedSubstring));
     }
 
+    @Then("the response body does not contain {string}")
+    public void theResponseBodyDoesNotContain(String unexpectedSubstring) {
+        assertThat(scenarioContext.getLastResponseBodyAsString())
+                .doesNotContain(scenarioContext.resolvePath(unexpectedSubstring));
+    }
+
     @Then("the response body is empty")
     public void theResponseBodyIsEmpty() {
         assertThat(scenarioContext.getLastResponseBodyAsString()).isEmpty();

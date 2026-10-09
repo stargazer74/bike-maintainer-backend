@@ -18,12 +18,21 @@ public class CurrentUserComponentImpl implements ICurrentUserComponent {
 
     @Override
     public AppUser getCurrentUser() {
+        // The account may have been deleted while the session was still alive.
+        return appUserRepository.findById(sessionUser().id())
+                .orElseThrow(() -> new AuthenticationFailedException("Not logged in"));
+    }
+
+    @Override
+    public Long getCurrentUserId() {
+        return sessionUser().id();
+    }
+
+    private static SessionUser sessionUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof SessionUser sessionUser)) {
             throw new AuthenticationFailedException("Not logged in");
         }
-        // The account may have been deleted while the session was still alive.
-        return appUserRepository.findById(sessionUser.id())
-                .orElseThrow(() -> new AuthenticationFailedException("Not logged in"));
+        return sessionUser;
     }
 }
