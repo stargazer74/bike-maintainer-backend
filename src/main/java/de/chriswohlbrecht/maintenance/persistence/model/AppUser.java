@@ -32,9 +32,13 @@ public class AppUser {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Stored trimmed and lower-cased; unique. */
-    @Column(nullable = false, unique = true)
+    /** Stored trimmed and lower-cased; unique. Null for household profiles. */
+    @Column(unique = true)
     private String email;
+
+    /** Name shown in the profile selection (household mode); stored trimmed, unique. */
+    @Column(name = "display_name", length = 50, unique = true)
+    private String displayName;
 
     /** Null until a password has been set (e.g. the initial admin before first startup). */
     @Column(name = "password_hash", length = 100)

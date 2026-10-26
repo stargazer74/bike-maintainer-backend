@@ -1,4 +1,4 @@
-package de.chriswohlbrecht.maintenance.cucumber;
+package de.chriswohlbrecht.maintenance.cucumber.steps;
 
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogRepository;
