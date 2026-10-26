@@ -1,9 +1,9 @@
-package de.chriswohlbrecht.maintenance.cucumber;
+package de.chriswohlbrecht.maintenance.cucumber.portal;
 
 import io.cucumber.spring.CucumberContextConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @CucumberContextConfiguration
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class CucumberSpringConfiguration {
+public class PortalCucumberSpringConfiguration {
 }

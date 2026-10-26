@@ -26,7 +26,7 @@ class FlywayMigrationTest {
     void appliesAllMigrationsSuccessfully() {
         MigrationInfo[] appliedMigrations = flyway.info().applied();
 
-        assertThat(appliedMigrations).hasSize(5);
+        assertThat(appliedMigrations).hasSize(6);
         assertThat(appliedMigrations[0].getDescription()).isEqualTo("init schema");
         assertThat(appliedMigrations[0].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[1].getDescription()).isEqualTo("vehicle model year required");
@@ -37,6 +37,8 @@ class FlywayMigrationTest {
         assertThat(appliedMigrations[3].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[4].getDescription()).isEqualTo("add spring session");
         assertThat(appliedMigrations[4].getState()).isEqualTo(MigrationState.SUCCESS);
+        assertThat(appliedMigrations[5].getDescription()).isEqualTo("household profiles");
+        assertThat(appliedMigrations[5].getState()).isEqualTo(MigrationState.SUCCESS);
     }
 
     @Test

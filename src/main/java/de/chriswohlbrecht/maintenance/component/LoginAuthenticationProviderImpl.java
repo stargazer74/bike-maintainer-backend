@@ -10,14 +10,12 @@ import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -91,9 +89,7 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
             appUserRepository.save(user);
         }
 
-        SessionUser principal = new SessionUser(user.getId(), user.getEmail());
-        return UsernamePasswordAuthenticationToken.authenticated(principal, null,
-                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())));
+        return SessionUser.authenticationFor(user);
     }
 
     @Override

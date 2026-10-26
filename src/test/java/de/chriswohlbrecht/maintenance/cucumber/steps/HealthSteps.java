@@ -1,4 +1,4 @@
-package de.chriswohlbrecht.maintenance.cucumber;
+package de.chriswohlbrecht.maintenance.cucumber.steps;
 
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;

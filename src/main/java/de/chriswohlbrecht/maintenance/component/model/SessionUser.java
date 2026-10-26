@@ -1,8 +1,14 @@
 package de.chriswohlbrecht.maintenance.component.model;
 
+import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+
 import java.io.Serial;
 import java.io.Serializable;
 import java.security.Principal;
+import java.util.List;
 
 /**
  * Principal stored in the HTTP session after login. Kept minimal because it is serialized into the
@@ -15,6 +21,12 @@ public record SessionUser(Long id, String email) implements Principal, Serializa
 
     @Serial
     private static final long serialVersionUID = 1L;
+
+    /** Authentication stored in the session after a login (portal) or a profile selection (household). */
+    public static Authentication authenticationFor(AppUser user) {
+        return UsernamePasswordAuthenticationToken.authenticated(new SessionUser(user.getId(), user.getEmail()), null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())));
+    }
 
     @Override
     public String getName() {

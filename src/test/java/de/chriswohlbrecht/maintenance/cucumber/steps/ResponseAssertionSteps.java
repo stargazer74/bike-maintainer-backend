@@ -1,4 +1,4 @@
-package de.chriswohlbrecht.maintenance.cucumber;
+package de.chriswohlbrecht.maintenance.cucumber.steps;
 
 import de.chriswohlbrecht.maintenance.cucumber.support.ScenarioContext;
 import io.cucumber.java.en.Then;

@@ -67,6 +67,35 @@ class AppUserMigrationTest {
                 .hasMessageContaining("USER_ID");
     }
 
+    @Test
+    void namesInitialAdminForTheProfileSelection() {
+        migrate("latest");
+
+        assertThat(jdbcTemplate.queryForObject("SELECT display_name FROM app_user WHERE role = 'ADMIN'", String.class))
+                .isEqualTo("Admin");
+    }
+
+    @Test
+    void allowsProfilesWithoutEmail() {
+        migrate("latest");
+
+        jdbcTemplate.update("INSERT INTO app_user (display_name, role) VALUES ('Anna', 'USER')");
+        jdbcTemplate.update("INSERT INTO app_user (display_name, role) VALUES ('Ben', 'USER')");
+
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM app_user WHERE email IS NULL", Integer.class))
+                .isEqualTo(2);
+    }
+
+    @Test
+    void rejectsDuplicateDisplayName() {
+        migrate("latest");
+        jdbcTemplate.update("INSERT INTO app_user (display_name, role) VALUES ('Anna', 'USER')");
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO app_user (display_name, role) VALUES ('Anna', 'USER')"))
+                .hasMessageContaining("UK_APP_USER_DISPLAY_NAME");
+    }
+
     private void migrate(String target) {
         Flyway.configure()
                 .dataSource(dataSource)
