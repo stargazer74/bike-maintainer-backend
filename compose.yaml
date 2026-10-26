@@ -32,6 +32,10 @@ services:
       - 'DB_NAME=maintenance'
       - 'DB_USERNAME=maintenance'
       - 'DB_PASSWORD=maintenance'
+      # Initial admin (owner of all vehicles, also those from docs/seed_test_data.sql). Set the password
+      # in a .env file next to this file (gitignored); compose refuses to start without it.
+      - 'BM_INITIAL_ADMIN_EMAIL=${BM_INITIAL_ADMIN_EMAIL:-admin@localhost}'
+      - 'BM_INITIAL_ADMIN_PASSWORD=${BM_INITIAL_ADMIN_PASSWORD:?set BM_INITIAL_ADMIN_PASSWORD in .env}'
     ports:
       - '${BACKEND_PORT:-8090}:8080'
     depends_on:

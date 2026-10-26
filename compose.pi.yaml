@@ -36,6 +36,11 @@ services:
       - 'DB_NAME=maintenance'
       - 'DB_USERNAME=maintenance'
       - 'DB_PASSWORD=maintenance'
+      # Initial admin (owner of all vehicles from before user accounts). Set both in a .env file next to
+      # this file, not here (public repo). The email is only read when migration V4 runs; the password
+      # is only applied while the admin has none. Compose refuses to start if either is missing.
+      - 'BM_INITIAL_ADMIN_EMAIL=${BM_INITIAL_ADMIN_EMAIL:?set BM_INITIAL_ADMIN_EMAIL in .env}'
+      - 'BM_INITIAL_ADMIN_PASSWORD=${BM_INITIAL_ADMIN_PASSWORD:?set BM_INITIAL_ADMIN_PASSWORD in .env}'
     depends_on:
       mariadb:
         condition: service_healthy

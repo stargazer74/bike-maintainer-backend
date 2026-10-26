@@ -36,3 +36,6 @@ build/
 ### Nginx Proxy Manager runtime data ###
 /nginx/data/
 /nginx/letsencrypt/
+
+### Local secrets (e.g. BM_INITIAL_ADMIN_PASSWORD for compose.pi.yaml) ###
+.env
