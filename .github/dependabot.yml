@@ -16,6 +16,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # A new Java major version is a deliberate decision (next LTS); only updates within the current one.
+      - dependency-name: eclipse-temurin
+        update-types: [ version-update:semver-major ]
 
   - package-ecosystem: github-actions
     directory: /

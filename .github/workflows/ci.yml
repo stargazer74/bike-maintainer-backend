@@ -26,11 +26,11 @@ jobs:
       - name: Check out backend
         uses: actions/checkout@v7
 
-      - name: Set up Java 21
+      - name: Set up Java 25
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: maven
 
       # The backend consumes the API spec as Maven artifact, which is not published anywhere. Build it from the

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM eclipse-temurin:24-jre-noble
+FROM eclipse-temurin:25-jre-noble
 WORKDIR /app
 
 # The base image often lags behind Ubuntu's security fixes; pull them in at build time (as root, before USER).
