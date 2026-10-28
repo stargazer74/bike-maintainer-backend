@@ -70,6 +70,16 @@ Requirements: Java 25.
 ./mvnw test
 ```
 
+## Static analysis
+
+`./mvnw verify` runs **SpotBugs** with the **FindSecBugs** security rules (effort `Max`, threshold `Medium`) and fails
+on any finding; CI uploads the results to Security → Code scanning. Generated code (OpenAPI, MapStruct, Lombok) is
+excluded via `spotbugs-exclude.xml` and `lombok.config`.
+
+For a finding: fix the code. If it is a false positive, suppress it at the spot with
+`@SuppressFBWarnings(value = "…", justification = "…")` – a broad entry in `spotbugs-exclude.xml` only with a reason.
+Report without failing: `./mvnw verify -Dspotbugs.failOnError=false`.
+
 ## Docker image
 
 CI publishes a multi-arch image (`linux/amd64`, `linux/arm64`) to the GitHub Container Registry,

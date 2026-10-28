@@ -65,6 +65,21 @@ jobs:
       - name: Build and test
         run: ./mvnw -B -ntp verify
 
+      # SpotBugs + FindSecBugs run in `verify` and fail the build on findings. Their SARIF has paths relative to
+      # src/main/java; Code scanning needs them relative to the repository root.
+      - name: Prepare SpotBugs results for upload
+        if: always() && hashFiles('target/spotbugsSarif.json') != ''
+        run: >-
+          jq '(.runs[].results[].locations[].physicalLocation.artifactLocation.uri) |= "src/main/java/" + .'
+          target/spotbugsSarif.json > spotbugs.sarif
+
+      - name: Upload SpotBugs results
+        if: always() && hashFiles('spotbugs.sarif') != '' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: spotbugs.sarif
+          category: spotbugs
+
       # The image contains the OS packages of the base image and the JAR with all Maven dependencies, so one Trivy scan
       # covers both. Scanned for linux/amd64; the arm64 variant uses the same base image release. Runs for PRs, main and
       # release tags – publish needs this job, so a failing scan would also stop a release.

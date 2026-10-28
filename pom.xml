@@ -37,6 +37,9 @@
         <archunit-junit5.version>1.5.1</archunit-junit5.version>
         <instancio-junit.version>6.1.0</instancio-junit.version>
         <pdfbox.version>3.0.8</pdfbox.version>
+        <spotbugs-maven-plugin.version>4.10.5.0</spotbugs-maven-plugin.version>
+        <spotbugs.version>4.10.5</spotbugs.version>
+        <findsecbugs-plugin.version>1.14.0</findsecbugs-plugin.version>
 
         <maintenance.api.base-package>
             de.chriswohlbrecht.maintenance.api
@@ -185,6 +188,13 @@
             <version>${instancio-junit.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- @SuppressFBWarnings, also added by Lombok to generated code (lombok.config); compile time only. -->
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <version>${spotbugs.version}</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -208,6 +218,39 @@
             </testResource>
         </testResources>
         <plugins>
+            <!-- Static analysis: SpotBugs plus FindSecBugs security rules, runs in `verify` (CI: ./mvnw verify). -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>${spotbugs-maven-plugin.version}</version>
+                <configuration>
+                    <effort>Max</effort>
+                    <threshold>Medium</threshold>
+                    <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+                    <sarifOutput>true</sarifOutput>
+                    <plugins>
+                        <plugin>
+                            <groupId>com.h3xstream.findsecbugs</groupId>
+                            <artifactId>findsecbugs-plugin</artifactId>
+                            <version>${findsecbugs-plugin.version}</version>
+                        </plugin>
+                    </plugins>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs</artifactId>
+                        <version>${spotbugs.version}</version>
+                    </dependency>
+                </dependencies>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
