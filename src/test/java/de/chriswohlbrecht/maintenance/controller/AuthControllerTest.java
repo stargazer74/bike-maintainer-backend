@@ -109,7 +109,8 @@ class AuthControllerTest {
     @Test
     void register_notImplementedYet_returns501() throws Exception {
         mockMvc.perform(post(AuthApi.PATH_REGISTER).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\": \"new@example.org\", \"password\": \"long-enough-password\"}"))
+                        .content("{\"email\": \"new@example.org\", \"password\": \"long-enough-password\", "
+                                + "\"altcha\": \"not-checked-yet\"}"))
                 .andExpect(status().isNotImplemented());
     }
 

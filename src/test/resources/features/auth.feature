@@ -90,6 +90,6 @@ Feature: Authentication
   Scenario: Not yet implemented auth endpoints answer 501
     When a POST request is sent to "/api/v1/auth/register" with body:
       """
-      { "email": "new@example.org", "password": "long-enough-password" }
+      { "email": "new@example.org", "password": "long-enough-password", "altcha": "not-checked-yet" }
       """
     Then the response status code is 501
