@@ -8,4 +8,9 @@ public record MaintenanceReportEntry(
         Integer mileageAtPerformed,
         String notes,
         List<String> performedTaskNames) {
+
+    /** Immutable copy, so the entry cannot be changed through the list passed in or returned. */
+    public MaintenanceReportEntry {
+        performedTaskNames = List.copyOf(performedTaskNames);
+    }
 }
