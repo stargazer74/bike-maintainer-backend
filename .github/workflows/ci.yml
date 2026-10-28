@@ -18,6 +18,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      # Upload of the Trivy results to the Security tab.
+      security-events: write
     steps:
       - name: Check out backend
         uses: actions/checkout@v7
@@ -60,6 +64,34 @@ jobs:
 
       - name: Build and test
         run: ./mvnw -B -ntp verify
+
+      # The image contains the OS packages of the base image and the JAR with all Maven dependencies, so one Trivy scan
+      # covers both. Scanned for linux/amd64; the arm64 variant uses the same base image release. Runs for PRs, main and
+      # release tags – publish needs this job, so a failing scan would also stop a release.
+      - name: Build image for scanning
+        run: docker build -t bike-maintainer-backend:scan .
+
+      # Report only for now (exit-code 0): findings go to Security → Code scanning. Once the existing findings are
+      # dealt with, switch to exit-code 1 so that CRITICAL/HIGH vulnerabilities with an available fix fail the build.
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: bike-maintainer-backend:scan
+          scanners: vuln
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH,MEDIUM
+          format: sarif
+          output: trivy-image.sarif
+          exit-code: '0'
+
+      # Pull requests from forks get no write token; their results are only in the log.
+      - name: Upload Trivy results
+        if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
 
       - name: Upload JAR for the image
         if: startsWith(github.ref, 'refs/tags/v')

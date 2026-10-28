@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # Built from the bike-maintainer-api repo, not published to a registry.
+      - dependency-name: de.chris-wohlbrecht:maintenance-api
+    groups:
+      maven-minor-and-patch:
+        update-types: [ minor, patch ]
+
+  # Base image in the Dockerfile (eclipse-temurin).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: [ '*' ]
