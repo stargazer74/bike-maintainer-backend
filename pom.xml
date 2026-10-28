@@ -29,14 +29,14 @@
     <properties>
         <java.version>21</java.version>
         <cucumber.version>8.0.4</cucumber.version>
-        <openapi-generator-maven-plugin.version>7.17.0</openapi-generator-maven-plugin.version>
+        <openapi-generator-maven-plugin.version>7.26.0</openapi-generator-maven-plugin.version>
         <maven-remote-resources-plugin.version>3.3.0</maven-remote-resources-plugin.version>
-        <openapitools-jackson-databind-nullable.version>0.2.9</openapitools-jackson-databind-nullable.version>
-        <springdoc.version>3.0.3</springdoc.version>
+        <openapitools-jackson-databind-nullable.version>0.2.13</openapitools-jackson-databind-nullable.version>
+        <springdoc.version>3.2.0</springdoc.version>
         <mapstruct.version>1.6.3</mapstruct.version>
-        <archunit-junit5.version>1.4.0</archunit-junit5.version>
-        <instancio-junit.version>6.0.1</instancio-junit.version>
-        <pdfbox.version>3.0.3</pdfbox.version>
+        <archunit-junit5.version>1.5.1</archunit-junit5.version>
+        <instancio-junit.version>6.1.0</instancio-junit.version>
+        <pdfbox.version>3.0.8</pdfbox.version>
 
         <maintenance.api.base-package>
             de.chriswohlbrecht.maintenance.api
