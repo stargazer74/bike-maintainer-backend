@@ -28,7 +28,7 @@ src/
 
 ## Technologies
 - **Java Version**: 21
-- **Framework**: Spring Boot 4.1.1
+- **Framework**: Spring Boot 4.1.2
 - **Build Tool**: Maven Wrapper (`./mvnw`)
 - **Key Libraries**: Lombok, Spring Boot Docker Compose, Spring Boot Test, Cucumber, MapStruct
 

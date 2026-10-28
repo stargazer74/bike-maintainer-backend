@@ -36,7 +36,7 @@ which tasks are currently due or overdue, and logs when a task was actually perf
 ## Tech stack
 
 - Java 21
-- Spring Boot 4.1.1 (Web, Validation)
+- Spring Boot 4.1.2 (Web, Validation)
 - Lombok, MapStruct
 - Maven (wrapper: `./mvnw`)
 - ArchUnit for architecture tests
