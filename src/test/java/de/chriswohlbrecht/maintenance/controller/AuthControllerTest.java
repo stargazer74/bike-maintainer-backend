@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -104,6 +105,30 @@ class AuthControllerTest {
         mockMvc.perform(get(AuthApi.PATH_GET_CURRENT_USER))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.emailVerified").value(true));
+    }
+
+    @Test
+    void updateCurrentUser_returnsUpdatedUser() throws Exception {
+        when(authComponent.updateCurrentUser(any())).thenReturn(user().language(Language.EN));
+
+        mockMvc.perform(patch(AuthApi.PATH_UPDATE_CURRENT_USER).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"language\": \"en\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.language").value("en"));
+    }
+
+    @Test
+    void updateCurrentUser_unsupportedLanguage_returns400() throws Exception {
+        mockMvc.perform(patch(AuthApi.PATH_UPDATE_CURRENT_USER).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"language\": \"fr\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateCurrentUser_missingLanguage_returns400() throws Exception {
+        mockMvc.perform(patch(AuthApi.PATH_UPDATE_CURRENT_USER).contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

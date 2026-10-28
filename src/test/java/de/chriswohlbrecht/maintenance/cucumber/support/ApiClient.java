@@ -59,6 +59,10 @@ public class ApiClient {
         return exchange(HttpMethod.PUT, path, jsonBody, true);
     }
 
+    public EntityExchangeResult<byte[]> patch(String path, String jsonBody) {
+        return exchange(HttpMethod.PATCH, path, jsonBody, true);
+    }
+
     public EntityExchangeResult<byte[]> delete(String path) {
         return exchange(HttpMethod.DELETE, path, null, true);
     }

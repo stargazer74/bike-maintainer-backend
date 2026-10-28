@@ -49,6 +49,16 @@ Feature: Household mode – profile selection instead of login
     And the JSON response field "displayName" equals "Anna"
     And the JSON response field "role" equals "USER"
 
+  Scenario: A selected profile can change its language
+    Given a profile "Anna" exists
+    When I select the profile "Anna"
+    And a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "language": "en" }
+      """
+    Then the response status code is 200
+    And the JSON response field "language" equals "en"
+
   Scenario: Selecting an unknown profile answers 404
     When a POST request is sent to "/api/v1/profiles/999999/select" with body:
       """

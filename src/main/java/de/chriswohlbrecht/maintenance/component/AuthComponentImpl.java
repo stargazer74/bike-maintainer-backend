@@ -1,9 +1,12 @@
 package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.LoginRequest;
+import de.chriswohlbrecht.maintenance.api.model.UpdateCurrentUserRequest;
 import de.chriswohlbrecht.maintenance.api.model.UserResponse;
 import de.chriswohlbrecht.maintenance.exception.AuthenticationFailedException;
 import de.chriswohlbrecht.maintenance.mapper.UserMapper;
+import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
+import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +19,7 @@ import org.springframework.security.web.authentication.logout.SecurityContextLog
 import org.springframework.security.web.csrf.CsrfLogoutHandler;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @RequiredArgsConstructor
@@ -26,6 +30,7 @@ public class AuthComponentImpl implements IAuthComponent {
     private final CsrfTokenRepository csrfTokenRepository;
     private final ICurrentUserComponent currentUserComponent;
     private final UserMapper userMapper;
+    private final AppUserRepository appUserRepository;
 
     @Override
     public UserResponse login(LoginRequest request, HttpServletRequest httpRequest,
@@ -53,5 +58,13 @@ public class AuthComponentImpl implements IAuthComponent {
     @Override
     public UserResponse getCurrentUser() {
         return userMapper.toResponse(currentUserComponent.getCurrentUser());
+    }
+
+    @Override
+    @Transactional
+    public UserResponse updateCurrentUser(UpdateCurrentUserRequest request) {
+        AppUser user = currentUserComponent.getCurrentUser();
+        user.setLanguage(request.getLanguage().getValue());
+        return userMapper.toResponse(appUserRepository.save(user));
     }
 }

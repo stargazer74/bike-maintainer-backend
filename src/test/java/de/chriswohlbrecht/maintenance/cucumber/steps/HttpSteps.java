@@ -36,6 +36,12 @@ public class HttpSteps {
                 apiClient.put(scenarioContext.resolvePath(path), scenarioContext.resolvePath(body)));
     }
 
+    @When("a PATCH request is sent to {string} with body:")
+    public void aPatchRequestIsSentToWithBody(String path, String body) {
+        scenarioContext.setLastResponse(
+                apiClient.patch(scenarioContext.resolvePath(path), scenarioContext.resolvePath(body)));
+    }
+
     @When("a DELETE request is sent to {string}")
     public void aDeleteRequestIsSentTo(String path) {
         scenarioContext.setLastResponse(apiClient.delete(scenarioContext.resolvePath(path)));

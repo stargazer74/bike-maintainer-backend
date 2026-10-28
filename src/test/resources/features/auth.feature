@@ -44,6 +44,36 @@ Feature: Authentication
     Then the response status code is 403
     And the JSON response field "code" equals "ACCOUNT_DISABLED"
 
+  Scenario: Change the preferred language
+    Given I am logged in as "rider@example.org"
+    When a GET request is sent to "/api/v1/auth/me"
+    Then the JSON response field "language" equals "de"
+    When a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "language": "en" }
+      """
+    Then the response status code is 200
+    And the JSON response field "language" equals "en"
+    When a GET request is sent to "/api/v1/auth/me"
+    Then the JSON response field "language" equals "en"
+
+  Scenario: Only supported languages can be chosen
+    Given I am logged in as "rider@example.org"
+    When a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "language": "fr" }
+      """
+    Then the response status code is 400
+    When a GET request is sent to "/api/v1/auth/me"
+    Then the JSON response field "language" equals "de"
+
+  Scenario: Changing the language requires login
+    When a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "language": "en" }
+      """
+    Then the response status code is 401
+
   Scenario: Logout ends the session
     Given I am logged in as "rider@example.org"
     When I log out
