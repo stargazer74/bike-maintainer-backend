@@ -23,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -65,7 +66,8 @@ class MaintenanceLogComponentImplTest {
         lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
         maintenanceLogComponent = new MaintenanceLogComponentImpl(
                 vehicleRepository, maintenanceLogRepository, maintenanceLogTaskRepository,
-                maintenanceTaskRepository, new MaintenanceLogMapperImpl(), maintenanceReportPdfHelper, currentUserComponent);
+                maintenanceTaskRepository, new MaintenanceLogMapperImpl(), maintenanceReportPdfHelper,
+                new UserLocaleComponentImpl(), currentUserComponent);
     }
 
     @Test
@@ -282,15 +284,16 @@ class MaintenanceLogComponentImplTest {
     }
 
     @Test
-    void generateMaintenanceReport_vehicleFound_returnsGeneratedPdfBytes() {
+    void generateMaintenanceReport_vehicleFound_returnsPdfInOwnersLanguage() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
+        vehicle.getUser().setLanguage("en");
         MaintenanceLog log = Instancio.create(MaintenanceLog.class);
         log.setVehicle(vehicle);
         byte[] pdfBytes = {1, 2, 3};
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(log));
         when(maintenanceLogTaskRepository.findAllByLog_Id(log.getId())).thenReturn(List.of());
-        when(maintenanceReportPdfHelper.generate(eq(vehicle), any())).thenReturn(pdfBytes);
+        when(maintenanceReportPdfHelper.generate(eq(vehicle), any(), eq(Locale.UK))).thenReturn(pdfBytes);
 
         Optional<byte[]> result = maintenanceLogComponent.generateMaintenanceReport(vehicle.getId());
 
@@ -305,6 +308,6 @@ class MaintenanceLogComponentImplTest {
         Optional<byte[]> result = maintenanceLogComponent.generateMaintenanceReport(99L);
 
         assertThat(result).isEmpty();
-        verify(maintenanceReportPdfHelper, never()).generate(any(), any());
+        verify(maintenanceReportPdfHelper, never()).generate(any(), any(), any());
     }
 }

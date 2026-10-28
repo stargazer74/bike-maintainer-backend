@@ -35,6 +35,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     private final MaintenanceTaskRepository maintenanceTaskRepository;
     private final MaintenanceLogMapper maintenanceLogMapper;
     private final MaintenanceReportPdfHelper maintenanceReportPdfHelper;
+    private final IUserLocaleComponent userLocaleComponent;
     private final ICurrentUserComponent currentUserComponent;
 
     @Override
@@ -125,7 +126,8 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
                                     .map(link -> link.getTask().getName())
                                     .toList()))
                     .toList();
-            return maintenanceReportPdfHelper.generate(vehicle, entries);
+            return maintenanceReportPdfHelper.generate(vehicle, entries,
+                    userLocaleComponent.localeOf(vehicle.getUser()));
         });
     }
 

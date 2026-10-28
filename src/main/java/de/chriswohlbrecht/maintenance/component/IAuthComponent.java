@@ -1,6 +1,7 @@
 package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.LoginRequest;
+import de.chriswohlbrecht.maintenance.api.model.UpdateCurrentUserRequest;
 import de.chriswohlbrecht.maintenance.api.model.UserResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,4 +21,7 @@ public interface IAuthComponent {
     void logout(HttpServletRequest httpRequest, HttpServletResponse httpResponse);
 
     UserResponse getCurrentUser();
+
+    /** Changes the settings of the logged-in user (currently the preferred language). */
+    UserResponse updateCurrentUser(UpdateCurrentUserRequest request);
 }
