@@ -35,7 +35,7 @@ which tasks are currently due or overdue, and logs when a task was actually perf
 
 ## Tech stack
 
-- Java 21
+- Java 25
 - Spring Boot 4.1.2 (Web, Validation)
 - Lombok, MapStruct
 - Maven (wrapper: `./mvnw`)
@@ -57,7 +57,7 @@ These rules are enforced via ArchUnit tests (`src/test/java/.../archunit`).
 
 ## Setup & running
 
-Requirements: Java 21.
+Requirements: Java 25.
 
 ```bash
 # Build
