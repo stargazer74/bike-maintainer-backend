@@ -70,6 +70,27 @@ Requirements: Java 21.
 ./mvnw test
 ```
 
+## Docker image
+
+CI publishes a multi-arch image (`linux/amd64`, `linux/arm64`) to the GitHub Container Registry,
+`ghcr.io/stargazer74/bike-maintainer-backend` – **only for release tags**. Pull requests and pushes to `main` only
+build and test; nothing is published.
+
+| Git tag | Image tags |
+|---|---|
+| `vX.Y.Z` | `X.Y.Z`, `X.Y`, `X`, `latest` |
+
+Release builds set the Maven version to the tag version, so `info.app.version` and the JAR name match the release.
+
+```bash
+docker pull ghcr.io/stargazer74/bike-maintainer-backend:1
+```
+
+**Creating a release:** tag the same version in this repo and in `bike-maintainer-frontend` (e.g. `v1.2.0`) and push
+the tags; backend and frontend always share one version number. Compose files for running the app (pulling these
+images) live in [bike-maintainer-deploy](https://github.com/stargazer74/bike-maintainer-deploy). The `compose.yaml`
+in this repo is the development setup and builds the backend from source.
+
 ## Status
 
 Early development stage – the project currently consists of the Spring Boot
