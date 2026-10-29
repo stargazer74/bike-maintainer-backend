@@ -12,8 +12,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -21,14 +19,15 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
-/** One-time token sent by email; see {@code IUserTokenComponent}. */
+/**
+ * One-time token sent by email; see {@code IUserTokenComponent}. No {@code @Builder}: its generated toString() would
+ * print the referenced {@link AppUser}.
+ */
 @Entity
 @Table(name = "user_token")
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class UserToken {
 
     @Id

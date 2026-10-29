@@ -38,12 +38,12 @@ public class UserTokenComponentImpl implements IUserTokenComponent {
         byte[] bytes = new byte[TOKEN_BYTES];
         RANDOM.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        userTokenRepository.save(UserToken.builder()
-                .user(user)
-                .type(type)
-                .tokenHash(hash(token))
-                .expiresAt(now.plus(validity))
-                .build());
+        UserToken userToken = new UserToken();
+        userToken.setUser(user);
+        userToken.setType(type);
+        userToken.setTokenHash(hash(token));
+        userToken.setExpiresAt(now.plus(validity));
+        userTokenRepository.save(userToken);
         return token;
     }
 
