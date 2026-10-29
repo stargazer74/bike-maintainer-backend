@@ -3,6 +3,7 @@ package de.chriswohlbrecht.maintenance.cucumber.steps;
 import de.chriswohlbrecht.maintenance.cucumber.support.ApiClient;
 import de.chriswohlbrecht.maintenance.cucumber.support.ScenarioContext;
 import io.cucumber.java.en.When;
+import org.springframework.http.HttpMethod;
 import org.springframework.beans.factory.annotation.Autowired;
 
 public class HttpSteps {
@@ -34,6 +35,16 @@ public class HttpSteps {
     public void aPutRequestIsSentToWithBody(String path, String body) {
         scenarioContext.setLastResponse(
                 apiClient.put(scenarioContext.resolvePath(path), scenarioContext.resolvePath(body)));
+    }
+
+    @When("a POST request is sent to the unencoded path {string} with body:")
+    public void aPostRequestIsSentToTheUnencodedPathWithBody(String path, String body) {
+        scenarioContext.setLastResponse(apiClient.sendRawPath(HttpMethod.POST, path, body));
+    }
+
+    @When("a PUT request is sent to the unencoded path {string} with body:")
+    public void aPutRequestIsSentToTheUnencodedPathWithBody(String path, String body) {
+        scenarioContext.setLastResponse(apiClient.sendRawPath(HttpMethod.PUT, path, body));
     }
 
     @When("a PATCH request is sent to {string} with body:")

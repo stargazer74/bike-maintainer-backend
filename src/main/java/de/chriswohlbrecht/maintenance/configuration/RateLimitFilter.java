@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -43,19 +44,27 @@ class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !LIMITED_REQUESTS.contains(request.getMethod() + " " + request.getRequestURI());
+        return !LIMITED_REQUESTS.contains(request.getMethod() + " " + decodedPath(request));
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         Optional<Duration> retryAfter = rateLimitComponent.tryConsume(
-                request.getRequestURI() + "|" + request.getRemoteAddr());
+                decodedPath(request) + "|" + request.getRemoteAddr());
         if (retryAfter.isPresent()) {
             response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(ErrorResponses.retryAfterSeconds(retryAfter.get())));
             errorWriter.write(request, response, HttpStatus.TOO_MANY_REQUESTS, "Too many attempts, try again later");
             return;
         }
         chain.doFilter(request, response);
+    }
+
+    /**
+     * The path as Spring MVC matches it: percent-decoded, without ";…" parameters. The raw request URI would let
+     * {@code /api/v1/auth/logi%6E} reach the login endpoint without being limited.
+     */
+    private static String decodedPath(HttpServletRequest request) {
+        return UrlPathHelper.defaultInstance.getPathWithinApplication(request);
     }
 }

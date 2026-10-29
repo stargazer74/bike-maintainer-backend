@@ -116,3 +116,13 @@ Feature: Authentication
     And the client IP is "198.51.100.202"
     And I log in as "rider@example.org" with password "correct-horse-battery"
     Then the response status code is 429
+
+  Scenario: Percent-encoded login paths count towards the same rate limit
+    Given a verified user "rider@example.org" with password "correct-horse-battery" exists
+    And the client IP is "198.51.100.203"
+    When I fail to log in as "someone-else@example.org" 10 times
+    And a POST request is sent to the unencoded path "/api/v1/auth/logi%6E" with body:
+      """
+      { "email": "rider@example.org", "password": "correct-horse-battery" }
+      """
+    Then the response status code is 429

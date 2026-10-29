@@ -59,3 +59,13 @@ Feature: Change the password of the logged-in user
     When I change my password from "wrong-password-123" to "brand-new-password" 10 times
     And I change my password from "correct-horse-battery" to "brand-new-password"
     Then the response status code is 429
+
+  Scenario: Percent-encoded paths count towards the same rate limit
+    Given a verified user "rider@example.org" with password "correct-horse-battery" exists
+    And I log in as "rider@example.org" with password "correct-horse-battery"
+    When I change my password from "wrong-password-123" to "brand-new-password" 10 times
+    And a PUT request is sent to the unencoded path "/api/v1/auth/pass%77ord" with body:
+      """
+      { "currentPassword": "correct-horse-battery", "newPassword": "brand-new-password" }
+      """
+    Then the response status code is 429

@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.client.EntityExchangeResult;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
 import java.net.HttpCookie;
+import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,14 +34,16 @@ public class ApiClient {
     private static final String[] TEST_NETS = {"203.0.113.", "198.51.100.", "192.0.2."};
     private static final AtomicInteger IP_COUNTER = new AtomicInteger();
 
+    private final String baseUrl;
     private final RestTestClient restTestClient;
     private final Map<String, String> cookies = new LinkedHashMap<>();
     private String clientIp = nextTestNetIp();
     private String acceptLanguage;
 
     public ApiClient(@LocalServerPort int port) {
+        this.baseUrl = "http://localhost:" + port;
         this.restTestClient = RestTestClient.bindToServer()
-                .baseUrl("http://localhost:" + port)
+                .baseUrl(baseUrl)
                 .build();
     }
 
@@ -58,6 +61,11 @@ public class ApiClient {
 
     public EntityExchangeResult<byte[]> put(String path, String jsonBody) {
         return exchange(HttpMethod.PUT, path, jsonBody, true);
+    }
+
+    /** Sends the path exactly as given, e.g. with percent-encoded letters, instead of encoding it once more. */
+    public EntityExchangeResult<byte[]> sendRawPath(HttpMethod method, String path, String jsonBody) {
+        return exchange(method, URI.create(baseUrl + path), jsonBody, true);
     }
 
     public EntityExchangeResult<byte[]> patch(String path, String jsonBody) {
@@ -82,12 +90,21 @@ public class ApiClient {
 
     private EntityExchangeResult<byte[]> exchange(HttpMethod method, String path, String jsonBody,
                                                   boolean withCsrfToken) {
+        return exchange(restTestClient.method(method).uri(path), jsonBody, withCsrfToken);
+    }
+
+    private EntityExchangeResult<byte[]> exchange(HttpMethod method, URI uri, String jsonBody,
+                                                  boolean withCsrfToken) {
+        return exchange(restTestClient.method(method).uri(uri), jsonBody, withCsrfToken);
+    }
+
+    private EntityExchangeResult<byte[]> exchange(RestTestClient.RequestBodySpec target, String jsonBody,
+                                                  boolean withCsrfToken) {
         if (withCsrfToken && !cookies.containsKey(XSRF_COOKIE)) {
             // Like the SPA on startup: any GET makes the server issue the XSRF-TOKEN cookie.
             exchange(HttpMethod.GET, "/api/v1/auth/me", null, false);
         }
-        RestTestClient.RequestBodySpec request = restTestClient.method(method).uri(path)
-                .header("X-Forwarded-For", clientIp);
+        RestTestClient.RequestBodySpec request = target.header("X-Forwarded-For", clientIp);
         if (acceptLanguage != null) {
             request.header(HttpHeaders.ACCEPT_LANGUAGE, acceptLanguage);
         }
