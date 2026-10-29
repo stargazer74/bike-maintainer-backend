@@ -21,6 +21,14 @@ class PdfPageWriterTest {
     }
 
     @Test
+    void showsDecomposedUmlautsAndDropsInvisibleCharacters() throws IOException {
+        String text = render(writer -> writer.writeLine(
+                "Mu\u0308ller Brems\u00ADbeläge Ket\u200Bte \u2764\uFE0F", PdfPageWriter.FONT_TEXT, 11f));
+
+        assertThat(text).contains("Müller Bremsbeläge Kette ?").doesNotContain("??");
+    }
+
+    @Test
     void wrapsLongTextAtWordBoundaries() throws IOException {
         String longText = "Bremsbeläge vorne und hinten prüfen, Bremsflüssigkeit wechseln, Bremsscheiben auf "
                 + "Riefen und Mindeststärke kontrollieren, Bremssättel reinigen und Kolben gangbar machen.";

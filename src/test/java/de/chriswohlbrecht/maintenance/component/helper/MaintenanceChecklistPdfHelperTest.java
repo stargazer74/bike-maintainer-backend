@@ -120,6 +120,42 @@ class MaintenanceChecklistPdfHelperTest {
     }
 
     @Test
+    void longVehicleNamesAreWrappedInsteadOfRunningOffThePage() throws IOException {
+        Vehicle vehicle = vehicle();
+        vehicle.setName("Meine treue Reiseenduro mit Koffersystem, Heizgriffen, Navi und Sturzbügeln aus 2019");
+
+        String text = text(helper.generate(vehicle, List.of(BRAKES_LATER), PRINTED, Locale.GERMANY));
+
+        String firstLineOfName = text.lines().filter(line -> line.startsWith("Meine treue")).findFirst().orElseThrow();
+        assertThat(firstLineOfName).isNotEqualTo(vehicle.getName());
+        assertThat(text.replaceAll("\\s+", " ")).contains(vehicle.getName());
+    }
+
+    @Test
+    void fillInFieldsNeverEndUpAloneOnAnExtraPage() throws IOException {
+        for (int tasks = 1; tasks <= 25; tasks++) {
+            List<MaintenanceChecklistEntry> entries = java.util.Collections.nCopies(tasks, CHAIN_SOON);
+            try (PDDocument document = Loader.loadPDF(helper.generate(vehicle(), entries, PRINTED, Locale.GERMANY))) {
+                PDFTextStripper stripper = new PDFTextStripper();
+                int last = document.getNumberOfPages();
+                stripper.setStartPage(last);
+                stripper.setEndPage(last);
+                assertThat(stripper.getText(document)).as("last page with %d tasks", tasks).contains("Notizen:");
+            }
+        }
+    }
+
+    @Test
+    void taskWithoutIntervalSaysSoOnlyOnce() throws IOException {
+        MaintenanceChecklistEntry noInterval = new MaintenanceChecklistEntry("Sichtprüfung", null, false, null, null,
+                status(MaintenanceTaskStatus.OK, null, null, 20000, LocalDate.of(2026, 1, 1)));
+
+        String text = text(helper.generate(vehicle(), List.of(noInterval), PRINTED, Locale.GERMANY));
+
+        assertThat(text.split("Kein Intervall", -1)).hasSize(2);
+    }
+
+    @Test
     void fileNameUsesASafeVehicleNameAndTheDate() {
         Vehicle vehicle = vehicle();
         vehicle.setName("Die Rote / Ölschleuder!");

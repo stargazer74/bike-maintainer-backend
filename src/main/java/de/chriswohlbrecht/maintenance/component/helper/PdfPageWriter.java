@@ -9,6 +9,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 
 import java.io.IOException;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,7 +30,10 @@ final class PdfPageWriter {
     private static final float LEADING = 16f;
     private static final float CHECKBOX_SIZE = 9f;
     private static final float CHECKBOX_INDENT = 18f;
+    private static final float FILL_IN_LINE_HEIGHT = LEADING * 1.5f;
     private static final String REPLACEMENT = "?";
+    /** Soft hyphen, zero-width space/joiners, word joiner, variation selectors, BOM: not meant to be seen. */
+    private static final String INVISIBLE = "[\\u00AD\\u200B-\\u200D\\u2060\\uFE0E\\uFE0F\\uFEFF]";
 
     private final PDDocument document;
     private PDPageContentStream contentStream;
@@ -41,7 +45,7 @@ final class PdfPageWriter {
         startNewPage();
     }
 
-    /** One line, cut off at the right margin if too long – for short texts like titles and labels. */
+    /** One line without wrapping – only for short texts like labels; longer text belongs in {@link #writeWrapped}. */
     void writeLine(String text, PDFont font, float fontSize) throws IOException {
         ensureSpace(LEADING);
         showText(sanitize(text, font), font, fontSize, MARGIN);
@@ -72,9 +76,9 @@ final class PdfPageWriter {
         writeWrapped(text, font, fontSize, CHECKBOX_INDENT);
     }
 
-    /** A horizontal line to write on by hand, labelled with {@code label} if given. */
+    /** A horizontal line to write on by hand, labelled with {@code label} if given; takes {@link #fillInLineHeight()}. */
     void writeFillInLine(String label, PDFont font, float fontSize) throws IOException {
-        ensureSpace(LEADING * 1.5f);
+        ensureSpace(FILL_IN_LINE_HEIGHT);
         yPosition -= LEADING / 2;
         float lineStart = MARGIN;
         if (label != null && !label.isBlank()) {
@@ -103,6 +107,11 @@ final class PdfPageWriter {
 
     void close() throws IOException {
         contentStream.close();
+    }
+
+    /** Vertical space one {@link #writeFillInLine} takes, to keep a block of them together. */
+    static float fillInLineHeight() {
+        return FILL_IN_LINE_HEIGHT;
     }
 
     /** Indent of the text of a checkbox item, for lines that belong to it. */
@@ -168,13 +177,18 @@ final class PdfPageWriter {
         return font.getStringWidth(text) / 1000 * fontSize;
     }
 
-    /** Control characters become spaces, characters the font cannot encode become {@code ?}. */
+    /**
+     * Control characters become spaces, invisible formatting characters are dropped, characters the font cannot
+     * encode become {@code ?}.
+     */
     static String sanitize(String text, PDFont font) {
         if (text == null) {
             return "";
         }
-        StringBuilder result = new StringBuilder(text.length());
-        text.codePoints().forEach(codePoint -> {
+        // Composed form first, so that e.g. "u" + combining diaeresis (macOS) becomes "ü" instead of "u?".
+        String normalized = Normalizer.normalize(text, Normalizer.Form.NFC).replaceAll(INVISIBLE, "");
+        StringBuilder result = new StringBuilder(normalized.length());
+        normalized.codePoints().forEach(codePoint -> {
             if (Character.isISOControl(codePoint)) {
                 result.append(' ');
                 return;

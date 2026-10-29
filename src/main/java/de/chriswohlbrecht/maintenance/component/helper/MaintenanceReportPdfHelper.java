@@ -49,7 +49,7 @@ public class MaintenanceReportPdfHelper {
 
     private void writeHeader(PdfPageWriter writer, Vehicle vehicle, Texts texts) throws IOException {
         writer.writeLine(texts.get("report.title"), FONT_TITLE, 18f);
-        writer.writeLine(vehicle.getName(), FONT_HEADING, 13f);
+        writer.writeWrapped(vehicle.getName(), FONT_HEADING, 13f, 0f);
         writer.newLine();
 
         writer.writeLine(texts.get("report.type", texts.get("vehicleType." + vehicle.getType().name())), FONT_TEXT,
@@ -58,7 +58,7 @@ public class MaintenanceReportPdfHelper {
             String makeModel = String.join(" ",
                     vehicle.getMake() == null ? "" : vehicle.getMake(),
                     vehicle.getModel() == null ? "" : vehicle.getModel()).trim();
-            writer.writeLine(texts.get("report.makeModel", makeModel), FONT_TEXT, 11f);
+            writer.writeWrapped(texts.get("report.makeModel", makeModel), FONT_TEXT, 11f, 0f);
         }
         if (vehicle.getModelYear() != null) {
             // No thousands separator in a year.

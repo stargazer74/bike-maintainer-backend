@@ -66,13 +66,13 @@ public class MaintenanceChecklistPdfHelper {
     private void writeHeader(PdfPageWriter writer, Vehicle vehicle, LocalDate printDate, Texts texts)
             throws IOException {
         writer.writeLine(texts.get("checklist.title"), FONT_TITLE, 18f);
-        writer.writeLine(vehicle.getName(), FONT_HEADING, 13f);
+        writer.writeWrapped(vehicle.getName(), FONT_HEADING, 13f, 0f);
         writer.newLine();
         if (vehicle.getMake() != null || vehicle.getModel() != null) {
             String makeModel = String.join(" ",
                     vehicle.getMake() == null ? "" : vehicle.getMake(),
                     vehicle.getModel() == null ? "" : vehicle.getModel()).trim();
-            writer.writeLine(texts.get("report.makeModel", makeModel), FONT_TEXT, 11f);
+            writer.writeWrapped(texts.get("report.makeModel", makeModel), FONT_TEXT, 11f, 0f);
         }
         if (vehicle.getModelYear() != null) {
             writer.writeLine(texts.get("report.modelYear", String.valueOf(vehicle.getModelYear())), FONT_TEXT, 11f);
@@ -100,7 +100,8 @@ public class MaintenanceChecklistPdfHelper {
 
     private void writeFillInFields(PdfPageWriter writer, Texts texts) throws IOException {
         writer.newLine();
-        writer.ensureSpace(140f);
+        // Date, mileage and notes plus the empty note lines stay together on one page.
+        writer.ensureSpace((3 + NOTE_LINES) * PdfPageWriter.fillInLineHeight());
         writer.writeFillInLine(texts.get("checklist.fillIn.date"), FONT_TEXT, 11f);
         writer.writeFillInLine(texts.get("checklist.fillIn.mileage"), FONT_TEXT, 11f);
         writer.writeFillInLine(texts.get("checklist.fillIn.notes"), FONT_TEXT, 11f);
