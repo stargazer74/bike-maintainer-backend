@@ -3,9 +3,13 @@ package de.chriswohlbrecht.maintenance.component;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskStatus;
+import de.chriswohlbrecht.maintenance.component.helper.MaintenanceChecklistEntry;
+import de.chriswohlbrecht.maintenance.component.helper.MaintenanceChecklistPdfHelper;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceTaskStatusHelper;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceTaskStatusResult;
+import de.chriswohlbrecht.maintenance.component.model.MaintenanceChecklist;
 import de.chriswohlbrecht.maintenance.exception.InvalidMaintenanceIntervalException;
+import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceTaskMapperImpl;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLogTask;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceTask;
@@ -18,15 +22,24 @@ import org.instancio.junit.InstancioExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -55,6 +68,14 @@ class MaintenanceTaskComponentImplTest {
     @Mock
     private MaintenanceTaskStatusHelper maintenanceTaskStatusHelper;
 
+    @Mock
+    private MaintenanceChecklistPdfHelper maintenanceChecklistPdfHelper;
+
+    @Mock
+    private IUserLocaleComponent userLocaleComponent;
+
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-29T10:00:00Z"), ZoneId.of("Europe/Berlin"));
+
     private MaintenanceTaskComponentImpl maintenanceTaskComponent;
 
     @BeforeEach
@@ -62,7 +83,8 @@ class MaintenanceTaskComponentImplTest {
         lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
         maintenanceTaskComponent = new MaintenanceTaskComponentImpl(
                 vehicleRepository, maintenanceTaskRepository, maintenanceLogTaskRepository,
-                new MaintenanceTaskMapperImpl(), maintenanceTaskStatusHelper, currentUserComponent);
+                new MaintenanceTaskMapperImpl(), maintenanceTaskStatusHelper, currentUserComponent,
+                maintenanceChecklistPdfHelper, userLocaleComponent, CLOCK);
         lenient().when(maintenanceLogTaskRepository.findAllByLog_Vehicle_Id(any())).thenReturn(List.<MaintenanceLogTask>of());
         lenient().when(maintenanceTaskStatusHelper.compute(any(), anyInt(), any(), any())).thenReturn(DUMMY_STATUS);
     }
@@ -273,5 +295,124 @@ class MaintenanceTaskComponentImplTest {
 
         assertThat(result).isFalse();
         verify(maintenanceTaskRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void generateMaintenanceChecklist_ordersByUrgency_mostUrgentFirst() {
+        Vehicle vehicle = ownVehicle();
+        MaintenanceTask ok = task(1L, vehicle, "ok");
+        MaintenanceTask overdue = task(2L, vehicle, "overdue");
+        MaintenanceTask soonLater = task(3L, vehicle, "soonLater");
+        MaintenanceTask soonFirst = task(4L, vehicle, "soonFirst");
+        MaintenanceTask noFraction = task(5L, vehicle, "noFraction");
+        when(maintenanceTaskRepository.findAllByVehicle_Id(vehicle.getId()))
+                .thenReturn(List.of(ok, overdue, soonLater, soonFirst, noFraction));
+        status(ok, MaintenanceTaskStatus.OK, 0.5);
+        status(overdue, MaintenanceTaskStatus.OVERDUE, -0.1);
+        status(soonLater, MaintenanceTaskStatus.DUE_SOON, 0.08);
+        status(soonFirst, MaintenanceTaskStatus.DUE_SOON, 0.02);
+        status(noFraction, MaintenanceTaskStatus.OK, null);
+        when(userLocaleComponent.localeOf(vehicle.getUser())).thenReturn(Locale.GERMANY);
+        when(maintenanceChecklistPdfHelper.generate(eq(vehicle), any(), eq(LocalDate.of(2026, 10, 29)),
+                eq(Locale.GERMANY))).thenReturn(new byte[]{1});
+        when(maintenanceChecklistPdfHelper.fileName(vehicle, LocalDate.of(2026, 10, 29), Locale.GERMANY))
+                .thenReturn("checkliste.pdf");
+
+        Optional<MaintenanceChecklist> result =
+                maintenanceTaskComponent.generateMaintenanceChecklist(vehicle.getId(), List.of(1L, 5L, 3L, 2L, 4L));
+
+        assertThat(result).isPresent();
+        assertThat(result.get().fileName()).isEqualTo("checkliste.pdf");
+        assertThat(result.get().content()).containsExactly(1);
+        assertThat(capturedEntries(vehicle)).extracting(MaintenanceChecklistEntry::name)
+                .containsExactly("overdue", "soonFirst", "soonLater", "ok", "noFraction");
+    }
+
+    @Test
+    void generateMaintenanceChecklist_duplicateIds_listTaskOnce() {
+        Vehicle vehicle = ownVehicle();
+        MaintenanceTask task = task(1L, vehicle, "only");
+        when(maintenanceTaskRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(task));
+        when(maintenanceChecklistPdfHelper.generate(any(), any(), any(), any())).thenReturn(new byte[]{1});
+
+        maintenanceTaskComponent.generateMaintenanceChecklist(vehicle.getId(), List.of(1L, 1L));
+
+        assertThat(capturedEntries(vehicle)).hasSize(1);
+    }
+
+    @Test
+    void generateMaintenanceChecklist_taskOfOtherVehicle_isRejected() {
+        Vehicle vehicle = ownVehicle();
+        when(maintenanceTaskRepository.findAllByVehicle_Id(vehicle.getId()))
+                .thenReturn(List.of(task(1L, vehicle, "own")));
+
+        assertThatThrownBy(() -> maintenanceTaskComponent.generateMaintenanceChecklist(vehicle.getId(),
+                List.of(1L, 77L))).isInstanceOf(InvalidTaskReferenceException.class);
+    }
+
+    @Test
+    void generateMaintenanceChecklist_inactiveTask_isRejected() {
+        Vehicle vehicle = ownVehicle();
+        MaintenanceTask inactive = task(1L, vehicle, "inactive");
+        inactive.setActive(false);
+        when(maintenanceTaskRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(inactive));
+
+        assertThatThrownBy(() -> maintenanceTaskComponent.generateMaintenanceChecklist(vehicle.getId(),
+                List.of(1L))).isInstanceOf(InvalidTaskReferenceException.class);
+    }
+
+    @Test
+    void generateMaintenanceChecklist_doneOneTimeTask_isRejected() {
+        Vehicle vehicle = ownVehicle();
+        MaintenanceTask done = task(1L, vehicle, "done");
+        done.setOneTime(true);
+        when(maintenanceTaskRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(done));
+        status(done, MaintenanceTaskStatus.DONE, null);
+
+        assertThatThrownBy(() -> maintenanceTaskComponent.generateMaintenanceChecklist(vehicle.getId(),
+                List.of(1L))).isInstanceOf(InvalidTaskReferenceException.class);
+    }
+
+    @Test
+    void generateMaintenanceChecklist_emptySelection_isRejected() {
+        Vehicle vehicle = ownVehicle();
+
+        assertThatThrownBy(() -> maintenanceTaskComponent.generateMaintenanceChecklist(vehicle.getId(), List.of()))
+                .isInstanceOf(InvalidTaskReferenceException.class);
+    }
+
+    @Test
+    void generateMaintenanceChecklist_vehicleNotFound_returnsEmptyOptional() {
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
+
+        assertThat(maintenanceTaskComponent.generateMaintenanceChecklist(99L, List.of(1L))).isEmpty();
+    }
+
+    private Vehicle ownVehicle() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        return vehicle;
+    }
+
+    private static MaintenanceTask task(Long id, Vehicle vehicle, String name) {
+        MaintenanceTask task = Instancio.create(MaintenanceTask.class);
+        task.setId(id);
+        task.setVehicle(vehicle);
+        task.setName(name);
+        task.setActive(true);
+        task.setOneTime(false);
+        return task;
+    }
+
+    private void status(MaintenanceTask task, MaintenanceTaskStatus status, Double remainingFraction) {
+        lenient().when(maintenanceTaskStatusHelper.compute(same(task), anyInt(), any(), any()))
+                .thenReturn(new MaintenanceTaskStatusResult(status, null, remainingFraction, null, null, null, null));
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<MaintenanceChecklistEntry> capturedEntries(Vehicle vehicle) {
+        ArgumentCaptor<List<MaintenanceChecklistEntry>> entries = ArgumentCaptor.forClass(List.class);
+        verify(maintenanceChecklistPdfHelper).generate(eq(vehicle), entries.capture(), any(), any());
+        return entries.getValue();
     }
 }

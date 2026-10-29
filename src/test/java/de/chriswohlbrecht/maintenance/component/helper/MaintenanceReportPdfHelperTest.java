@@ -75,6 +75,16 @@ class MaintenanceReportPdfHelperTest {
                 .contains("Type: Car").contains("No maintenance recorded.");
     }
 
+    @Test
+    void generate_withCharactersTheFontLacks_doesNotFail() throws IOException {
+        MaintenanceReportEntry withEmoji = new MaintenanceReportEntry(
+                LocalDate.of(2026, 10, 9), 12500, "Kette gespannt 👍", List.of("Kette → schmieren"));
+
+        assertThat(text(helper.generate(vehicle(), List.of(withEmoji), Locale.GERMANY)))
+                .contains("Notizen: Kette gespannt ?")
+                .contains("Aufgaben: Kette ? schmieren");
+    }
+
     private static Vehicle vehicle() {
         return Vehicle.builder()
                 .name("Die Rote")
