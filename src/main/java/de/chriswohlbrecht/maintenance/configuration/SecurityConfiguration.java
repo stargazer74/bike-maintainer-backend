@@ -50,7 +50,7 @@ public class SecurityConfiguration {
                         // error dispatches render the original error (e.g. 400), not a 401 on top of it
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/config").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/config", "/api/v1/auth/challenge").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())

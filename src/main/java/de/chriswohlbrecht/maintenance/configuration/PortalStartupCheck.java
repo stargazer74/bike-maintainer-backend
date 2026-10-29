@@ -10,9 +10,9 @@ import org.springframework.core.env.Profiles;
  * deployment and not when the first user registers. Without the profile {@code local} emails are really sent,
  * so an SMTP host is required; {@code local} only logs them.
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @Conditional(OperatingModeCondition.Portal.class)
-public class PortalStartupCheck {
+public final class PortalStartupCheck {
 
     public PortalStartupCheck(Environment environment) {
         if (isBlank(environment.getProperty("bm.altcha.hmac-key"))) {

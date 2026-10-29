@@ -6,6 +6,7 @@ import de.chriswohlbrecht.maintenance.exception.AccountUnusableException;
 import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -38,6 +39,7 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
     /** Hash of a random value, compared against for unknown emails so they take as long as known ones. */
     private final String dummyHash;
 
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
     public LoginAuthenticationProviderImpl(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder,
                                            Clock clock, SecurityProperties securityProperties) {
         this.appUserRepository = appUserRepository;

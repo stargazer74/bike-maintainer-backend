@@ -36,6 +36,7 @@ public class ApiClient {
     private final RestTestClient restTestClient;
     private final Map<String, String> cookies = new LinkedHashMap<>();
     private String clientIp = nextTestNetIp();
+    private String acceptLanguage;
 
     public ApiClient(@LocalServerPort int port) {
         this.restTestClient = RestTestClient.bindToServer()
@@ -67,6 +68,10 @@ public class ApiClient {
         return exchange(HttpMethod.DELETE, path, null, true);
     }
 
+    public void useAcceptLanguage(String acceptLanguage) {
+        this.acceptLanguage = acceptLanguage;
+    }
+
     public void useClientIp(String ip) {
         this.clientIp = ip;
     }
@@ -83,6 +88,9 @@ public class ApiClient {
         }
         RestTestClient.RequestBodySpec request = restTestClient.method(method).uri(path)
                 .header("X-Forwarded-For", clientIp);
+        if (acceptLanguage != null) {
+            request.header(HttpHeaders.ACCEPT_LANGUAGE, acceptLanguage);
+        }
         if (!cookies.isEmpty()) {
             request.header(HttpHeaders.COOKIE, cookies.entrySet().stream()
                     .map(cookie -> cookie.getKey() + "=" + cookie.getValue())

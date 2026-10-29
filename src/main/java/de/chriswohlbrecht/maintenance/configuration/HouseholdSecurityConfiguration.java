@@ -25,6 +25,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class HouseholdSecurityConfiguration {
 
     private static final String[] PORTAL_ONLY_ENDPOINTS = {
+            "/api/v1/auth/challenge",
             "/api/v1/auth/login",
             "/api/v1/auth/register",
             "/api/v1/auth/verify-email",

@@ -37,6 +37,8 @@ public class DatabaseCleanupHooks {
         maintenanceLogRepository.deleteAllInBatch();
         maintenanceTaskRepository.deleteAllInBatch();
         vehicleRepository.deleteAllInBatch();
+        jdbcTemplate.update("DELETE FROM user_token");
+        jdbcTemplate.update("DELETE FROM mail_quota");
         appUserRepository.deleteAllInBatch(appUserRepository.findAll().stream()
                 .filter(user -> user.getRole() != UserRole.ADMIN)
                 .toList());
