@@ -122,6 +122,12 @@ Feature: Registration and email verification
     And the JSON response field "code" equals "CAPTCHA_INVALID"
     And 0 emails have been sent to "other@example.org"
 
+  Scenario: A password longer than 72 bytes is rejected before the ALTCHA solution is used
+    When I register as "new@example.org" with password "ääääääääääääääääääääääääääääääääääääääää"
+    Then the response status code is 400
+    And 0 emails have been sent to "new@example.org"
+    And no account exists for "new@example.org"
+
   Scenario: A filled honeypot is accepted but ignored
     When I register as "bot@example.org" with password "correct-horse-battery" and the honeypot filled
     Then the response status code is 202

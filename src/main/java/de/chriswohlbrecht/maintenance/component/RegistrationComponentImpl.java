@@ -4,6 +4,7 @@ import de.chriswohlbrecht.maintenance.api.model.EmailRequest;
 import de.chriswohlbrecht.maintenance.api.model.RegisterRequest;
 import de.chriswohlbrecht.maintenance.api.model.TokenRequest;
 import de.chriswohlbrecht.maintenance.configuration.OperatingModeCondition;
+import de.chriswohlbrecht.maintenance.exception.InvalidPasswordException;
 import de.chriswohlbrecht.maintenance.exception.InvalidTokenException;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
@@ -17,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Optional;
@@ -46,8 +48,13 @@ public class RegistrationComponentImpl implements IRegistrationComponent {
         return altchaComponent.createChallengeJson();
     }
 
+    /** Checked before the ALTCHA solution, so a rejected password does not use up the solved challenge. */
     @Override
     public void register(RegisterRequest request, String acceptLanguage) {
+        if (request.getPassword().getBytes(StandardCharsets.UTF_8).length > InitialAdminComponentImpl.MAX_PASSWORD_BYTES) {
+            throw new InvalidPasswordException(
+                    "Password must not exceed " + InitialAdminComponentImpl.MAX_PASSWORD_BYTES + " bytes (UTF-8)");
+        }
         altchaComponent.verify(request.getAltcha());
         String honeypot = request.getWebsite();
         if (honeypot != null && !honeypot.isBlank()) {
