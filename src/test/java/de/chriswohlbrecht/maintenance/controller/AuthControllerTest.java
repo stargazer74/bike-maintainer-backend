@@ -2,9 +2,11 @@ package de.chriswohlbrecht.maintenance.controller;
 
 import de.chriswohlbrecht.maintenance.api.handler.AuthApi;
 import de.chriswohlbrecht.maintenance.api.model.Language;
+import de.chriswohlbrecht.maintenance.api.model.RegisterRequest;
 import de.chriswohlbrecht.maintenance.api.model.UserResponse;
 import de.chriswohlbrecht.maintenance.api.model.UserRole;
 import de.chriswohlbrecht.maintenance.component.IAuthComponent;
+import de.chriswohlbrecht.maintenance.component.IRegistrationComponent;
 import de.chriswohlbrecht.maintenance.exception.AccountUnusableException;
 import de.chriswohlbrecht.maintenance.exception.AuthenticationFailedException;
 import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -20,6 +23,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -41,6 +45,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private IAuthComponent authComponent;
+
+    @MockitoBean
+    private IRegistrationComponent registrationComponent;
 
     @Test
     void login_success_returnsUser() throws Exception {
@@ -132,10 +139,51 @@ class AuthControllerTest {
     }
 
     @Test
-    void register_notImplementedYet_returns501() throws Exception {
+    void register_delegatesWithAcceptLanguage_returns202() throws Exception {
         mockMvc.perform(post(AuthApi.PATH_REGISTER).contentType(MediaType.APPLICATION_JSON)
+                        .header(HttpHeaders.ACCEPT_LANGUAGE, "en-US")
                         .content("{\"email\": \"new@example.org\", \"password\": \"long-enough-password\", "
-                                + "\"altcha\": \"not-checked-yet\"}"))
+                                + "\"altcha\": \"solved\"}"))
+                .andExpect(status().isAccepted());
+
+        verify(registrationComponent).register(any(RegisterRequest.class), eq("en-US"));
+    }
+
+    @Test
+    void register_missingAltcha_returns400CaptchaInvalid() throws Exception {
+        mockMvc.perform(post(AuthApi.PATH_REGISTER).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\": \"new@example.org\", \"password\": \"long-enough-password\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CAPTCHA_INVALID"));
+    }
+
+    @Test
+    void register_invalidEmail_returns400WithoutCode() throws Exception {
+        mockMvc.perform(post(AuthApi.PATH_REGISTER).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\": \"not-an-email\", \"password\": \"long-enough-password\", "
+                                + "\"altcha\": \"solved\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").doesNotExist());
+    }
+
+    @Test
+    void getAuthChallenge_passesLibraryJsonOn_withNoStore() throws Exception {
+        when(registrationComponent.createChallengeJson())
+                .thenReturn("{\"parameters\":{\"algorithm\":\"PBKDF2/SHA-256\",\"expiresAt\":1761660000},"
+                        + "\"signature\":\"abc\"}");
+
+        mockMvc.perform(get(AuthApi.PATH_GET_AUTH_CHALLENGE))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.signature").value("abc"))
+                .andExpect(jsonPath("$.parameters.algorithm").value("PBKDF2/SHA-256"))
+                .andExpect(jsonPath("$.parameters.expiresAt").value(1761660000));
+    }
+
+    @Test
+    void confirmPasswordReset_notImplementedYet_returns501() throws Exception {
+        mockMvc.perform(post(AuthApi.PATH_CONFIRM_PASSWORD_RESET).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\": \"some-token\", \"newPassword\": \"long-enough-password\"}"))
                 .andExpect(status().isNotImplemented());
     }
 

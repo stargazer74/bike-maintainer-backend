@@ -70,6 +70,26 @@ Requirements: Java 25.
 ./mvnw test
 ```
 
+### Configuration
+
+| Variable | Purpose |
+|---|---|
+| `BM_MODE` | `portal` (default, accounts with login) or `household` (profiles without password, home network only) |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD` | MariaDB connection |
+| `BM_INITIAL_ADMIN_EMAIL`, `BM_INITIAL_ADMIN_PASSWORD` | initial admin (portal) |
+| `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT` (587), `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` | SMTP for registration emails (STARTTLS required) |
+| `BM_MAIL_FROM` | sender address (default `noreply@bike-maintainer.de`) |
+| `BM_PUBLIC_URL` | address of the app used in email links, e.g. `https://app.bike-maintainer.de` |
+| `BM_ALTCHA_HMAC_KEY` | secret for the registration captcha, e.g. `openssl rand -hex 32` |
+
+In portal mode the backend refuses to start without `BM_ALTCHA_HMAC_KEY`, and without `SPRING_MAIL_HOST` unless the
+Spring profile `local` is active. At most `bm.mail.daily-limit` (100) emails are sent per day; unverified accounts are
+deleted after 7 days.
+
+**Profile `local` (development):** emails are not sent but written to the log, including the verification link, and a
+fixed ALTCHA key is used (`application-local.properties`). `./mvnw spring-boot:run` and the development
+`compose.yaml` activate it; the published image never does. Never use it in production.
+
 ## Static analysis
 
 `./mvnw verify` runs **SpotBugs** with the **FindSecBugs** security rules (effort `Max`, threshold `Medium`) and fails

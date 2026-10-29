@@ -129,6 +129,10 @@ Feature: Household mode – profile selection instead of login
     When a GET request is sent to "/api/v1/vehicles"
     Then the response status code is 401
 
+  Scenario: The registration captcha of portal mode does not exist
+    When a GET request is sent to "/api/v1/auth/challenge"
+    Then the response status code is 404
+
   Scenario Outline: Account endpoints of portal mode do not exist
     When a POST request without CSRF token is sent to "<path>" with body:
       """

@@ -118,8 +118,8 @@ Feature: Authentication
     Then the response status code is 429
 
   Scenario: Not yet implemented auth endpoints answer 501
-    When a POST request is sent to "/api/v1/auth/register" with body:
+    When a POST request is sent to "/api/v1/auth/password-reset/confirm" with body:
       """
-      { "email": "new@example.org", "password": "long-enough-password", "altcha": "not-checked-yet" }
+      { "token": "some-token", "newPassword": "long-enough-password" }
       """
     Then the response status code is 501

@@ -32,6 +32,8 @@ services:
       - 'DB_NAME=maintenance'
       - 'DB_USERNAME=maintenance'
       - 'DB_PASSWORD=maintenance'
+      # Development: emails only go to the log, fixed ALTCHA key (application-local.properties)
+      - 'SPRING_PROFILES_ACTIVE=local'
       # Initial admin (owner of all vehicles, also those from docs/seed_test_data.sql). Set the password
       # in a .env file next to this file (gitignored); compose refuses to start without it.
       - 'BM_INITIAL_ADMIN_EMAIL=${BM_INITIAL_ADMIN_EMAIL:-admin@localhost}'
