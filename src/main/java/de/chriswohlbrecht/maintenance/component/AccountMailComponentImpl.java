@@ -27,6 +27,11 @@ public class AccountMailComponentImpl implements IAccountMailComponent {
     }
 
     @Override
+    public void sendPasswordReset(AppUser user, String token) {
+        send(user, "mail.passwordReset", mailProperties.linkBaseUrl() + "/passwort-zuruecksetzen?token=" + token);
+    }
+
+    @Override
     public void sendRegistrationExists(AppUser user) {
         send(user, "mail.registrationExists", mailProperties.linkBaseUrl() + "/anmelden",
                 mailProperties.linkBaseUrl() + "/passwort-vergessen");

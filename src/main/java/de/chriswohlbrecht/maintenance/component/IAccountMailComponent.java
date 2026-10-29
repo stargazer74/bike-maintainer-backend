@@ -11,6 +11,9 @@ public interface IAccountMailComponent {
     /** Link to confirm the email address: {@code {BM_PUBLIC_URL}/email-bestaetigen?token=…}. */
     void sendVerification(AppUser user, String token);
 
+    /** Link to set a new password: {@code {BM_PUBLIC_URL}/passwort-zuruecksetzen?token=…}. */
+    void sendPasswordReset(AppUser user, String token);
+
     /** Someone tried to register with the address of this existing account; links to login and password reset. */
     void sendRegistrationExists(AppUser user);
 }

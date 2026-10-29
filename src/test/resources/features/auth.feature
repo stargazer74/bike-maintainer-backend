@@ -116,10 +116,3 @@ Feature: Authentication
     And the client IP is "198.51.100.202"
     And I log in as "rider@example.org" with password "correct-horse-battery"
     Then the response status code is 429
-
-  Scenario: Not yet implemented auth endpoints answer 501
-    When a POST request is sent to "/api/v1/auth/password-reset/confirm" with body:
-      """
-      { "token": "some-token", "newPassword": "long-enough-password" }
-      """
-    Then the response status code is 501

@@ -61,6 +61,12 @@ public class UserTokenComponentImpl implements IUserTokenComponent {
 
     @Override
     @Transactional
+    public void revokeOpen(AppUser user, UserTokenType type) {
+        userTokenRepository.invalidateOpenTokens(user, type, LocalDateTime.now(clock));
+    }
+
+    @Override
+    @Transactional
     public int deleteExpired() {
         return userTokenRepository.deleteUsedOrExpired(LocalDateTime.now(clock));
     }

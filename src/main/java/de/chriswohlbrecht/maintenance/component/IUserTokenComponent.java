@@ -23,6 +23,9 @@ public interface IUserTokenComponent {
      */
     Optional<AppUser> consume(String token, UserTokenType type);
 
+    /** Invalidates all open tokens of this user and type, e.g. reset links after the password was changed. */
+    void revokeOpen(AppUser user, UserTokenType type);
+
     /** Deletes used and expired tokens; returns how many. */
     int deleteExpired();
 }
