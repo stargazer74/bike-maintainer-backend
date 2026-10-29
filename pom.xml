@@ -37,6 +37,8 @@
         <archunit-junit5.version>1.5.1</archunit-junit5.version>
         <instancio-junit.version>6.1.0</instancio-junit.version>
         <pdfbox.version>3.0.8</pdfbox.version>
+        <altcha.version>2.1.1</altcha.version>
+        <org-json.version>20260814</org-json.version>
         <spotbugs-maven-plugin.version>4.10.5.0</spotbugs-maven-plugin.version>
         <spotbugs.version>4.10.5</spotbugs.version>
         <findsecbugs-plugin.version>1.14.0</findsecbugs-plugin.version>
@@ -79,6 +81,21 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        <!-- ALTCHA proof-of-work captcha (protocol v2); needs org.json at runtime, pinned to a current release -->
+        <dependency>
+            <groupId>org.altcha</groupId>
+            <artifactId>altcha</artifactId>
+            <version>${altcha.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>${org-json.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -254,6 +271,12 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- ./mvnw spring-boot:run is local development: emails only go to the log, fixed ALTCHA key -->
+                    <profiles>
+                        <profile>local</profile>
+                    </profiles>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
