@@ -36,6 +36,15 @@ public class AuthSteps {
         createUser(email, password, true, true);
     }
 
+    @Given("a verified user {string} with password {string} and language {string} exists")
+    public void aVerifiedUserWithLanguageExists(String email, String password, String language) {
+        createUser(email, password, true, true);
+        appUserRepository.findByEmailIgnoreCase(email).ifPresent(user -> {
+            user.setLanguage(language);
+            appUserRepository.save(user);
+        });
+    }
+
     @Given("an unverified user {string} with password {string} exists")
     public void anUnverifiedUserExists(String email, String password) {
         createUser(email, password, false, true);

@@ -2,10 +2,12 @@ package de.chriswohlbrecht.maintenance.controller;
 
 import de.chriswohlbrecht.maintenance.api.handler.AuthApi;
 import de.chriswohlbrecht.maintenance.api.model.Language;
+import de.chriswohlbrecht.maintenance.api.model.PasswordResetConfirmRequest;
 import de.chriswohlbrecht.maintenance.api.model.RegisterRequest;
 import de.chriswohlbrecht.maintenance.api.model.UserResponse;
 import de.chriswohlbrecht.maintenance.api.model.UserRole;
 import de.chriswohlbrecht.maintenance.component.IAuthComponent;
+import de.chriswohlbrecht.maintenance.component.IPasswordComponent;
 import de.chriswohlbrecht.maintenance.component.IRegistrationComponent;
 import de.chriswohlbrecht.maintenance.exception.AccountUnusableException;
 import de.chriswohlbrecht.maintenance.exception.AuthenticationFailedException;
@@ -25,6 +27,7 @@ import java.time.OffsetDateTime;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -48,6 +51,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private IRegistrationComponent registrationComponent;
+
+    @MockitoBean
+    private IPasswordComponent passwordComponent;
 
     @Test
     void login_success_returnsUser() throws Exception {
@@ -181,10 +187,22 @@ class AuthControllerTest {
     }
 
     @Test
-    void confirmPasswordReset_notImplementedYet_returns501() throws Exception {
+    void confirmPasswordReset_delegatesAndReturns204() throws Exception {
         mockMvc.perform(post(AuthApi.PATH_CONFIRM_PASSWORD_RESET).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"token\": \"some-token\", \"newPassword\": \"long-enough-password\"}"))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isNoContent());
+
+        verify(passwordComponent).confirmReset(new PasswordResetConfirmRequest()
+                .token("some-token").newPassword("long-enough-password"));
+    }
+
+    @Test
+    void confirmPasswordReset_tooShortPassword_returns400() throws Exception {
+        mockMvc.perform(post(AuthApi.PATH_CONFIRM_PASSWORD_RESET).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\": \"some-token\", \"newPassword\": \"short\"}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(passwordComponent);
     }
 
     private static UserResponse user() {

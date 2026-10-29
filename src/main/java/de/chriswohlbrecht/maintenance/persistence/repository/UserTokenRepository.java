@@ -21,6 +21,14 @@ public interface UserTokenRepository extends JpaRepository<UserToken, Long> {
     int invalidateOpenTokens(@Param("user") AppUser user, @Param("type") UserTokenType type,
                              @Param("now") LocalDateTime now);
 
+    /**
+     * Marks the token as used unless another request did so first; the condition is checked by the database, so of
+     * two parallel requests only one gets 1.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE UserToken t SET t.usedAt = :now WHERE t.id = :id AND t.usedAt IS NULL")
+    int markUsed(@Param("id") Long id, @Param("now") LocalDateTime now);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("DELETE FROM UserToken t WHERE t.expiresAt < :now OR t.usedAt IS NOT NULL")
     int deleteUsedOrExpired(@Param("now") LocalDateTime now);

@@ -39,6 +39,13 @@ public class SessionComponentImpl implements ISessionComponent {
                 .forEach(sessionRepository::deleteById);
     }
 
+    @Override
+    public void invalidateOtherSessionsOf(Long userId, String keptSessionId) {
+        sessionRepository.findByPrincipalName(String.valueOf(userId)).keySet().stream()
+                .filter(sessionId -> !sessionId.equals(keptSessionId))
+                .forEach(sessionRepository::deleteById);
+    }
+
     /**
      * The CSRF token is loaded lazily; after it has been rotated, reading it makes Spring write the new
      * XSRF-TOKEN cookie in this response, so the client can send state-changing requests right away.

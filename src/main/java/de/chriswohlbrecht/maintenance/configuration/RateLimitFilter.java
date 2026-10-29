@@ -7,9 +7,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -26,11 +26,13 @@ import java.util.Set;
  */
 class RateLimitFilter extends OncePerRequestFilter {
 
-    static final Set<String> LIMITED_PATHS = Set.of(
-            "/api/v1/auth/login",
-            "/api/v1/auth/register",
-            "/api/v1/auth/verify-email/resend",
-            "/api/v1/auth/password-reset/request");
+    /** Method and path; changing the password needs a session, but the current password can be guessed there. */
+    static final Set<String> LIMITED_REQUESTS = Set.of(
+            "POST /api/v1/auth/login",
+            "POST /api/v1/auth/register",
+            "POST /api/v1/auth/verify-email/resend",
+            "POST /api/v1/auth/password-reset/request",
+            "PUT /api/v1/auth/password");
 
     private final IRateLimitComponent rateLimitComponent;
     private final SecurityErrorWriter errorWriter;
@@ -42,19 +44,27 @@ class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !HttpMethod.POST.matches(request.getMethod()) || !LIMITED_PATHS.contains(request.getRequestURI());
+        return !LIMITED_REQUESTS.contains(request.getMethod() + " " + decodedPath(request));
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         Optional<Duration> retryAfter = rateLimitComponent.tryConsume(
-                request.getRequestURI() + "|" + request.getRemoteAddr());
+                decodedPath(request) + "|" + request.getRemoteAddr());
         if (retryAfter.isPresent()) {
             response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(ErrorResponses.retryAfterSeconds(retryAfter.get())));
             errorWriter.write(request, response, HttpStatus.TOO_MANY_REQUESTS, "Too many attempts, try again later");
             return;
         }
         chain.doFilter(request, response);
+    }
+
+    /**
+     * The path as Spring MVC matches it: percent-decoded, without ";…" parameters. The raw request URI would let
+     * {@code /api/v1/auth/logi%6E} reach the login endpoint without being limited.
+     */
+    private static String decodedPath(HttpServletRequest request) {
+        return UrlPathHelper.defaultInstance.getPathWithinApplication(request);
     }
 }

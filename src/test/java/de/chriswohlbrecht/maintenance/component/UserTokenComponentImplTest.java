@@ -72,6 +72,19 @@ class UserTokenComponentImplTest {
         assertThat(second).isEmpty();
     }
 
+    /**
+     * Simulates a parallel request that used the token between our read and our write: the entity in this
+     * persistence context still shows it as open, the database row does not.
+     */
+    @Test
+    void tokenUsedByParallelRequestIsRejected() {
+        String token = component.issue(user, UserTokenType.PASSWORD_RESET, VALIDITY);
+        userTokenRepository.findByTokenHash(UserTokenComponentImpl.hash(token)).orElseThrow();
+        jdbcTemplate.update("UPDATE user_token SET used_at = CURRENT_TIMESTAMP");
+
+        assertThat(component.consume(token, UserTokenType.PASSWORD_RESET)).isEmpty();
+    }
+
     @Test
     void expiredTokenIsRejected() {
         String token = component.issue(user, UserTokenType.EMAIL_VERIFICATION, VALIDITY);
