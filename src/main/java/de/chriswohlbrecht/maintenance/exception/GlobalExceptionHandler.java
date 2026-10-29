@@ -51,4 +51,11 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponses.of(HttpStatus.TOO_MANY_REQUESTS, MailQuotaExceededException.CODE,
                         ex.getMessage(), request.getRequestURI()));
     }
+
+    @ExceptionHandler(CaptchaInvalidException.class)
+    public ResponseEntity<ErrorResponse> handleCaptchaInvalid(CaptchaInvalidException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponses.of(HttpStatus.BAD_REQUEST, CaptchaInvalidException.CODE, ex.getMessage(),
+                        request.getRequestURI()));
+    }
 }
