@@ -51,12 +51,12 @@ public class UserTokenComponentImpl implements IUserTokenComponent {
     @Transactional
     public Optional<AppUser> consume(String token, UserTokenType type) {
         LocalDateTime now = LocalDateTime.now(clock);
-        Optional<UserToken> found = userTokenRepository.findByTokenHash(hash(token))
+        return userTokenRepository.findByTokenHash(hash(token))
                 .filter(candidate -> candidate.getType() == type)
                 .filter(candidate -> candidate.getUsedAt() == null)
-                .filter(candidate -> candidate.getExpiresAt().isAfter(now));
-        found.ifPresent(candidate -> candidate.setUsedAt(now));
-        return found.map(UserToken::getUser);
+                .filter(candidate -> candidate.getExpiresAt().isAfter(now))
+                .filter(candidate -> userTokenRepository.markUsed(candidate.getId(), now) == 1)
+                .map(UserToken::getUser);
     }
 
     @Override
