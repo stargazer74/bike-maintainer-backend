@@ -3,12 +3,7 @@ package de.chriswohlbrecht.maintenance.component.helper;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
 import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
@@ -26,11 +21,9 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class MaintenanceReportPdfHelper {
 
-    private static final float MARGIN = 50f;
-    private static final float LEADING = 16f;
-    private static final PDFont FONT_TITLE = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-    private static final PDFont FONT_HEADING = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-    private static final PDFont FONT_TEXT = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+    private static final PDFont FONT_TITLE = PdfPageWriter.FONT_TITLE;
+    private static final PDFont FONT_HEADING = PdfPageWriter.FONT_HEADING;
+    private static final PDFont FONT_TEXT = PdfPageWriter.FONT_TEXT;
 
     private final MessageSource messageSource;
 
@@ -40,7 +33,7 @@ public class MaintenanceReportPdfHelper {
      */
     public byte[] generate(Vehicle vehicle, List<MaintenanceReportEntry> entries, Locale locale) {
         try (PDDocument document = new PDDocument()) {
-            ReportWriter writer = new ReportWriter(document);
+            PdfPageWriter writer = new PdfPageWriter(document);
             Texts texts = new Texts(messageSource, locale);
             writeHeader(writer, vehicle, texts);
             writeEntries(writer, entries, texts);
@@ -54,7 +47,7 @@ public class MaintenanceReportPdfHelper {
         }
     }
 
-    private void writeHeader(ReportWriter writer, Vehicle vehicle, Texts texts) throws IOException {
+    private void writeHeader(PdfPageWriter writer, Vehicle vehicle, Texts texts) throws IOException {
         writer.writeLine(texts.get("report.title"), FONT_TITLE, 18f);
         writer.writeLine(vehicle.getName(), FONT_HEADING, 13f);
         writer.newLine();
@@ -76,7 +69,7 @@ public class MaintenanceReportPdfHelper {
         writer.newLine();
     }
 
-    private void writeEntries(ReportWriter writer, List<MaintenanceReportEntry> entries, Texts texts)
+    private void writeEntries(PdfPageWriter writer, List<MaintenanceReportEntry> entries, Texts texts)
             throws IOException {
         writer.writeLine(texts.get("report.performedMaintenance"), FONT_HEADING, 13f);
         writer.newLine();
@@ -90,11 +83,11 @@ public class MaintenanceReportPdfHelper {
             writer.writeLine(texts.get("report.entry", texts.date(entry), texts.kilometers(entry.mileageAtPerformed())),
                     FONT_HEADING, 11f);
             if (!entry.performedTaskNames().isEmpty()) {
-                writer.writeLine(texts.get("report.tasks", String.join(", ", entry.performedTaskNames())), FONT_TEXT,
-                        11f);
+                writer.writeWrapped(texts.get("report.tasks", String.join(", ", entry.performedTaskNames())),
+                        FONT_TEXT, 11f, 0f);
             }
             if (entry.notes() != null && !entry.notes().isBlank()) {
-                writer.writeLine(texts.get("report.notes", entry.notes()), FONT_TEXT, 11f);
+                writer.writeWrapped(texts.get("report.notes", entry.notes()), FONT_TEXT, 11f, 0f);
             }
             writer.newLine();
         }
@@ -128,47 +121,6 @@ public class MaintenanceReportPdfHelper {
 
         private String kilometers(Integer value) {
             return value == null ? "" : numberFormat.format(value);
-        }
-    }
-
-    private static final class ReportWriter {
-        private final PDDocument document;
-        private PDPageContentStream contentStream;
-        private float yPosition;
-
-        private ReportWriter(PDDocument document) throws IOException {
-            this.document = document;
-            startNewPage();
-        }
-
-        private void startNewPage() throws IOException {
-            if (contentStream != null) {
-                contentStream.close();
-            }
-            PDPage page = new PDPage(PDRectangle.A4);
-            document.addPage(page);
-            contentStream = new PDPageContentStream(document, page);
-            yPosition = page.getMediaBox().getHeight() - MARGIN;
-        }
-
-        private void writeLine(String text, PDFont font, float fontSize) throws IOException {
-            if (yPosition < MARGIN) {
-                startNewPage();
-            }
-            contentStream.beginText();
-            contentStream.setFont(font, fontSize);
-            contentStream.newLineAtOffset(MARGIN, yPosition);
-            contentStream.showText(text == null ? "" : text);
-            contentStream.endText();
-            yPosition -= LEADING;
-        }
-
-        private void newLine() {
-            yPosition -= LEADING / 2;
-        }
-
-        private void close() throws IOException {
-            contentStream.close();
         }
     }
 }
