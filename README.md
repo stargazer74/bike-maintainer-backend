@@ -87,7 +87,8 @@ Spring profile `local` is active. At most `bm.mail.daily-limit` (100) emails are
 deleted after 7 days.
 
 **Profile `local` (development):** emails are not sent but written to the log, including the verification link, and a
-fixed ALTCHA key is used (`application-local.properties`). `./mvnw spring-boot:run` and the development
+fixed ALTCHA key is used (`application-local.properties`). Swagger UI (`/swagger-ui.html`) and `/v3/api-docs` are
+only available in this profile. `./mvnw spring-boot:run` and the development
 `compose.yaml` activate it; the published image never does. Never use it in production.
 
 ## Static analysis
