@@ -2,10 +2,14 @@ package de.chriswohlbrecht.maintenance.cucumber.steps;
 
 import de.chriswohlbrecht.maintenance.cucumber.support.ScenarioContext;
 import io.cucumber.java.en.Then;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -78,6 +82,29 @@ public class ResponseAssertionSteps {
         byte[] body = scenarioContext.getLastResponse().getResponseBody();
         assertThat(body).isNotEmpty();
         assertThat(new String(body, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
+    }
+
+    @Then("the PDF document contains {string}")
+    public void thePdfDocumentContains(String expected) throws IOException {
+        assertThat(lastResponsePdfText()).contains(expected);
+    }
+
+    @Then("the PDF document does not contain {string}")
+    public void thePdfDocumentDoesNotContain(String unexpected) throws IOException {
+        assertThat(lastResponsePdfText()).doesNotContain(unexpected);
+    }
+
+    @Then("the PDF document lists {string} before {string}")
+    public void thePdfDocumentListsBefore(String first, String second) throws IOException {
+        String text = lastResponsePdfText();
+        assertThat(text).contains(first, second);
+        assertThat(text.indexOf(first)).as("%s before %s", first, second).isLessThan(text.indexOf(second));
+    }
+
+    private String lastResponsePdfText() throws IOException {
+        try (PDDocument document = Loader.loadPDF(scenarioContext.getLastResponse().getResponseBody())) {
+            return new PDFTextStripper().getText(document);
+        }
     }
 
     private JsonNode parseLastResponseBody() {
