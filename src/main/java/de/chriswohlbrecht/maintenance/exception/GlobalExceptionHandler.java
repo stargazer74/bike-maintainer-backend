@@ -42,4 +42,13 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponses.of(HttpStatus.TOO_MANY_REQUESTS, null, ex.getMessage(),
                         request.getRequestURI()));
     }
+
+    @ExceptionHandler(MailQuotaExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMailQuotaExceeded(MailQuotaExceededException ex,
+                                                                   HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ErrorResponses.retryAfterSeconds(ex.getRetryAfter())))
+                .body(ErrorResponses.of(HttpStatus.TOO_MANY_REQUESTS, MailQuotaExceededException.CODE,
+                        ex.getMessage(), request.getRequestURI()));
+    }
 }
