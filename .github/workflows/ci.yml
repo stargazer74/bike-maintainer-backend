@@ -33,6 +33,18 @@ jobs:
           java-version: '25'
           cache: maven
 
+      # main carries the upcoming version as X.Y.Z-SNAPSHOT; a release tag must match it, otherwise the build stops
+      # before anything is published (e.g. tag v0.4.0 while the pom says 0.3.0-SNAPSHOT).
+      - name: Check release tag against pom version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          POM_VERSION="$(./mvnw -B -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$TAG_VERSION" != "${POM_VERSION%-SNAPSHOT}" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME (version $TAG_VERSION) does not match pom version $POM_VERSION"
+            exit 1
+          fi
+
       # The backend consumes the API spec as Maven artifact, which is not published anywhere. Build it from the
       # api repo: the branch with the same name if it exists (PRs that depend on an open API PR), else main.
       - name: Select API branch

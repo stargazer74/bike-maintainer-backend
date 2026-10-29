@@ -96,8 +96,19 @@ Release builds set the Maven version to the tag version, so `info.app.version` a
 docker pull ghcr.io/stargazer74/bike-maintainer-backend:1
 ```
 
-**Creating a release:** tag the same version in this repo and in `bike-maintainer-frontend` (e.g. `v1.2.0`) and push
-the tags; backend and frontend always share one version number. Compose files for running the app (pulling these
+**Version numbers:** `main` always carries the *upcoming* version as `X.Y.Z-SNAPSHOT` in `pom.xml` (Maven
+convention); backend and frontend always share one version number.
+
+**Creating a release:**
+
+1. Tag the version from `main` without `-SNAPSHOT` in this repo and in `bike-maintainer-frontend` (e.g. `v0.3.0` for
+   `0.3.0-SNAPSHOT`) and push the tags. CI stops the release build before publishing if the tag does not match the
+   pom version.
+2. Bump `main` to the next snapshot via PR in both repos – next minor or patch, as needed:
+   `./mvnw versions:set -DnewVersion=0.4.0-SNAPSHOT -DgenerateBackupPoms=false` here,
+   `npm version --no-git-tag-version 0.4.0-SNAPSHOT` in the frontend.
+
+Compose files for running the app (pulling these
 images) live in [bike-maintainer-deploy](https://github.com/stargazer74/bike-maintainer-deploy). The `compose.yaml`
 in this repo is the development setup and builds the backend from source.
 
