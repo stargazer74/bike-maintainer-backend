@@ -44,7 +44,7 @@ class MaintenanceChecklistPdfHelperTest {
                 .contains("Aktueller Kilometerstand: 23.456 km")
                 .contains("Erstellt am: 29.10.2026")
                 .contains("Öl 10W-40, Filter HF204")
-                .contains("Überfällig seit 300 km")
+                .contains("Überfällig um 300 km")
                 .contains("Fällig in 12 Tagen")
                 .contains("Fällig in 200 km")
                 .contains("Zuletzt: 01.09.2025 bei 17.700 km")
