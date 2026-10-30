@@ -108,7 +108,8 @@ Feature: Vehicle management
       """
     And a maintenance log "historyLog" exists for vehicle "withHistory" with body:
       """
-      { "performedAt": "2026-01-15", "mileageAtPerformed": 11000, "performedTaskIds": [{historyTask}] }
+      { "performedAt": "2026-01-15", "mileageAtPerformed": 11000, "performedTaskIds": [{historyTask}],
+        "materials": [ { "name": "Oelfilter", "quantity": 1, "unit": "PIECE", "price": 12.50, "taskId": {historyTask} } ] }
       """
     When a DELETE request is sent to "/api/v1/vehicles/{withHistory}"
     Then the response status code is 204
