@@ -19,6 +19,7 @@ import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskR
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
 import org.instancio.Instancio;
+import org.instancio.Select;
 import org.instancio.junit.InstancioExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,7 +87,7 @@ class MaintenanceLogComponentImplTest {
     @Test
     void listMaintenanceLogs_vehicleFound_returnsMappedLogs() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        MaintenanceLog log = Instancio.create(MaintenanceLog.class);
+        MaintenanceLog log = Instancio.of(MaintenanceLog.class).set(Select.field(MaintenanceLog::getCurrency), "EUR").create();
         log.setVehicle(vehicle);
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(log));
@@ -112,7 +113,7 @@ class MaintenanceLogComponentImplTest {
     @Test
     void getMaintenanceLog_found_returnsMappedResponseWithPerformedTaskIds() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        MaintenanceLog log = Instancio.create(MaintenanceLog.class);
+        MaintenanceLog log = Instancio.of(MaintenanceLog.class).set(Select.field(MaintenanceLog::getCurrency), "EUR").create();
         log.setVehicle(vehicle);
         MaintenanceTask task = Instancio.create(MaintenanceTask.class);
         MaintenanceLogTask link = MaintenanceLogTask.builder()
@@ -220,7 +221,7 @@ class MaintenanceLogComponentImplTest {
     @Test
     void updateMaintenanceLog_withNewTasks_createsAndLinksThem() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        MaintenanceLog existing = Instancio.create(MaintenanceLog.class);
+        MaintenanceLog existing = Instancio.of(MaintenanceLog.class).set(Select.field(MaintenanceLog::getCurrency), "EUR").create();
         existing.setId(20L);
         existing.setVehicle(vehicle);
         MaintenanceLogRequest request = new MaintenanceLogRequest(LocalDate.of(2026, 3, 1), 8600)
@@ -299,7 +300,7 @@ class MaintenanceLogComponentImplTest {
     @Test
     void updateMaintenanceLog_found_replacesTaskLinksAndReturnsMappedResponse() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        MaintenanceLog existing = Instancio.create(MaintenanceLog.class);
+        MaintenanceLog existing = Instancio.of(MaintenanceLog.class).set(Select.field(MaintenanceLog::getCurrency), "EUR").create();
         existing.setVehicle(vehicle);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .newTasks(List.of())
@@ -335,7 +336,7 @@ class MaintenanceLogComponentImplTest {
     @Test
     void updateMaintenanceLog_withUnknownTaskId_throwsInvalidTaskReferenceException() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        MaintenanceLog existing = Instancio.create(MaintenanceLog.class);
+        MaintenanceLog existing = Instancio.of(MaintenanceLog.class).set(Select.field(MaintenanceLog::getCurrency), "EUR").create();
         existing.setVehicle(vehicle);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
                 .newTasks(List.of())
@@ -356,7 +357,7 @@ class MaintenanceLogComponentImplTest {
     @Test
     void deleteMaintenanceLog_found_deletesLinksAndLogAndReturnsTrue() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        MaintenanceLog log = Instancio.create(MaintenanceLog.class);
+        MaintenanceLog log = Instancio.of(MaintenanceLog.class).set(Select.field(MaintenanceLog::getCurrency), "EUR").create();
         log.setVehicle(vehicle);
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(log.getId(), vehicle.getId())).thenReturn(Optional.of(log));
@@ -470,7 +471,7 @@ class MaintenanceLogComponentImplTest {
     }
 
     private MaintenanceLog log(Vehicle vehicle, Long id, LocalDate performedAt, int mileage) {
-        MaintenanceLog log = Instancio.create(MaintenanceLog.class);
+        MaintenanceLog log = Instancio.of(MaintenanceLog.class).set(Select.field(MaintenanceLog::getCurrency), "EUR").create();
         log.setId(id);
         log.setVehicle(vehicle);
         log.setPerformedAt(performedAt);
