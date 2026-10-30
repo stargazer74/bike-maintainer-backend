@@ -25,7 +25,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -45,6 +48,7 @@ import static org.mockito.Mockito.when;
 class MaintenanceLogComponentImplTest {
 
     private static final Long USER_ID = 99L;
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-30T10:00:00Z"), ZoneOffset.UTC);
 
     @Mock
     private ICurrentUserComponent currentUserComponent;
@@ -72,7 +76,7 @@ class MaintenanceLogComponentImplTest {
         maintenanceLogComponent = new MaintenanceLogComponentImpl(
                 vehicleRepository, maintenanceLogRepository, maintenanceLogTaskRepository,
                 maintenanceTaskRepository, new MaintenanceLogMapperImpl(), maintenanceReportPdfHelper,
-                new UserLocaleComponentImpl(), currentUserComponent);
+                new UserLocaleComponentImpl(), currentUserComponent, CLOCK);
     }
 
     @Test
@@ -297,7 +301,8 @@ class MaintenanceLogComponentImplTest {
         byte[] pdfBytes = {1, 2, 3};
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(newer, older));
-        when(maintenanceReportPdfHelper.generate(eq(vehicle), any(), eq(Locale.UK))).thenReturn(pdfBytes);
+        when(maintenanceReportPdfHelper.generate(eq(vehicle), any(), eq(LocalDate.of(2026, 10, 30)), eq(Locale.UK)))
+                .thenReturn(pdfBytes);
 
         Optional<MaintenanceReport> result = maintenanceLogComponent.generateMaintenanceReport(vehicle.getId(), null);
 
@@ -306,7 +311,7 @@ class MaintenanceLogComponentImplTest {
         assertThat(result.get().fileName()).isEqualTo("maintenance-report-vehicle-" + vehicle.getId() + ".pdf");
         verify(maintenanceReportPdfHelper).generate(eq(vehicle), argThat(entries -> entries.stream()
                 .map(MaintenanceReportEntry::mileageAtPerformed).toList().equals(List.of(1000, 2000))),
-                eq(Locale.UK));
+                eq(LocalDate.of(2026, 10, 30)), eq(Locale.UK));
     }
 
     @Test
@@ -317,7 +322,7 @@ class MaintenanceLogComponentImplTest {
         MaintenanceLog third = log(vehicle, 3L, LocalDate.of(2026, 5, 1), 3000);
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(first, second, third));
-        when(maintenanceReportPdfHelper.generate(eq(vehicle), any(), any())).thenReturn(new byte[] {1});
+        when(maintenanceReportPdfHelper.generate(eq(vehicle), any(), any(), any())).thenReturn(new byte[] {1});
 
         Optional<MaintenanceReport> result = maintenanceLogComponent.generateMaintenanceReport(vehicle.getId(),
                 List.of(3L, 1L, 3L));
@@ -325,7 +330,7 @@ class MaintenanceLogComponentImplTest {
         assertThat(result).isPresent();
         assertThat(result.get().fileName()).isEqualTo("maintenance-report-vehicle-" + vehicle.getId() + ".pdf");
         verify(maintenanceReportPdfHelper).generate(eq(vehicle), argThat(entries -> entries.stream()
-                .map(MaintenanceReportEntry::mileageAtPerformed).toList().equals(List.of(1000, 3000))), any());
+                .map(MaintenanceReportEntry::mileageAtPerformed).toList().equals(List.of(1000, 3000))), any(), any());
     }
 
     @Test
@@ -335,7 +340,7 @@ class MaintenanceLogComponentImplTest {
         MaintenanceLog second = log(vehicle, 2L, LocalDate.of(2025, 6, 23), 2000);
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(first, second));
-        when(maintenanceReportPdfHelper.generate(eq(vehicle), any(), any())).thenReturn(new byte[] {1});
+        when(maintenanceReportPdfHelper.generate(eq(vehicle), any(), any(), any())).thenReturn(new byte[] {1});
 
         Optional<MaintenanceReport> result = maintenanceLogComponent.generateMaintenanceReport(vehicle.getId(),
                 List.of(2L, 2L));
@@ -354,7 +359,7 @@ class MaintenanceLogComponentImplTest {
 
         assertThatThrownBy(() -> maintenanceLogComponent.generateMaintenanceReport(vehicle.getId(),
                 List.of(1L, 77L))).isInstanceOf(InvalidLogReferenceException.class);
-        verify(maintenanceReportPdfHelper, never()).generate(any(), any(), any());
+        verify(maintenanceReportPdfHelper, never()).generate(any(), any(), any(), any());
     }
 
     @Test
@@ -373,7 +378,7 @@ class MaintenanceLogComponentImplTest {
         Optional<MaintenanceReport> result = maintenanceLogComponent.generateMaintenanceReport(99L, List.of(1L));
 
         assertThat(result).isEmpty();
-        verify(maintenanceReportPdfHelper, never()).generate(any(), any(), any());
+        verify(maintenanceReportPdfHelper, never()).generate(any(), any(), any(), any());
     }
 
     private MaintenanceLog log(Vehicle vehicle, Long id, LocalDate performedAt, int mileage) {

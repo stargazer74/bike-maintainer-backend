@@ -21,6 +21,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -42,6 +44,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     private final MaintenanceReportPdfHelper maintenanceReportPdfHelper;
     private final IUserLocaleComponent userLocaleComponent;
     private final ICurrentUserComponent currentUserComponent;
+    private final Clock clock;
 
     private static final Comparator<MaintenanceLog> CHRONOLOGICAL = Comparator
             .comparing(MaintenanceLog::getPerformedAt)
@@ -135,7 +138,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
                                     .map(link -> link.getTask().getName())
                                     .toList()))
                     .toList();
-            byte[] content = maintenanceReportPdfHelper.generate(vehicle, entries,
+            byte[] content = maintenanceReportPdfHelper.generate(vehicle, entries, LocalDate.now(clock),
                     userLocaleComponent.localeOf(vehicle.getUser()));
             return new MaintenanceReport(reportFileName(vehicleId, logIds, logs), content);
         });

@@ -3,7 +3,6 @@ package de.chriswohlbrecht.maintenance.component.helper;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
 import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
@@ -11,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.text.NumberFormat;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.List;
@@ -21,20 +21,24 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class MaintenanceReportPdfHelper {
 
-    private static final PDFont FONT_TITLE = PdfPageWriter.FONT_TITLE;
-    private static final PDFont FONT_HEADING = PdfPageWriter.FONT_HEADING;
-    private static final PDFont FONT_TEXT = PdfPageWriter.FONT_TEXT;
+    private static final PdfFont FONT_TITLE = PdfFont.TITLE;
+    private static final PdfFont FONT_HEADING = PdfFont.HEADING;
+    private static final PdfFont FONT_TEXT = PdfFont.TEXT;
 
     private final MessageSource messageSource;
 
     /**
      * @param locale locale of the vehicle owner from {@code IUserLocaleComponent#localeOf} (de-DE or en-GB). Other
      *               locales are not supported: e.g. French number formats use U+202F, which the PDF font lacks.
+     * @param createdOn date in the footer of every page
      */
-    public byte[] generate(Vehicle vehicle, List<MaintenanceReportEntry> entries, Locale locale) {
+    public byte[] generate(Vehicle vehicle, List<MaintenanceReportEntry> entries, LocalDate createdOn,
+                           Locale locale) {
         try (PDDocument document = new PDDocument()) {
-            PdfPageWriter writer = new PdfPageWriter(document);
             Texts texts = new Texts(messageSource, locale);
+            PdfPageWriter writer = new PdfPageWriter(document, new PdfFrame(texts.get("report.title"),
+                    vehicle.getName(), texts.get("pdf.footer.created", createdOn.format(texts.dateFormatter)),
+                    (page, total) -> texts.get("pdf.footer.page", String.valueOf(page), String.valueOf(total))));
             writeHeader(writer, vehicle, texts);
             writeEntries(writer, entries, texts);
             writer.close();
