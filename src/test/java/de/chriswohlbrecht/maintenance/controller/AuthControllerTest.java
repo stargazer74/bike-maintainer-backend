@@ -1,6 +1,7 @@
 package de.chriswohlbrecht.maintenance.controller;
 
 import de.chriswohlbrecht.maintenance.api.handler.AuthApi;
+import de.chriswohlbrecht.maintenance.api.model.Currency;
 import de.chriswohlbrecht.maintenance.api.model.Language;
 import de.chriswohlbrecht.maintenance.api.model.PasswordResetConfirmRequest;
 import de.chriswohlbrecht.maintenance.api.model.RegisterRequest;
@@ -11,6 +12,7 @@ import de.chriswohlbrecht.maintenance.component.IPasswordComponent;
 import de.chriswohlbrecht.maintenance.component.IRegistrationComponent;
 import de.chriswohlbrecht.maintenance.exception.AccountUnusableException;
 import de.chriswohlbrecht.maintenance.exception.AuthenticationFailedException;
+import de.chriswohlbrecht.maintenance.exception.InvalidUserUpdateException;
 import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -131,6 +133,23 @@ class AuthControllerTest {
     }
 
     @Test
+    void updateCurrentUser_currencyOnly_returnsUpdatedUser() throws Exception {
+        when(authComponent.updateCurrentUser(any())).thenReturn(user().currency(Currency.CHF));
+
+        mockMvc.perform(patch(AuthApi.PATH_UPDATE_CURRENT_USER).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currency\": \"CHF\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currency").value("CHF"));
+    }
+
+    @Test
+    void updateCurrentUser_unsupportedCurrency_returns400() throws Exception {
+        mockMvc.perform(patch(AuthApi.PATH_UPDATE_CURRENT_USER).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currency\": \"JPY\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void updateCurrentUser_unsupportedLanguage_returns400() throws Exception {
         mockMvc.perform(patch(AuthApi.PATH_UPDATE_CURRENT_USER).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"language\": \"fr\"}"))
@@ -138,7 +157,9 @@ class AuthControllerTest {
     }
 
     @Test
-    void updateCurrentUser_missingLanguage_returns400() throws Exception {
+    void updateCurrentUser_emptyBody_returns400() throws Exception {
+        when(authComponent.updateCurrentUser(any())).thenThrow(new InvalidUserUpdateException("empty"));
+
         mockMvc.perform(patch(AuthApi.PATH_UPDATE_CURRENT_USER).contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
@@ -213,6 +234,7 @@ class AuthControllerTest {
                 .active(true)
                 .emailVerified(true)
                 .language(Language.DE)
+                .currency(Currency.EUR)
                 .createdAt(OffsetDateTime.parse("2026-10-09T12:00:00+02:00"));
     }
 }

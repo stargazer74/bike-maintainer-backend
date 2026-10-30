@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -44,6 +45,15 @@ public class MaintenanceLog {
 
     @Column(length = 1000)
     private String notes;
+
+    /** Null if no labor cost was entered. */
+    @Column(name = "labor_cost", precision = 10, scale = 2)
+    private BigDecimal laborCost;
+
+    /** ISO 4217 code; fixed when the entry is created. */
+    @Builder.Default
+    @Column(nullable = false, length = 3)
+    private String currency = "EUR";
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -1,6 +1,7 @@
 package de.chriswohlbrecht.maintenance.component.helper;
 
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
+import de.chriswohlbrecht.maintenance.persistence.type.MaterialUnit;
 import de.chriswohlbrecht.maintenance.persistence.type.VehicleType;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
@@ -99,6 +101,59 @@ class MaintenanceReportPdfHelperTest {
                 "Wartungshistorie", "Erstellt mit Bike Maintainer am 30.10.2026", "Seite %d von %d");
         assertEveryPage(helper.generate(vehicle(), entries, CREATED, Locale.UK),
                 "Maintenance history", "Created with Bike Maintainer on 30 Oct 2026", "Page %d of %d");
+    }
+
+    private static final MaintenanceReportEntry COSTLY = new MaintenanceReportEntry(
+            LocalDate.of(2026, 10, 9), 12500, null, List.of("Ölwechsel"),
+            List.of(new ReportMaterial("Ölfilter", "HF-204", new BigDecimal("1.000"), MaterialUnit.PIECE,
+                            new BigDecimal("12.50")),
+                    new ReportMaterial("Motoröl", null, new BigDecimal("0.5"), MaterialUnit.LITER, null)),
+            new BigDecimal("37.25"), new BigDecimal("49.75"), "EUR");
+
+    @Test
+    void generate_withCosts_german_showsMaterialsLaborAndTotals() throws IOException {
+        String text = normalized(text(helper.generate(vehicle(), List.of(COSTLY), CREATED, Locale.GERMANY)));
+
+        assertThat(text)
+                .contains("Ölfilter – Teilenr. HF-204 – 1 Stk. – 12,50 €")
+                .contains("Motoröl – 0,5 l")
+                .contains("Arbeitskosten: 37,25 €")
+                .contains("Summe: 49,75 €")
+                .contains("Gesamtsummen");
+    }
+
+    @Test
+    void generate_withCosts_english_formatsAmountsAndUnits() throws IOException {
+        String text = normalized(text(helper.generate(vehicle(), List.of(COSTLY), CREATED, Locale.UK)));
+
+        assertThat(text)
+                .contains("Ölfilter – Part no. HF-204 – 1 pcs – €12.50")
+                .contains("Labor cost: €37.25")
+                .contains("Total: €49.75")
+                .contains("Grand totals");
+    }
+
+    @Test
+    void generate_grandTotalsPerCurrencySortedByCode() throws IOException {
+        MaintenanceReportEntry chf = new MaintenanceReportEntry(LocalDate.of(2026, 10, 10), 13000, null, List.of(),
+                List.of(), new BigDecimal("100.00"), new BigDecimal("100.00"), "CHF");
+        String text = normalized(text(helper.generate(vehicle(), List.of(COSTLY, ENTRY, COSTLY, chf), CREATED,
+                Locale.GERMANY)));
+
+        assertThat(text).containsSubsequence("Gesamtsummen", "100,00 CHF", "99,50 €");
+    }
+
+    @Test
+    void generate_entryWithoutCosts_showsNoCostBlockAndNoGrandTotals() throws IOException {
+        String text = text(helper.generate(vehicle(), List.of(ENTRY), CREATED, Locale.GERMANY));
+
+        assertThat(text).doesNotContain("Summe").doesNotContain("Gesamtsummen").doesNotContain("Arbeitskosten")
+                .doesNotContain("Material:");
+    }
+
+    /** NumberFormat uses (narrow) no-break spaces between amount and currency; the font text contains them as is. */
+    private static String normalized(String text) {
+        return text.replace('\u00A0', ' ').replace('\u202F', ' ');
     }
 
     private static void assertEveryPage(byte[] pdf, String documentType, String footer, String pageLabel)

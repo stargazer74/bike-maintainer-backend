@@ -5,6 +5,7 @@ import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
 import de.chriswohlbrecht.maintenance.mapper.VehicleMapperImpl;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
+import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogMaterialRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
@@ -45,6 +46,9 @@ class VehicleComponentImplTest {
     private MaintenanceLogRepository maintenanceLogRepository;
 
     @Mock
+    private MaintenanceLogMaterialRepository maintenanceLogMaterialRepository;
+
+    @Mock
     private MaintenanceLogTaskRepository maintenanceLogTaskRepository;
 
     @Mock
@@ -56,7 +60,7 @@ class VehicleComponentImplTest {
     void setUp() {
         lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
         vehicleComponent = new VehicleComponentImpl(vehicleRepository, maintenanceTaskRepository, maintenanceLogRepository,
-                maintenanceLogTaskRepository, new VehicleMapperImpl(), currentUserComponent);
+                maintenanceLogMaterialRepository, maintenanceLogTaskRepository, new VehicleMapperImpl(), currentUserComponent);
     }
 
     @Test
@@ -143,8 +147,9 @@ class VehicleComponentImplTest {
         boolean result = vehicleComponent.deleteVehicle(vehicle.getId());
 
         assertThat(result).isTrue();
-        InOrder order = inOrder(maintenanceLogTaskRepository, maintenanceLogRepository, maintenanceTaskRepository,
+        InOrder order = inOrder(maintenanceLogMaterialRepository, maintenanceLogTaskRepository, maintenanceLogRepository, maintenanceTaskRepository,
                 vehicleRepository);
+        order.verify(maintenanceLogMaterialRepository).deleteAllByLog_Vehicle_Id(vehicle.getId());
         order.verify(maintenanceLogTaskRepository).deleteAllByLog_Vehicle_Id(vehicle.getId());
         order.verify(maintenanceLogRepository).deleteAllByVehicle_Id(vehicle.getId());
         order.verify(maintenanceTaskRepository).deleteAllByVehicle_Id(vehicle.getId());

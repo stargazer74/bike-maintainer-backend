@@ -68,6 +68,11 @@ public class AppUser {
     @Column(nullable = false, length = 5)
     private String language = "de";
 
+    /** ISO 4217 code of the currency used for new maintenance entries. */
+    @Builder.Default
+    @Column(nullable = false, length = 3)
+    private String currency = "EUR";
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

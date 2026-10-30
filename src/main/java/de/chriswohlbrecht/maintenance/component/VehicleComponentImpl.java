@@ -4,6 +4,7 @@ import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
 import de.chriswohlbrecht.maintenance.mapper.VehicleMapper;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
+import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogMaterialRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
@@ -22,6 +23,7 @@ public class VehicleComponentImpl implements IVehicleComponent {
     private final VehicleRepository vehicleRepository;
     private final MaintenanceTaskRepository maintenanceTaskRepository;
     private final MaintenanceLogRepository maintenanceLogRepository;
+    private final MaintenanceLogMaterialRepository maintenanceLogMaterialRepository;
     private final MaintenanceLogTaskRepository maintenanceLogTaskRepository;
     private final VehicleMapper vehicleMapper;
     private final ICurrentUserComponent currentUserComponent;
@@ -59,6 +61,7 @@ public class VehicleComponentImpl implements IVehicleComponent {
         return findOwnVehicle(vehicleId)
                 .map(vehicle -> {
                     // No ON DELETE CASCADE in the schema: remove dependents first, children before parents.
+                    maintenanceLogMaterialRepository.deleteAllByLog_Vehicle_Id(vehicle.getId());
                     maintenanceLogTaskRepository.deleteAllByLog_Vehicle_Id(vehicle.getId());
                     maintenanceLogRepository.deleteAllByVehicle_Id(vehicle.getId());
                     maintenanceTaskRepository.deleteAllByVehicle_Id(vehicle.getId());

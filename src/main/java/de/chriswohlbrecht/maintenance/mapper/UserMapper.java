@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.mapper;
 
+import de.chriswohlbrecht.maintenance.api.model.Currency;
 import de.chriswohlbrecht.maintenance.api.model.Language;
 import de.chriswohlbrecht.maintenance.api.model.ProfileResponse;
 import de.chriswohlbrecht.maintenance.api.model.UserResponse;
@@ -24,6 +25,10 @@ public interface UserMapper {
 
     default Language toLanguage(String language) {
         return language == null ? Language.DE : Language.fromValue(language);
+    }
+
+    default Currency toCurrency(String currency) {
+        return currency == null ? Currency.EUR : Currency.fromValue(currency);
     }
 
     default OffsetDateTime toOffsetDateTime(LocalDateTime value) {

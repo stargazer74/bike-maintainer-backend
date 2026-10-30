@@ -199,3 +199,170 @@ Feature: Maintenance log management
       { "performedAt": "2026-03-01", "mileageAtPerformed": 8600, "newTasks": [ { "name": "Fremd" } ] }
       """
     Then the response status code is 404
+
+  Scenario: Create a maintenance log with materials and labor cost
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      {
+        "performedAt": "2026-04-01",
+        "mileageAtPerformed": 8700,
+        "performedTaskIds": [{oilChange}],
+        "laborCost": 30,
+        "materials": [
+          { "name": "Oelfilter", "partNumber": "HF-204", "quantity": 1, "unit": "PIECE", "price": 12.50, "taskId": {oilChange} },
+          { "name": "Motoroel", "quantity": 3.5, "unit": "LITER", "price": 7.25 }
+        ]
+      }
+      """
+    Then the response status code is 201
+    And the JSON response field "totalCost" equals "49.75"
+    And the JSON response field "currency" equals "EUR"
+    And the JSON response field "laborCost" equals "30"
+    And the response body contains "Oelfilter"
+    And the response body contains "HF-204"
+    And the vehicle "bike" has 1 maintenance log
+
+  Scenario: A log without any amount has no total cost
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      {
+        "performedAt": "2026-04-01",
+        "mileageAtPerformed": 8700,
+        "materials": [ { "name": "Kettenspray", "quantity": 1, "unit": "PIECE" } ]
+      }
+      """
+    Then the response status code is 201
+    And the JSON response field "totalCost" equals ""
+
+  Scenario: Updating a log replaces its materials
+    Given a maintenance log "service" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-04-01", "mileageAtPerformed": 8700, "materials": [ { "name": "Alter Filter", "quantity": 1, "unit": "PIECE", "price": 5 } ] }
+      """
+    When a PUT request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{service}" with body:
+      """
+      { "performedAt": "2026-04-01", "mileageAtPerformed": 8700, "materials": [ { "name": "Neuer Filter", "quantity": 1, "unit": "PIECE", "price": 6 } ] }
+      """
+    Then the response status code is 200
+    And the JSON response field "totalCost" equals "6"
+    When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{service}"
+    Then the response body contains "Neuer Filter"
+    And the response body does not contain "Alter Filter"
+
+  Scenario Outline: An invalid material saves nothing
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "performedAt": "2026-04-01", "mileageAtPerformed": 8700, "newTasks": [ { "name": "Spiegel ersetzt" } ], <fields> }
+      """
+    Then the response status code is 400
+    And the vehicle "bike" has 1 maintenance task
+    And the vehicle "bike" has 0 maintenance logs
+
+    Examples:
+      | fields                                                                                  |
+      | "materials": [ { "name": "Filter", "quantity": 1, "unit": "PIECE", "taskId": 999999 } ] |
+      | "materials": [ { "name": "Filter", "quantity": 1, "unit": "PIECE", "price": 12.505 } ]  |
+      | "materials": [ { "name": "Filter", "quantity": 1.2345, "unit": "LITER" } ]              |
+      | "materials": [ { "name": "   ", "quantity": 1, "unit": "PIECE" } ]                      |
+      | "laborCost": 10.001                                                                     |
+      | "laborCost": -1                                                                         |
+
+  Scenario: A material cannot reference a task that is not performed by the log
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "performedAt": "2026-04-01", "mileageAtPerformed": 8700, "materials": [ { "name": "Filter", "quantity": 1, "unit": "PIECE", "taskId": {oilChange} } ] }
+      """
+    Then the response status code is 400
+
+  Scenario: More than 50 materials are rejected
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "performedAt": "2026-04-01", "mileageAtPerformed": 8700, "materials": [
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" },
+        { "name": "Teil", "quantity": 1, "unit": "PIECE" }
+      ] }
+      """
+    Then the response status code is 400
+
+  Scenario: Delete a maintenance log with materials
+    Given a maintenance log "withParts" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-04-01", "mileageAtPerformed": 8700, "materials": [ { "name": "Filter", "quantity": 1, "unit": "PIECE", "price": 5 } ] }
+      """
+    When a DELETE request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{withParts}"
+    Then the response status code is 204
+
+  Scenario: Changing the currency affects only new logs
+    Given a maintenance log "old" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-04-01", "mileageAtPerformed": 8700, "laborCost": 10 }
+      """
+    When a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "currency": "CHF" }
+      """
+    Then the response status code is 200
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "performedAt": "2026-04-02", "mileageAtPerformed": 8750, "laborCost": 20 }
+      """
+    Then the response status code is 201
+    And the JSON response field "currency" equals "CHF"
+    When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{old}"
+    Then the JSON response field "currency" equals "EUR"
+    When a PUT request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{old}" with body:
+      """
+      { "performedAt": "2026-04-01", "mileageAtPerformed": 8700, "laborCost": 15 }
+      """
+    Then the response status code is 200
+    And the JSON response field "currency" equals "EUR"
+    And the JSON response field "totalCost" equals "15"
