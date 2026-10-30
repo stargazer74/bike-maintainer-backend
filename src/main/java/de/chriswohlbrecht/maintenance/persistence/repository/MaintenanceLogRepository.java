@@ -11,4 +11,6 @@ public interface MaintenanceLogRepository extends JpaRepository<MaintenanceLog, 
     List<MaintenanceLog> findAllByVehicle_Id(Long vehicleId);
 
     Optional<MaintenanceLog> findByIdAndVehicle_Id(Long id, Long vehicleId);
+
+    void deleteAllByVehicle_Id(Long vehicleId);
 }

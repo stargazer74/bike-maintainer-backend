@@ -11,4 +11,6 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
     List<MaintenanceTask> findAllByVehicle_Id(Long vehicleId);
 
     Optional<MaintenanceTask> findByIdAndVehicle_Id(Long id, Long vehicleId);
+
+    void deleteAllByVehicle_Id(Long vehicleId);
 }

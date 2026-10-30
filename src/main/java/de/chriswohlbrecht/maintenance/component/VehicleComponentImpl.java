@@ -4,9 +4,13 @@ import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
 import de.chriswohlbrecht.maintenance.mapper.VehicleMapper;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
+import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogRepository;
+import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
+import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,6 +20,9 @@ import java.util.Optional;
 public class VehicleComponentImpl implements IVehicleComponent {
 
     private final VehicleRepository vehicleRepository;
+    private final MaintenanceTaskRepository maintenanceTaskRepository;
+    private final MaintenanceLogRepository maintenanceLogRepository;
+    private final MaintenanceLogTaskRepository maintenanceLogTaskRepository;
     private final VehicleMapper vehicleMapper;
     private final ICurrentUserComponent currentUserComponent;
 
@@ -47,9 +54,14 @@ public class VehicleComponentImpl implements IVehicleComponent {
     }
 
     @Override
+    @Transactional
     public boolean deleteVehicle(Long vehicleId) {
         return findOwnVehicle(vehicleId)
                 .map(vehicle -> {
+                    // No ON DELETE CASCADE in the schema: remove dependents first, children before parents.
+                    maintenanceLogTaskRepository.deleteAllByLog_Vehicle_Id(vehicle.getId());
+                    maintenanceLogRepository.deleteAllByVehicle_Id(vehicle.getId());
+                    maintenanceTaskRepository.deleteAllByVehicle_Id(vehicle.getId());
                     vehicleRepository.delete(vehicle);
                     return true;
                 })

@@ -94,6 +94,20 @@ Feature: Maintenance task management
     When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-tasks/{toDelete}"
     Then the response status code is 404
 
+  Scenario: Reject deleting a maintenance task that was already performed
+    Given a maintenance task "performedTask" exists for vehicle "bike" with body:
+      """
+      { "name": "Chain lube", "intervalKm": 1000 }
+      """
+    And a maintenance log "performedLog" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-01-15", "mileageAtPerformed": 4000, "performedTaskIds": [{performedTask}] }
+      """
+    When a DELETE request is sent to "/api/v1/vehicles/{bike}/maintenance-tasks/{performedTask}"
+    Then the response status code is 409
+    When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-tasks/{performedTask}"
+    Then the response status code is 200
+
   Scenario: Delete a maintenance task that does not exist
     When a DELETE request is sent to "/api/v1/vehicles/{bike}/maintenance-tasks/999999"
     Then the response status code is 404
