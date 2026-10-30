@@ -263,6 +263,7 @@ Feature: Maintenance log management
       | "materials": [ { "name": "Filter", "quantity": 1, "unit": "PIECE", "taskId": 999999 } ] |
       | "materials": [ { "name": "Filter", "quantity": 1, "unit": "PIECE", "price": 12.505 } ]  |
       | "materials": [ { "name": "Filter", "quantity": 1.2345, "unit": "LITER" } ]              |
+      | "materials": [ { "name": "   ", "quantity": 1, "unit": "PIECE" } ]                      |
       | "laborCost": 10.001                                                                     |
       | "laborCost": -1                                                                         |
 

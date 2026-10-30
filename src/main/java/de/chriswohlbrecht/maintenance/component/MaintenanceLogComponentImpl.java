@@ -249,7 +249,12 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
         for (MaintenanceMaterialRequest materialRequest : request.getMaterials()) {
             requireMaxScale(materialRequest.getPrice(), MAX_AMOUNT_SCALE, "price");
             requireMaxScale(materialRequest.getQuantity(), MAX_QUANTITY_SCALE, "quantity");
+            String name = materialRequest.getName() == null ? "" : materialRequest.getName().trim();
+            if (name.isEmpty()) {
+                throw new InvalidMaterialException("Material name must not be blank");
+            }
             MaintenanceLogMaterial material = maintenanceLogMapper.toMaterialEntity(materialRequest);
+            material.setName(name);
             if (materialRequest.getTaskId() != null) {
                 MaintenanceTask task = performedById.get(materialRequest.getTaskId());
                 if (task == null) {

@@ -591,6 +591,33 @@ class MaintenanceLogComponentImplTest {
     }
 
     @Test
+    void create_blankMaterialName_throwsAndSavesNothing() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLogRequest request = new MaintenanceLogRequest(LocalDate.of(2026, 3, 1), 8600)
+                .materials(List.of(material("   ", "12.50", null)));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+
+        assertThatThrownBy(() -> maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request))
+                .isInstanceOf(InvalidMaterialException.class);
+        verify(maintenanceLogRepository, never()).save(any());
+        verify(maintenanceLogMaterialRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void create_materialNameIsTrimmed() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLogRequest request = new MaintenanceLogRequest(LocalDate.of(2026, 3, 1), 8600)
+                .materials(List.of(material("  Oelfilter  ", null, null)));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
+
+        verify(maintenanceLogMaterialRepository).saveAll(argThat(list ->
+                list.iterator().next().getName().equals("Oelfilter")));
+    }
+
+    @Test
     void create_priceWithThreeDecimals_throws() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceLogRequest request = new MaintenanceLogRequest(LocalDate.of(2026, 3, 1), 8600)

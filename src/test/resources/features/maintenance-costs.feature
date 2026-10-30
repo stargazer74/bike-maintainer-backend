@@ -35,3 +35,8 @@ Feature: Maintenance cost summary
   Scenario: Reject the cost summary of an unknown vehicle
     When a GET request is sent to "/api/v1/vehicles/999999/cost-summary"
     Then the response status code is 404
+
+  Scenario: The cost summary of another user's vehicle answers 404
+    Given I am logged in as "other@example.org"
+    When a GET request is sent to "/api/v1/vehicles/{bike}/cost-summary"
+    Then the response status code is 404
