@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
+import de.chriswohlbrecht.maintenance.api.model.NewMaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportEntry;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportPdfHelper;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
@@ -69,18 +70,12 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     @Transactional
     public Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request) {
         return findOwnVehicle(vehicleId).map(vehicle -> {
-            List<MaintenanceTask> performedTasks = new ArrayList<>();
-            for (Long taskId : performedTaskIds(request)) {
-                Optional<MaintenanceTask> task = maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId);
-                if (task.isEmpty()) {
-                    throw new InvalidTaskReferenceException("Task with id " + taskId + " not found for vehicle " + vehicleId);
-                }
-                performedTasks.add(task.get());
-            }
+            List<MaintenanceTask> performedTasks = existingTasks(vehicleId, request);
 
             MaintenanceLog log = maintenanceLogMapper.toEntity(request);
             log.setVehicle(vehicle);
             MaintenanceLog savedLog = maintenanceLogRepository.save(log);
+            performedTasks.addAll(createNewTasks(vehicle, request));
             linkTasks(savedLog, performedTasks);
             return toResponse(savedLog);
         });
@@ -92,18 +87,12 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
         return findOwnVehicle(vehicleId)
                 .flatMap(vehicle -> maintenanceLogRepository.findByIdAndVehicle_Id(logId, vehicleId))
                 .map(log -> {
-                    List<MaintenanceTask> performedTasks = new ArrayList<>();
-                    for (Long taskId : performedTaskIds(request)) {
-                        Optional<MaintenanceTask> task = maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId);
-                        if (task.isEmpty()) {
-                            throw new InvalidTaskReferenceException("Task with id " + taskId + " not found for vehicle " + vehicleId);
-                        }
-                        performedTasks.add(task.get());
-                    }
+                    List<MaintenanceTask> performedTasks = existingTasks(vehicleId, request);
 
                     maintenanceLogMapper.updateEntityFromRequest(request, log);
                     MaintenanceLog savedLog = maintenanceLogRepository.save(log);
                     maintenanceLogTaskRepository.deleteAllByLog_Id(savedLog.getId());
+                    performedTasks.addAll(createNewTasks(log.getVehicle(), request));
                     linkTasks(savedLog, performedTasks);
                     return toResponse(savedLog);
                 });
@@ -178,6 +167,43 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
 
     private static Set<Long> performedTaskIds(MaintenanceLogRequest request) {
         return request.getPerformedTaskIds() == null ? Set.of() : request.getPerformedTaskIds();
+    }
+
+    /** The performed tasks the request references; all must belong to the vehicle. Checked before anything is saved. */
+    private List<MaintenanceTask> existingTasks(Long vehicleId, MaintenanceLogRequest request) {
+        List<MaintenanceTask> tasks = new ArrayList<>();
+        for (Long taskId : performedTaskIds(request)) {
+            Optional<MaintenanceTask> task = maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId);
+            if (task.isEmpty()) {
+                throw new InvalidTaskReferenceException("Task with id " + taskId + " not found for vehicle " + vehicleId);
+            }
+            tasks.add(task.get());
+        }
+        return tasks;
+    }
+
+    /**
+     * Work that was no task before becomes a task of the vehicle, performed by this log: one-time without an interval,
+     * recurring with one (the log then counts as its first performance). Runs in the log's transaction.
+     */
+    private List<MaintenanceTask> createNewTasks(Vehicle vehicle, MaintenanceLogRequest request) {
+        if (request.getNewTasks() == null) {
+            return List.of();
+        }
+        List<MaintenanceTask> created = new ArrayList<>();
+        for (NewMaintenanceTaskRequest newTask : request.getNewTasks()) {
+            boolean recurring = newTask.getIntervalKm() != null || newTask.getIntervalMonths() != null;
+            created.add(maintenanceTaskRepository.save(MaintenanceTask.builder()
+                    .vehicle(vehicle)
+                    .name(newTask.getName())
+                    .description(newTask.getDescription())
+                    .intervalKm(newTask.getIntervalKm())
+                    .intervalMonths(newTask.getIntervalMonths())
+                    .oneTime(!recurring)
+                    .active(true)
+                    .build()));
+        }
+        return created;
     }
 
     private void linkTasks(MaintenanceLog log, List<MaintenanceTask> tasks) {

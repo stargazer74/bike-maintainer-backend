@@ -109,3 +109,93 @@ Feature: Maintenance log management
   Scenario: Delete a maintenance log that does not exist
     When a DELETE request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/999999"
     Then the response status code is 404
+
+  Scenario: New work without an interval becomes a one-time task done by the log
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      {
+        "performedAt": "2026-03-01",
+        "mileageAtPerformed": 8600,
+        "performedTaskIds": [{oilChange}],
+        "newTasks": [ { "name": "Bremsleitung getauscht", "description": "Stahlflex vorne" } ]
+      }
+      """
+    Then the response status code is 201
+    And the JSON response array field "performedTaskIds" contains "{oilChange}"
+    And the vehicle "bike" has 2 maintenance tasks
+    And the vehicle "bike" has the maintenance tasks:
+      | name                  | description     | oneTime | status | lastServiceMileage |
+      | Bremsleitung getauscht | Stahlflex vorne | true    | DONE   | 8600               |
+      | Oil change            |                 | false   | OK     | 8600               |
+
+  Scenario: New work with an interval becomes a recurring task, the log counts as its first performance
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      {
+        "performedAt": "2026-03-01",
+        "mileageAtPerformed": 8000,
+        "newTasks": [
+          { "name": "Kette reinigen", "intervalKm": 5000 },
+          { "name": "Spiegel ersetzt" }
+        ]
+      }
+      """
+    Then the response status code is 201
+    And the vehicle "bike" has the maintenance tasks:
+      | name            | oneTime | intervalKm | lastServiceMileage | kmRemaining | status |
+      | Kette reinigen  | false   | 5000       | 8000               | 5000        | OK     |
+      | Spiegel ersetzt | true    |            | 8000               |             | DONE   |
+
+  Scenario: Editing a log can add new work as well
+    Given a maintenance log "service" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-03-01", "mileageAtPerformed": 8600, "performedTaskIds": [{oilChange}] }
+      """
+    When a PUT request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{service}" with body:
+      """
+      {
+        "performedAt": "2026-03-01",
+        "mileageAtPerformed": 8600,
+        "performedTaskIds": [{oilChange}],
+        "newTasks": [ { "name": "Spiegel ersetzt" } ]
+      }
+      """
+    Then the response status code is 200
+    And the vehicle "bike" has the maintenance tasks:
+      | name            | status |
+      | Spiegel ersetzt | DONE   |
+
+  Scenario Outline: An invalid request saves neither the log nor any new task
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "performedAt": "2026-03-01", "mileageAtPerformed": 8600, <fields> }
+      """
+    Then the response status code is 400
+    And the vehicle "bike" has 1 maintenance task
+    And the vehicle "bike" has 0 maintenance logs
+
+    Examples:
+      | fields                                                                                  |
+      | "performedTaskIds": [999999], "newTasks": [ { "name": "Spiegel ersetzt" } ]             |
+      | "newTasks": [ { "name": "Spiegel ersetzt" }, { "name": "" } ]                           |
+      | "newTasks": [ { "name": "Spiegel ersetzt" }, { "name": "Kette", "intervalKm": 0 } ]     |
+      | "newTasks": [ { "name": "Spiegel ersetzt", "description": "" } ]                        |
+
+  Scenario: Deleting the log leaves the new task, open again
+    Given a maintenance log "repair" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-03-01", "mileageAtPerformed": 8600, "newTasks": [ { "name": "Spiegel ersetzt" } ] }
+      """
+    When a DELETE request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{repair}"
+    Then the response status code is 204
+    And the vehicle "bike" has the maintenance tasks:
+      | name            | oneTime | lastServiceMileage |
+      | Spiegel ersetzt | true    |                    |
+
+  Scenario: New work for another user's vehicle answers 404
+    Given I am logged in as "bob@example.org"
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "performedAt": "2026-03-01", "mileageAtPerformed": 8600, "newTasks": [ { "name": "Fremd" } ] }
+      """
+    Then the response status code is 404
