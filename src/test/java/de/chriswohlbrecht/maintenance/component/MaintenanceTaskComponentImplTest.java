@@ -8,6 +8,7 @@ import de.chriswohlbrecht.maintenance.component.helper.MaintenanceChecklistPdfHe
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceTaskStatusHelper;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceTaskStatusResult;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceChecklist;
+import de.chriswohlbrecht.maintenance.exception.ConflictException;
 import de.chriswohlbrecht.maintenance.exception.InvalidMaintenanceIntervalException;
 import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceTaskMapperImpl;
@@ -283,6 +284,20 @@ class MaintenanceTaskComponentImplTest {
 
         assertThat(result).isTrue();
         verify(maintenanceTaskRepository).deleteById(task.getId());
+    }
+
+    @Test
+    void deleteMaintenanceTask_alreadyPerformed_throwsConflictAndDoesNotDelete() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceTask task = Instancio.create(MaintenanceTask.class);
+        task.setVehicle(vehicle);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceTaskRepository.findByIdAndVehicle_Id(task.getId(), vehicle.getId())).thenReturn(Optional.of(task));
+        when(maintenanceLogTaskRepository.existsByTask_Id(task.getId())).thenReturn(true);
+
+        assertThatThrownBy(() -> maintenanceTaskComponent.deleteMaintenanceTask(vehicle.getId(), task.getId()))
+                .isInstanceOf(ConflictException.class);
+        verify(maintenanceTaskRepository, never()).deleteById(any());
     }
 
     @Test

@@ -5,12 +5,16 @@ import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
 import de.chriswohlbrecht.maintenance.mapper.VehicleMapperImpl;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
+import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogRepository;
+import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
+import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
 import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -20,6 +24,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
@@ -34,6 +39,15 @@ class VehicleComponentImplTest {
     private VehicleRepository vehicleRepository;
 
     @Mock
+    private MaintenanceTaskRepository maintenanceTaskRepository;
+
+    @Mock
+    private MaintenanceLogRepository maintenanceLogRepository;
+
+    @Mock
+    private MaintenanceLogTaskRepository maintenanceLogTaskRepository;
+
+    @Mock
     private ICurrentUserComponent currentUserComponent;
 
     private VehicleComponentImpl vehicleComponent;
@@ -41,7 +55,8 @@ class VehicleComponentImplTest {
     @BeforeEach
     void setUp() {
         lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
-        vehicleComponent = new VehicleComponentImpl(vehicleRepository, new VehicleMapperImpl(), currentUserComponent);
+        vehicleComponent = new VehicleComponentImpl(vehicleRepository, maintenanceTaskRepository, maintenanceLogRepository,
+                maintenanceLogTaskRepository, new VehicleMapperImpl(), currentUserComponent);
     }
 
     @Test
@@ -121,14 +136,19 @@ class VehicleComponentImplTest {
     }
 
     @Test
-    void deleteVehicle_found_deletesEntityAndReturnsTrue() {
+    void deleteVehicle_found_deletesDependentsBeforeVehicleAndReturnsTrue() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
 
         boolean result = vehicleComponent.deleteVehicle(vehicle.getId());
 
         assertThat(result).isTrue();
-        verify(vehicleRepository).delete(vehicle);
+        InOrder order = inOrder(maintenanceLogTaskRepository, maintenanceLogRepository, maintenanceTaskRepository,
+                vehicleRepository);
+        order.verify(maintenanceLogTaskRepository).deleteAllByLog_Vehicle_Id(vehicle.getId());
+        order.verify(maintenanceLogRepository).deleteAllByVehicle_Id(vehicle.getId());
+        order.verify(maintenanceTaskRepository).deleteAllByVehicle_Id(vehicle.getId());
+        order.verify(vehicleRepository).delete(vehicle);
     }
 
     @Test
@@ -139,5 +159,6 @@ class VehicleComponentImplTest {
 
         assertThat(result).isFalse();
         verify(vehicleRepository, never()).delete(any());
+        verify(maintenanceLogRepository, never()).deleteAllByVehicle_Id(any());
     }
 }

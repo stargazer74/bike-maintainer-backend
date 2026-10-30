@@ -96,3 +96,21 @@ Feature: Vehicle management
   Scenario: Delete a vehicle that does not exist
     When a DELETE request is sent to "/api/v1/vehicles/999999"
     Then the response status code is 404
+
+  Scenario: Delete a vehicle with maintenance tasks and logs
+    Given a vehicle "withHistory" exists with body:
+      """
+      { "name": "Well Kept", "type": "MOTORCYCLE", "modelYear": 2018, "firstRegistrationDate": "2018-01-01", "currentMileage": 12000 }
+      """
+    And a maintenance task "historyTask" exists for vehicle "withHistory" with body:
+      """
+      { "name": "Oil change", "intervalKm": 5000 }
+      """
+    And a maintenance log "historyLog" exists for vehicle "withHistory" with body:
+      """
+      { "performedAt": "2026-01-15", "mileageAtPerformed": 11000, "performedTaskIds": [{historyTask}] }
+      """
+    When a DELETE request is sent to "/api/v1/vehicles/{withHistory}"
+    Then the response status code is 204
+    When a GET request is sent to "/api/v1/vehicles/{withHistory}"
+    Then the response status code is 404

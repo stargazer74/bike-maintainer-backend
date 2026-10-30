@@ -8,6 +8,7 @@ import de.chriswohlbrecht.maintenance.component.helper.MaintenanceChecklistPdfHe
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceTaskStatusHelper;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceTaskStatusResult;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceChecklist;
+import de.chriswohlbrecht.maintenance.exception.ConflictException;
 import de.chriswohlbrecht.maintenance.exception.InvalidMaintenanceIntervalException;
 import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceTaskMapper;
@@ -185,6 +186,10 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
         return findOwnVehicle(vehicleId)
                 .flatMap(vehicle -> maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId))
                 .map(task -> {
+                    // Deleting a performed task would silently remove it from the history; deactivate it instead.
+                    if (maintenanceLogTaskRepository.existsByTask_Id(task.getId())) {
+                        throw new ConflictException("Maintenance task was already performed");
+                    }
                     maintenanceTaskRepository.deleteById(task.getId());
                     return true;
                 })
