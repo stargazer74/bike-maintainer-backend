@@ -1,9 +1,12 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.api.model.Currency;
+import de.chriswohlbrecht.maintenance.api.model.Language;
 import de.chriswohlbrecht.maintenance.api.model.LoginRequest;
 import de.chriswohlbrecht.maintenance.api.model.UpdateCurrentUserRequest;
 import de.chriswohlbrecht.maintenance.api.model.UserResponse;
 import de.chriswohlbrecht.maintenance.exception.AuthenticationFailedException;
+import de.chriswohlbrecht.maintenance.exception.InvalidUserUpdateException;
 import de.chriswohlbrecht.maintenance.mapper.UserMapper;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
@@ -63,8 +66,18 @@ public class AuthComponentImpl implements IAuthComponent {
     @Override
     @Transactional
     public UserResponse updateCurrentUser(UpdateCurrentUserRequest request) {
+        Language language = request.getLanguage();
+        Currency currency = request.getCurrency();
+        if (language == null && currency == null) {
+            throw new InvalidUserUpdateException("Either language or currency must be given");
+        }
         AppUser user = currentUserComponent.getCurrentUser();
-        user.setLanguage(request.getLanguage().getValue());
+        if (language != null) {
+            user.setLanguage(language.getValue());
+        }
+        if (currency != null) {
+            user.setCurrency(currency.getValue());
+        }
         return userMapper.toResponse(appUserRepository.save(user));
     }
 }

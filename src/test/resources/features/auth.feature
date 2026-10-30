@@ -57,6 +57,48 @@ Feature: Authentication
     When a GET request is sent to "/api/v1/auth/me"
     Then the JSON response field "language" equals "en"
 
+  Scenario: Change the currency without touching the language
+    Given I am logged in as "rider@example.org"
+    When a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "currency": "CHF" }
+      """
+    Then the response status code is 200
+    And the JSON response field "currency" equals "CHF"
+    And the JSON response field "language" equals "de"
+    When a GET request is sent to "/api/v1/auth/me"
+    Then the JSON response field "currency" equals "CHF"
+
+  Scenario: Changing the language keeps the currency
+    Given I am logged in as "rider@example.org"
+    When a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "currency": "GBP" }
+      """
+    And a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "language": "en" }
+      """
+    Then the response status code is 200
+    And the JSON response field "currency" equals "GBP"
+    And the JSON response field "language" equals "en"
+
+  Scenario: An update without any field is rejected
+    Given I am logged in as "rider@example.org"
+    When a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      {}
+      """
+    Then the response status code is 400
+
+  Scenario: Only supported currencies can be chosen
+    Given I am logged in as "rider@example.org"
+    When a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "currency": "JPY" }
+      """
+    Then the response status code is 400
+
   Scenario: Only supported languages can be chosen
     Given I am logged in as "rider@example.org"
     When a PATCH request is sent to "/api/v1/auth/me" with body:

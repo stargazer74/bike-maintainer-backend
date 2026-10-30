@@ -59,6 +59,17 @@ Feature: Household mode – profile selection instead of login
     Then the response status code is 200
     And the JSON response field "language" equals "en"
 
+  Scenario: A selected profile can change its currency
+    Given a profile "Anna" exists
+    When I select the profile "Anna"
+    And a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "currency": "CHF" }
+      """
+    Then the response status code is 200
+    And the JSON response field "currency" equals "CHF"
+    And the JSON response field "language" equals "de"
+
   Scenario: Selecting an unknown profile answers 404
     When a POST request is sent to "/api/v1/profiles/999999/select" with body:
       """
