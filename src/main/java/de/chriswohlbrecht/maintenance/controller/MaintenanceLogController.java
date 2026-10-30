@@ -61,15 +61,15 @@ public class MaintenanceLogController implements MaintenanceLogsApi {
     }
 
     @Override
-    public ResponseEntity<Resource> downloadMaintenanceReport(Long vehicleId) {
-        return maintenanceLogComponent.generateMaintenanceReport(vehicleId)
+    public ResponseEntity<Resource> downloadMaintenanceReport(Long vehicleId, List<Long> logId) {
+        return maintenanceLogComponent.generateMaintenanceReport(vehicleId, logId)
                 .map(report -> ResponseEntity.ok()
                         .contentType(MediaType.APPLICATION_PDF)
                         .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                                .filename("maintenance-report-vehicle-" + vehicleId + ".pdf")
+                                .filename(report.fileName())
                                 .build()
                                 .toString())
-                        .body((Resource) new ByteArrayResource(report)))
+                        .body((Resource) new ByteArrayResource(report.content())))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

@@ -4,6 +4,8 @@ import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportEntry;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportPdfHelper;
+import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
+import de.chriswohlbrecht.maintenance.exception.InvalidLogReferenceException;
 import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceLogMapper;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLog;
@@ -21,9 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -37,6 +42,10 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     private final MaintenanceReportPdfHelper maintenanceReportPdfHelper;
     private final IUserLocaleComponent userLocaleComponent;
     private final ICurrentUserComponent currentUserComponent;
+
+    private static final Comparator<MaintenanceLog> CHRONOLOGICAL = Comparator
+            .comparing(MaintenanceLog::getPerformedAt)
+            .thenComparing(MaintenanceLog::getId);
 
     @Override
     public Optional<List<MaintenanceLogResponse>> listMaintenanceLogs(Long vehicleId) {
@@ -112,10 +121,10 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<byte[]> generateMaintenanceReport(Long vehicleId) {
+    public Optional<MaintenanceReport> generateMaintenanceReport(Long vehicleId, List<Long> logIds) {
         return findOwnVehicle(vehicleId).map(vehicle -> {
-            List<MaintenanceLog> logs = maintenanceLogRepository.findAllByVehicle_Id(vehicleId).stream()
-                    .sorted(Comparator.comparing(MaintenanceLog::getPerformedAt))
+            List<MaintenanceLog> logs = selectLogs(vehicleId, logIds).stream()
+                    .sorted(CHRONOLOGICAL)
                     .toList();
             List<MaintenanceReportEntry> entries = logs.stream()
                     .map(log -> new MaintenanceReportEntry(
@@ -126,9 +135,42 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
                                     .map(link -> link.getTask().getName())
                                     .toList()))
                     .toList();
-            return maintenanceReportPdfHelper.generate(vehicle, entries,
+            byte[] content = maintenanceReportPdfHelper.generate(vehicle, entries,
                     userLocaleComponent.localeOf(vehicle.getUser()));
+            return new MaintenanceReport(reportFileName(vehicleId, logIds, logs), content);
         });
+    }
+
+    /** All logs of the vehicle, or only the selected ones; duplicates are ignored. */
+    private List<MaintenanceLog> selectLogs(Long vehicleId, List<Long> logIds) {
+        List<MaintenanceLog> all = maintenanceLogRepository.findAllByVehicle_Id(vehicleId);
+        if (logIds == null) {
+            return all;
+        }
+        Set<Long> selected = new LinkedHashSet<>(logIds);
+        if (selected.isEmpty()) {
+            throw new InvalidLogReferenceException("No maintenance log selected for the report");
+        }
+        Map<Long, MaintenanceLog> logsById = all.stream()
+                .collect(Collectors.toMap(MaintenanceLog::getId, log -> log));
+        List<MaintenanceLog> result = new ArrayList<>();
+        for (Long logId : selected) {
+            MaintenanceLog log = logsById.get(logId);
+            if (log == null) {
+                throw new InvalidLogReferenceException("Log with id " + logId + " not found for vehicle " + vehicleId);
+            }
+            result.add(log);
+        }
+        return result;
+    }
+
+    /** Like before for several entries; a report of a single entry carries the date of that maintenance. */
+    private static String reportFileName(Long vehicleId, List<Long> logIds, List<MaintenanceLog> logs) {
+        String base = "maintenance-report-vehicle-" + vehicleId;
+        if (logIds != null && logs.size() == 1) {
+            return base + "-" + logs.getFirst().getPerformedAt() + ".pdf";
+        }
+        return base + ".pdf";
     }
 
     private static Set<Long> performedTaskIds(MaintenanceLogRequest request) {

@@ -4,6 +4,8 @@ import de.chriswohlbrecht.maintenance.api.handler.MaintenanceLogsApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.IMaintenanceLogComponent;
+import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
+import de.chriswohlbrecht.maintenance.exception.InvalidLogReferenceException;
 import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
 import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
@@ -301,7 +303,8 @@ class MaintenanceLogControllerTest {
     @Test
     void testDownloadMaintenanceReportWithKnownVehicleIdShouldReturnPdf() throws Exception {
         byte[] pdfBytes = {1, 2, 3};
-        when(maintenanceLogComponent.generateMaintenanceReport(1L)).thenReturn(Optional.of(pdfBytes));
+        when(maintenanceLogComponent.generateMaintenanceReport(1L, null)).thenReturn(Optional.of(
+                new MaintenanceReport("maintenance-report-vehicle-1.pdf", pdfBytes)));
 
         mockMvc.perform(get(MaintenanceLogsApi.PATH_DOWNLOAD_MAINTENANCE_REPORT, 1L))
                 .andExpect(status().isOk())
@@ -311,7 +314,36 @@ class MaintenanceLogControllerTest {
                 .andExpect(content().bytes(pdfBytes))
                 .andDo(MockMvcResultHandlers.print());
 
-        verify(maintenanceLogComponent, times(1)).generateMaintenanceReport(1L);
+        verify(maintenanceLogComponent, times(1)).generateMaintenanceReport(1L, null);
+    }
+
+    /**
+     * Test case for downloadMaintenanceReport.
+     * Verifies that the selected log IDs are passed on and the file name comes from the component.
+     */
+    @Test
+    void testDownloadMaintenanceReportWithSelectionShouldPassLogIdsAndUseFileName() throws Exception {
+        when(maintenanceLogComponent.generateMaintenanceReport(1L, List.of(5L, 7L))).thenReturn(Optional.of(
+                new MaintenanceReport("maintenance-report-vehicle-1-2026-05-01.pdf", new byte[] {1})));
+
+        mockMvc.perform(get(MaintenanceLogsApi.PATH_DOWNLOAD_MAINTENANCE_REPORT, 1L)
+                        .param("logId", "5", "7"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition",
+                        org.hamcrest.Matchers.containsString("maintenance-report-vehicle-1-2026-05-01.pdf")));
+    }
+
+    /**
+     * Test case for downloadMaintenanceReport.
+     * Verifies that an invalid selection is answered with 400 BAD REQUEST.
+     */
+    @Test
+    void testDownloadMaintenanceReportWithInvalidLogIdShouldReturnBadRequest() throws Exception {
+        when(maintenanceLogComponent.generateMaintenanceReport(1L, List.of(77L)))
+                .thenThrow(new InvalidLogReferenceException("Log with id 77 not found for vehicle 1"));
+
+        mockMvc.perform(get(MaintenanceLogsApi.PATH_DOWNLOAD_MAINTENANCE_REPORT, 1L).param("logId", "77"))
+                .andExpect(status().isBadRequest());
     }
 
     /**
@@ -320,12 +352,12 @@ class MaintenanceLogControllerTest {
      */
     @Test
     void testDownloadMaintenanceReportWithUnknownVehicleIdShouldReturnNotFound() throws Exception {
-        when(maintenanceLogComponent.generateMaintenanceReport(99L)).thenReturn(Optional.empty());
+        when(maintenanceLogComponent.generateMaintenanceReport(99L, null)).thenReturn(Optional.empty());
 
         mockMvc.perform(get(MaintenanceLogsApi.PATH_DOWNLOAD_MAINTENANCE_REPORT, 99L))
                 .andExpect(status().isNotFound())
                 .andDo(MockMvcResultHandlers.print());
 
-        verify(maintenanceLogComponent, times(1)).generateMaintenanceReport(99L);
+        verify(maintenanceLogComponent, times(1)).generateMaintenanceReport(99L, null);
     }
 }
