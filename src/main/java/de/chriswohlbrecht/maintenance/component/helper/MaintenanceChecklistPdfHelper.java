@@ -4,7 +4,6 @@ import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskStatus;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
 import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
@@ -27,9 +26,9 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class MaintenanceChecklistPdfHelper {
 
-    private static final PDFont FONT_TITLE = PdfPageWriter.FONT_TITLE;
-    private static final PDFont FONT_HEADING = PdfPageWriter.FONT_HEADING;
-    private static final PDFont FONT_TEXT = PdfPageWriter.FONT_TEXT;
+    private static final PdfFont FONT_TITLE = PdfFont.TITLE;
+    private static final PdfFont FONT_HEADING = PdfFont.HEADING;
+    private static final PdfFont FONT_TEXT = PdfFont.TEXT;
     private static final int MAX_FILE_NAME_PART = 40;
     private static final int NOTE_LINES = 4;
 
@@ -39,8 +38,8 @@ public class MaintenanceChecklistPdfHelper {
     public byte[] generate(Vehicle vehicle, List<MaintenanceChecklistEntry> entries, LocalDate printDate,
                            Locale locale) {
         try (PDDocument document = new PDDocument()) {
-            PdfPageWriter writer = new PdfPageWriter(document);
             Texts texts = new Texts(messageSource, locale);
+            PdfPageWriter writer = new PdfPageWriter(document, texts.frame("checklist.title", vehicle, printDate));
             writeHeader(writer, vehicle, printDate, texts);
             for (MaintenanceChecklistEntry entry : entries) {
                 writeEntry(writer, entry, texts);
@@ -202,6 +201,11 @@ public class MaintenanceChecklistPdfHelper {
 
         private String number(Integer value) {
             return value == null ? "" : numberFormat.format(value);
+        }
+
+        private PdfFrame frame(String titleKey, Vehicle vehicle, LocalDate createdOn) {
+            return new PdfFrame(get(titleKey), vehicle.getName(), get("pdf.footer.created", date(createdOn)),
+                    (page, total) -> get("pdf.footer.page", String.valueOf(page), String.valueOf(total)));
         }
     }
 }

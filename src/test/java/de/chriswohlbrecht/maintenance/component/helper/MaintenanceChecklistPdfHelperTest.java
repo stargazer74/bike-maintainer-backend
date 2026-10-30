@@ -156,6 +156,19 @@ class MaintenanceChecklistPdfHelperTest {
     }
 
     @Test
+    void generate_hasHeaderAndFooterInTheUsersLanguage() throws IOException {
+        assertThat(text(helper.generate(vehicle(), List.of(BRAKES_LATER), PRINTED, Locale.GERMANY)))
+                .contains("Bike Maintainer")
+                .contains("Wartungs-Checkliste")
+                .contains("Erstellt mit Bike Maintainer am 29.10.2026")
+                .contains("Seite 1 von 1");
+        assertThat(text(helper.generate(vehicle(), List.of(BRAKES_LATER), PRINTED, Locale.UK)))
+                .contains("Maintenance checklist")
+                .contains("Created with Bike Maintainer on 29 Oct 2026")
+                .contains("Page 1 of 1");
+    }
+
+    @Test
     void fileNameUsesASafeVehicleNameAndTheDate() {
         Vehicle vehicle = vehicle();
         vehicle.setName("Die Rote / Ölschleuder!");
