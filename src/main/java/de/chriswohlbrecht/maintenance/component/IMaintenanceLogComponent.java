@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.api.model.CostSummaryEntry;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
@@ -28,4 +29,12 @@ public interface IMaintenanceLogComponent {
      *         that does not belong to the vehicle
      */
     Optional<MaintenanceReport> generateMaintenanceReport(Long vehicleId, List<Long> logIds);
+
+    /**
+     * Costs of the vehicle per currency (sorted by currency code): total and of the current year. Entries without
+     * any amount are ignored.
+     *
+     * @return empty if the vehicle does not exist or belongs to another user
+     */
+    Optional<List<CostSummaryEntry>> getCostSummary(Long vehicleId);
 }

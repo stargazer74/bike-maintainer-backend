@@ -1,6 +1,7 @@
 package de.chriswohlbrecht.maintenance.controller;
 
 import de.chriswohlbrecht.maintenance.api.handler.MaintenanceLogsApi;
+import de.chriswohlbrecht.maintenance.api.model.CostSummaryEntry;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.IMaintenanceLogComponent;
@@ -70,6 +71,13 @@ public class MaintenanceLogController implements MaintenanceLogsApi {
                                 .build()
                                 .toString())
                         .body((Resource) new ByteArrayResource(report.content())))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @Override
+    public ResponseEntity<List<CostSummaryEntry>> getCostSummary(Long vehicleId) {
+        return maintenanceLogComponent.getCostSummary(vehicleId)
+                .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

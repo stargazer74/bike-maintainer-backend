@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
+import de.chriswohlbrecht.maintenance.api.model.CostSummaryEntry;
 import de.chriswohlbrecht.maintenance.api.model.Currency;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceMaterialRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaterialUnit;
@@ -643,5 +644,78 @@ class MaintenanceLogComponentImplTest {
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(maintenanceLogMaterialRepository, maintenanceLogRepository);
         order.verify(maintenanceLogMaterialRepository).deleteAllByLog_Id(20L);
         order.verify(maintenanceLogRepository).deleteById(20L);
+    }
+
+    private static MaintenanceLog costLog(Long id, String currency, LocalDate performedAt, String laborCost) {
+        return Instancio.of(MaintenanceLog.class)
+                .set(Select.field(MaintenanceLog::getId), id)
+                .set(Select.field(MaintenanceLog::getCurrency), currency)
+                .set(Select.field(MaintenanceLog::getPerformedAt), performedAt)
+                .set(Select.field(MaintenanceLog::getLaborCost), laborCost == null ? null : new BigDecimal(laborCost))
+                .create();
+    }
+
+    private static MaintenanceLogMaterial materialOf(MaintenanceLog log, String price) {
+        return Instancio.of(MaintenanceLogMaterial.class)
+                .set(Select.field(MaintenanceLogMaterial::getLog), log)
+                .set(Select.field(MaintenanceLogMaterial::getPrice), price == null ? null : new BigDecimal(price))
+                .create();
+    }
+
+    @Test
+    void getCostSummary_sumsPerCurrencySortedWithCurrentYear() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLog eur2025 = costLog(1L, "EUR", LocalDate.of(2025, 12, 31), "60.00");
+        MaintenanceLog eur2026 = costLog(2L, "EUR", LocalDate.of(2026, 1, 1), null);
+        MaintenanceLog chf2026 = costLog(3L, "CHF", LocalDate.of(2026, 5, 5), "20");
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId()))
+                .thenReturn(List.of(eur2025, eur2026, chf2026));
+        when(maintenanceLogMaterialRepository.findAllByLog_Vehicle_Id(vehicle.getId())).thenReturn(List.of(
+                materialOf(eur2025, "40.00"), materialOf(eur2026, "50.00"), materialOf(eur2026, null)));
+
+        Optional<List<CostSummaryEntry>> result = maintenanceLogComponent.getCostSummary(vehicle.getId());
+
+        assertThat(result).isPresent();
+        assertThat(result.get()).extracting(CostSummaryEntry::getCurrency, CostSummaryEntry::getTotal,
+                        CostSummaryEntry::getCurrentYear)
+                .containsExactly(
+                        tuple(Currency.CHF, new BigDecimal("20.00"), new BigDecimal("20.00")),
+                        tuple(Currency.EUR, new BigDecimal("150.00"), new BigDecimal("50.00")));
+    }
+
+    @Test
+    void getCostSummary_noCostsThisYear_currentYearIsZero() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLog old = costLog(1L, "EUR", LocalDate.of(2025, 3, 1), "10.00");
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(old));
+        when(maintenanceLogMaterialRepository.findAllByLog_Vehicle_Id(vehicle.getId())).thenReturn(List.of());
+
+        List<CostSummaryEntry> result = maintenanceLogComponent.getCostSummary(vehicle.getId()).orElseThrow();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().getCurrentYear()).isEqualByComparingTo("0");
+        assertThat(result.getFirst().getCurrentYear().scale()).isEqualTo(2);
+    }
+
+    @Test
+    void getCostSummary_logsWithoutAmounts_areIgnored() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLog noCosts = costLog(1L, "EUR", LocalDate.of(2026, 3, 1), null);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(noCosts));
+        when(maintenanceLogMaterialRepository.findAllByLog_Vehicle_Id(vehicle.getId()))
+                .thenReturn(List.of(materialOf(noCosts, null)));
+
+        assertThat(maintenanceLogComponent.getCostSummary(vehicle.getId())).contains(List.of());
+    }
+
+    @Test
+    void getCostSummary_foreignVehicle_returnsEmptyOptional() {
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
+
+        assertThat(maintenanceLogComponent.getCostSummary(99L)).isEmpty();
+        verify(maintenanceLogRepository, never()).findAllByVehicle_Id(any());
     }
 }

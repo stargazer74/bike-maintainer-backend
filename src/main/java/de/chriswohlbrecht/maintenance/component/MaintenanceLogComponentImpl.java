@@ -1,5 +1,7 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.api.model.CostSummaryEntry;
+import de.chriswohlbrecht.maintenance.api.model.Currency;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceMaterialRequest;
@@ -28,6 +30,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -37,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 @Component
@@ -57,6 +61,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
 
     private static final int MAX_AMOUNT_SCALE = 2;
     private static final int MAX_QUANTITY_SCALE = 3;
+    private static final BigDecimal ZERO_AMOUNT = BigDecimal.ZERO.setScale(MAX_AMOUNT_SCALE);
 
     private static final Comparator<MaintenanceLog> CHRONOLOGICAL = Comparator
             .comparing(MaintenanceLog::getPerformedAt)
@@ -148,6 +153,36 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
             byte[] content = maintenanceReportPdfHelper.generate(vehicle, entries, LocalDate.now(clock),
                     userLocaleComponent.localeOf(vehicle.getUser()));
             return new MaintenanceReport(reportFileName(vehicleId, logIds, logs), content);
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<List<CostSummaryEntry>> getCostSummary(Long vehicleId) {
+        return findOwnVehicle(vehicleId).map(vehicle -> {
+            Map<Long, List<MaintenanceLogMaterial>> materialsByLog = maintenanceLogMaterialRepository
+                    .findAllByLog_Vehicle_Id(vehicleId).stream()
+                    .collect(Collectors.groupingBy(material -> material.getLog().getId()));
+            int currentYear = LocalDate.now(clock).getYear();
+            Map<String, CostSummaryEntry> entriesByCurrency = new TreeMap<>();
+            for (MaintenanceLog log : maintenanceLogRepository.findAllByVehicle_Id(vehicleId)) {
+                BigDecimal cost = maintenanceCostHelper.totalCost(
+                        materialsByLog.getOrDefault(log.getId(), List.of()), log.getLaborCost());
+                if (cost == null) {
+                    continue;
+                }
+                CostSummaryEntry entry = entriesByCurrency.computeIfAbsent(log.getCurrency(),
+                        currency -> new CostSummaryEntry(Currency.fromValue(currency), ZERO_AMOUNT, ZERO_AMOUNT));
+                entry.setTotal(entry.getTotal().add(cost));
+                if (log.getPerformedAt().getYear() == currentYear) {
+                    entry.setCurrentYear(entry.getCurrentYear().add(cost));
+                }
+            }
+            entriesByCurrency.values().forEach(entry -> {
+                entry.setTotal(entry.getTotal().setScale(MAX_AMOUNT_SCALE, RoundingMode.UNNECESSARY));
+                entry.setCurrentYear(entry.getCurrentYear().setScale(MAX_AMOUNT_SCALE, RoundingMode.UNNECESSARY));
+            });
+            return List.copyOf(entriesByCurrency.values());
         });
     }
 
