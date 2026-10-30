@@ -7,6 +7,7 @@ import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceMaterialRequest;
 import de.chriswohlbrecht.maintenance.api.model.NewMaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceCostHelper;
+import de.chriswohlbrecht.maintenance.component.helper.ReportMaterial;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportEntry;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportPdfHelper;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
@@ -141,14 +142,12 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
             List<MaintenanceLog> logs = selectLogs(vehicleId, logIds).stream()
                     .sorted(CHRONOLOGICAL)
                     .toList();
+            Map<Long, List<MaintenanceLogMaterial>> materialsByLog = maintenanceLogMaterialRepository
+                    .findAllByLog_Vehicle_Id(vehicleId).stream()
+                    .sorted(Comparator.comparingInt(MaintenanceLogMaterial::getPosition))
+                    .collect(Collectors.groupingBy(material -> material.getLog().getId()));
             List<MaintenanceReportEntry> entries = logs.stream()
-                    .map(log -> new MaintenanceReportEntry(
-                            log.getPerformedAt(),
-                            log.getMileageAtPerformed(),
-                            log.getNotes(),
-                            maintenanceLogTaskRepository.findAllByLog_Id(log.getId()).stream()
-                                    .map(link -> link.getTask().getName())
-                                    .toList()))
+                    .map(log -> toReportEntry(log, materialsByLog.getOrDefault(log.getId(), List.of())))
                     .toList();
             byte[] content = maintenanceReportPdfHelper.generate(vehicle, entries, LocalDate.now(clock),
                     userLocaleComponent.localeOf(vehicle.getUser()));
@@ -312,6 +311,23 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
                     .build();
             maintenanceLogTaskRepository.save(link);
         }
+    }
+
+    private MaintenanceReportEntry toReportEntry(MaintenanceLog log, List<MaintenanceLogMaterial> materials) {
+        return new MaintenanceReportEntry(
+                log.getPerformedAt(),
+                log.getMileageAtPerformed(),
+                log.getNotes(),
+                maintenanceLogTaskRepository.findAllByLog_Id(log.getId()).stream()
+                        .map(link -> link.getTask().getName())
+                        .toList(),
+                materials.stream()
+                        .map(m -> new ReportMaterial(m.getName(), m.getPartNumber(), m.getQuantity(), m.getUnit(),
+                                m.getPrice()))
+                        .toList(),
+                log.getLaborCost(),
+                maintenanceCostHelper.totalCost(materials, log.getLaborCost()),
+                log.getCurrency());
     }
 
     private MaintenanceLogResponse toResponse(MaintenanceLog log) {
