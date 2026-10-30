@@ -170,6 +170,60 @@ class PdfPageWriterTest {
     }
 
     @Test
+    void neverSplitsCharactersOutsideTheBasicPlane() throws IOException {
+        String squared = "🄰";
+        PdfFrame frame = new PdfFrame("Wartungshistorie", "x".repeat(37) + squared.repeat(80), "Erstellt",
+                (page, total) -> "Seite " + page + " von " + total);
+
+        String text = render(frame, writer -> writer.writeWrapped(squared.repeat(120), PdfFont.TEXT, 11f, 0f));
+
+        assertThat(text).contains(squared).doesNotContain("?");
+    }
+
+    @Test
+    void dropsBidiControlsAndTreatsLineSeparatorsAsSpaces() throws IOException {
+        String text = render(writer -> writer.writeLine(
+                "A‎B‏C‮D⁦E⁩F G H I", PdfFont.TEXT, 11f));
+
+        assertThat(text).contains("ABCDEF G H I").doesNotContain("?");
+    }
+
+    @Test
+    void keepsALongPageLabelOnThePage() throws IOException {
+        String label = "Seite eins von insgesamt sehr vielen Seiten dieses ausgesprochen ausführlichen Dokuments "
+                .repeat(3);
+        PdfFrame frame = new PdfFrame("Wartungshistorie", "Die Rote", "Erstellt mit Bike Maintainer",
+                (page, total) -> label);
+
+        byte[] pdf = renderPdf(frame, writer -> writer.writeLine("Inhalt", PdfFont.TEXT, 11f));
+
+        try (PDDocument document = Loader.loadPDF(pdf)) {
+            float pageWidth = document.getPage(0).getMediaBox().getWidth();
+            List<String> footerLines = new ArrayList<>();
+            List<Float> footerStarts = new ArrayList<>();
+            List<Float> footerEnds = new ArrayList<>();
+            PDFTextStripper stripper = new PDFTextStripper() {
+                @Override
+                protected void writeString(String text, List<TextPosition> positions) {
+                    // The text extraction drops characters outside the page, so check what is left of the label.
+                    if (positions.getFirst().getYDirAdj() > 780f) {
+                        footerLines.add(text);
+                        footerStarts.add(positions.getFirst().getXDirAdj());
+                        TextPosition last = positions.getLast();
+                        footerEnds.add(last.getXDirAdj() + last.getWidthDirAdj());
+                    }
+                }
+            };
+            stripper.getText(document);
+
+            assertThat(footerLines).singleElement().satisfies(line -> assertThat(line)
+                    .startsWith("Seite eins von insgesamt").endsWith("\u2026"));
+            assertThat(footerStarts).allMatch(x -> x >= 49f);
+            assertThat(footerEnds).allMatch(x -> x <= pageWidth - 49f);
+        }
+    }
+
+    @Test
     void writesCheckboxItemsWithWrappedText() throws IOException {
         String text = render(writer -> writer.writeCheckboxItem("Ölwechsel", PdfFont.HEADING, 11f));
 

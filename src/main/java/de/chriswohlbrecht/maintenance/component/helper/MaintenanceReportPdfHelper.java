@@ -28,8 +28,8 @@ public class MaintenanceReportPdfHelper {
     private final MessageSource messageSource;
 
     /**
-     * @param locale locale of the vehicle owner from {@code IUserLocaleComponent#localeOf} (de-DE or en-GB). Other
-     *               locales are not supported: e.g. French number formats use U+202F, which the PDF font lacks.
+     * @param locale locale of the vehicle owner from {@code IUserLocaleComponent#localeOf} (de-DE or en-GB); the
+     *               texts exist only in these two languages.
      * @param createdOn date in the footer of every page
      */
     public byte[] generate(Vehicle vehicle, List<MaintenanceReportEntry> entries, LocalDate createdOn,

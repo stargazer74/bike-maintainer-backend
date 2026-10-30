@@ -41,8 +41,12 @@ final class PdfPageWriter {
     private static final float FILL_IN_LINE_HEIGHT = LEADING * 1.5f;
     private static final String REPLACEMENT = "?";
     private static final String ELLIPSIS = "\u2026";
-    /** Soft hyphen, zero-width space/joiners, word joiner, variation selectors, BOM: not meant to be seen. */
-    private static final String INVISIBLE = "[\\u00AD\\u200B-\\u200D\\u2060\\uFE0E\\uFE0F\\uFEFF]";
+    /**
+     * Soft hyphen, zero-width space/joiners, bidi marks and controls, word joiner, variation selectors, BOM: not
+     * meant to be seen.
+     */
+    private static final String INVISIBLE =
+            "[\\u00AD\\u200B-\\u200F\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFE0E\\uFE0F\\uFEFF]";
 
     /** Header: logo and texts between the top edge of the page and the orange rule. */
     private static final float HEADER_TOP = 36f;
@@ -217,11 +221,16 @@ final class PdfPageWriter {
 
         PDFont font = font(PdfFont.TEXT);
         footer.setNonStrokingColor(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
-        String label = sanitize(frame.pageLabel().of(page, total), font);
+        float contentWidth = right - MARGIN;
+        String label = fit(sanitize(frame.pageLabel().of(page, total), font), font, FOOTER_FONT_SIZE, contentWidth);
         float labelWidth = width(label, font, FOOTER_FONT_SIZE);
-        String note = fit(sanitize(frame.footerText(), font), font, FOOTER_FONT_SIZE,
-                right - MARGIN - labelWidth - 12f);
-        showText(footer, note, font, FOOTER_FONT_SIZE, MARGIN, FOOTER_BASELINE);
+        // The note gets what the page label leaves; without room it is left out rather than overlapping.
+        float noteWidth = contentWidth - labelWidth - 12f;
+        String note = sanitize(frame.footerText(), font);
+        if (noteWidth > width(ELLIPSIS, font, FOOTER_FONT_SIZE)) {
+            showText(footer, fit(note, font, FOOTER_FONT_SIZE, noteWidth), font, FOOTER_FONT_SIZE, MARGIN,
+                    FOOTER_BASELINE);
+        }
         showText(footer, label, font, FOOTER_FONT_SIZE, right - labelWidth, FOOTER_BASELINE);
     }
 
@@ -251,9 +260,10 @@ final class PdfPageWriter {
         if (width(text, font, fontSize) <= maxWidth) {
             return text;
         }
+        // Shortened by whole code points, so a character outside the basic plane is never cut in half.
         int end = text.length();
         while (end > 0 && width(text.substring(0, end).stripTrailing() + ELLIPSIS, font, fontSize) > maxWidth) {
-            end--;
+            end = text.offsetByCodePoints(end, -1);
         }
         return text.substring(0, end).stripTrailing() + ELLIPSIS;
     }
@@ -291,9 +301,11 @@ final class PdfPageWriter {
             // A single word wider than the line is split at the last character that still fits.
             String rest = word;
             while (width(rest, font, fontSize) > maxWidth) {
-                int cut = rest.length() - 1;
-                while (cut > 1 && width(rest.substring(0, cut), font, fontSize) > maxWidth) {
-                    cut--;
+                // Whole code points only, see fit(); at least one per line.
+                int minCut = rest.offsetByCodePoints(0, 1);
+                int cut = rest.offsetByCodePoints(rest.length(), -1);
+                while (cut > minCut && width(rest.substring(0, cut), font, fontSize) > maxWidth) {
+                    cut = rest.offsetByCodePoints(cut, -1);
                 }
                 lines.add(rest.substring(0, cut));
                 rest = rest.substring(cut);
@@ -311,7 +323,7 @@ final class PdfPageWriter {
     }
 
     /**
-     * Control characters become spaces, invisible formatting characters are dropped, characters the font has no
+     * Control characters and line/paragraph separators become spaces, invisible formatting characters are dropped, characters the font has no
      * glyph for become {@code ?}.
      */
     static String sanitize(String text, PDFont font) {
@@ -322,7 +334,8 @@ final class PdfPageWriter {
         String normalized = Normalizer.normalize(text, Normalizer.Form.NFC).replaceAll(INVISIBLE, "");
         StringBuilder result = new StringBuilder(normalized.length());
         normalized.codePoints().forEach(codePoint -> {
-            if (Character.isISOControl(codePoint)) {
+            if (Character.isISOControl(codePoint) || Character.getType(codePoint) == Character.LINE_SEPARATOR
+                    || Character.getType(codePoint) == Character.PARAGRAPH_SEPARATOR) {
                 result.append(' ');
                 return;
             }
