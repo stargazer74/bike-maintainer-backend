@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
+import de.chriswohlbrecht.maintenance.api.model.NewMaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportEntry;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportPdfHelper;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
@@ -29,6 +30,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -36,10 +38,12 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -141,6 +145,7 @@ class MaintenanceLogComponentImplTest {
     void createMaintenanceLog_withoutTasks_savesLogAndReturnsMappedResponse() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+                .newTasks(List.of())
                 .mileageAtPerformed(12000)
                 .performedTaskIds(Set.of());
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
@@ -161,10 +166,88 @@ class MaintenanceLogComponentImplTest {
     }
 
     @Test
+    void createMaintenanceLog_withNewTasks_createsThemOneTimeOrRecurringAndLinksThem() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLogRequest request = new MaintenanceLogRequest(LocalDate.of(2026, 3, 1), 8600)
+                .newTasks(List.of(
+                        new NewMaintenanceTaskRequest("Bremsleitung getauscht").description("Stahlflex vorne"),
+                        new NewMaintenanceTaskRequest("Kette reinigen").intervalKm(1000),
+                        new NewMaintenanceTaskRequest("Luftfilter").intervalMonths(12)));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        List<MaintenanceTask> savedTasks = new ArrayList<>();
+        when(maintenanceTaskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> {
+            MaintenanceTask toSave = invocation.getArgument(0);
+            toSave.setId(100L + savedTasks.size());
+            savedTasks.add(toSave);
+            return toSave;
+        });
+        when(maintenanceLogRepository.save(any(MaintenanceLog.class))).thenAnswer(invocation -> {
+            MaintenanceLog toSave = invocation.getArgument(0);
+            toSave.setId(20L);
+            return toSave;
+        });
+        when(maintenanceLogTaskRepository.findAllByLog_Id(20L)).thenReturn(List.of());
+
+        maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
+
+        assertThat(savedTasks).extracting(MaintenanceTask::getName, MaintenanceTask::isOneTime,
+                        MaintenanceTask::getIntervalKm, MaintenanceTask::getIntervalMonths, MaintenanceTask::isActive)
+                .containsExactly(
+                        tuple("Bremsleitung getauscht", true, null, null, true),
+                        tuple("Kette reinigen", false, 1000, null, true),
+                        tuple("Luftfilter", false, null, 12, true));
+        assertThat(savedTasks).allMatch(task -> task.getVehicle() == vehicle);
+        assertThat(savedTasks.getFirst().getDescription()).isEqualTo("Stahlflex vorne");
+        verify(maintenanceLogTaskRepository, times(3)).save(argThat(link -> link.getLog().getId() == 20L
+                && savedTasks.contains(link.getTask())));
+    }
+
+    @Test
+    void createMaintenanceLog_unknownTaskId_createsNoNewTask() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLogRequest request = new MaintenanceLogRequest(LocalDate.of(2026, 3, 1), 8600)
+                .performedTaskIds(Set.of(999L))
+                .newTasks(List.of(new NewMaintenanceTaskRequest("Spiegel ersetzt")));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceTaskRepository.findByIdAndVehicle_Id(999L, vehicle.getId())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request))
+                .isInstanceOf(InvalidTaskReferenceException.class);
+        verify(maintenanceTaskRepository, never()).save(any());
+        verify(maintenanceLogRepository, never()).save(any());
+    }
+
+    @Test
+    void updateMaintenanceLog_withNewTasks_createsAndLinksThem() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLog existing = Instancio.create(MaintenanceLog.class);
+        existing.setId(20L);
+        existing.setVehicle(vehicle);
+        MaintenanceLogRequest request = new MaintenanceLogRequest(LocalDate.of(2026, 3, 1), 8600)
+                .newTasks(List.of(new NewMaintenanceTaskRequest("Spiegel ersetzt")));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findByIdAndVehicle_Id(20L, vehicle.getId())).thenReturn(Optional.of(existing));
+        when(maintenanceLogRepository.save(existing)).thenReturn(existing);
+        when(maintenanceTaskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> {
+            MaintenanceTask toSave = invocation.getArgument(0);
+            toSave.setId(100L);
+            return toSave;
+        });
+        when(maintenanceLogTaskRepository.findAllByLog_Id(20L)).thenReturn(List.of());
+
+        maintenanceLogComponent.updateMaintenanceLog(vehicle.getId(), 20L, request);
+
+        verify(maintenanceTaskRepository).save(argThat(task -> "Spiegel ersetzt".equals(task.getName())
+                && task.isOneTime()));
+        verify(maintenanceLogTaskRepository).save(argThat(link -> link.getTask().getId() == 100L));
+    }
+
+    @Test
     void createMaintenanceLog_withValidTaskIds_linksTasks() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceTask task = Instancio.create(MaintenanceTask.class);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+                .newTasks(List.of())
                 .mileageAtPerformed(12000)
                 .performedTaskIds(Set.of(task.getId()));
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
@@ -187,6 +270,7 @@ class MaintenanceLogComponentImplTest {
     void createMaintenanceLog_withUnknownTaskId_throwsInvalidTaskReferenceException() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+                .newTasks(List.of())
                 .mileageAtPerformed(12000)
                 .performedTaskIds(Set.of(999L));
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
@@ -202,7 +286,8 @@ class MaintenanceLogComponentImplTest {
 
     @Test
     void createMaintenanceLog_vehicleNotFound_returnsEmptyAndDoesNotSave() {
-        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
+        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+                .newTasks(List.of()).mileageAtPerformed(12000);
         when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
         Optional<MaintenanceLogResponse> result = maintenanceLogComponent.createMaintenanceLog(99L, request);
@@ -217,6 +302,7 @@ class MaintenanceLogComponentImplTest {
         MaintenanceLog existing = Instancio.create(MaintenanceLog.class);
         existing.setVehicle(vehicle);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+                .newTasks(List.of())
                 .mileageAtPerformed(12000)
                 .performedTaskIds(Set.of());
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
@@ -235,7 +321,8 @@ class MaintenanceLogComponentImplTest {
     @Test
     void updateMaintenanceLog_notFound_returnsEmptyAndDoesNotSave() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
-        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
+        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+                .newTasks(List.of()).mileageAtPerformed(12000);
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
         when(maintenanceLogRepository.findByIdAndVehicle_Id(99L, vehicle.getId())).thenReturn(Optional.empty());
 
@@ -251,6 +338,7 @@ class MaintenanceLogComponentImplTest {
         MaintenanceLog existing = Instancio.create(MaintenanceLog.class);
         existing.setVehicle(vehicle);
         MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+                .newTasks(List.of())
                 .mileageAtPerformed(12000)
                 .performedTaskIds(Set.of(999L));
         when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
