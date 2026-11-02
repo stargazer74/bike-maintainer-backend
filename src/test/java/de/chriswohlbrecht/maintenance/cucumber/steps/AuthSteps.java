@@ -12,6 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.client.EntityExchangeResult;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class AuthSteps {
@@ -30,6 +33,9 @@ public class AuthSteps {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private Clock clock;
 
     @Given("a verified user {string} with password {string} exists")
     public void aVerifiedUserExists(String email, String password) {
@@ -64,6 +70,15 @@ public class AuthSteps {
         assertThat(response.getStatus().value())
                 .as("login as %s (response: %s)", email, new String(response.getResponseBody()))
                 .isEqualTo(200);
+    }
+
+    /** Moves the end of the lock into the past instead of waiting for the lockout duration. */
+    @Given("the account lock of {string} has expired")
+    public void theAccountLockHasExpired(String email) {
+        AppUser user = appUserRepository.findByEmailIgnoreCase(email).orElseThrow();
+        assertThat(user.getLockedUntil()).as("lock of %s", email).isNotNull();
+        user.setLockedUntil(LocalDateTime.now(clock).minusMinutes(1));
+        appUserRepository.save(user);
     }
 
     @Given("the client IP is {string}")

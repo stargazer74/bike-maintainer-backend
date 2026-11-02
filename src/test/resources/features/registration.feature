@@ -128,6 +128,17 @@ Feature: Registration and email verification
     And 0 emails have been sent to "new@example.org"
     And no account exists for "new@example.org"
 
+  Scenario Outline: Invalid email addresses and passwords are rejected
+    When I register as "<email>" with password "<password>"
+    Then the response status code is 400
+    And 0 emails have been sent to "<email>"
+    And no account exists for "<email>"
+
+    Examples:
+      | email           | password              |
+      | not-an-email    | correct-horse-battery |
+      | new@example.org | too-short             |
+
   Scenario: A filled honeypot is accepted but ignored
     When I register as "bot@example.org" with password "correct-horse-battery" and the honeypot filled
     Then the response status code is 202
