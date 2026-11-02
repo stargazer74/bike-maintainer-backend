@@ -83,7 +83,9 @@ other `@SpringBootTest`. Pick the lightest option that tests what matters:
 - Ask when uncertain or unclear
 - Respect test structure: use @Order for ordered test execution
 - Never use `var` for variable declarations.
-- Use builder pattern for object creation in tests.
+- Test data: use **Instancio** (`Instancio.create(...)`, `@ExtendWith(InstancioExtension.class)`) for filler objects
+  whose concrete values do not matter to the test. As soon as the test checks or depends on specific values, build
+  the object with the **builder pattern** (or constructor) and fixed values, so the expectation is visible in the test.
 - Write version numbers in the pom.xml in the properties section.
 - In the pom.xml, separate every `<dependency>` block from the next one with an empty line (in `<dependencies>` as
   well as in `<dependencyManagement>`).
