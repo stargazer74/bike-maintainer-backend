@@ -69,3 +69,12 @@ Feature: Change the password of the logged-in user
       { "currentPassword": "correct-horse-battery", "newPassword": "brand-new-password" }
       """
     Then the response status code is 429
+
+  Scenario: A new password shorter than 10 characters is rejected
+    Given a verified user "rider@example.org" with password "correct-horse-battery" exists
+    And I log in as "rider@example.org" with password "correct-horse-battery"
+    When I change my password from "correct-horse-battery" to "too-short"
+    Then the response status code is 400
+    When I log out
+    And I log in as "rider@example.org" with password "correct-horse-battery"
+    Then the response status code is 200

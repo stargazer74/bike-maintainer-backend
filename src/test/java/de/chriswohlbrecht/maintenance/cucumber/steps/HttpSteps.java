@@ -53,6 +53,14 @@ public class HttpSteps {
                 apiClient.patch(scenarioContext.resolvePath(path), scenarioContext.resolvePath(body)));
     }
 
+    /** For checks that only depend on method and path; write requests send an empty JSON object. */
+    @When("a {word} request without login is sent to {string}")
+    public void aRequestWithoutLoginIsSentTo(String method, String path) {
+        HttpMethod httpMethod = HttpMethod.valueOf(method);
+        String body = HttpMethod.GET.equals(httpMethod) || HttpMethod.DELETE.equals(httpMethod) ? null : "{}";
+        scenarioContext.setLastResponse(apiClient.sendRawPath(httpMethod, path, body));
+    }
+
     @When("a DELETE request is sent to {string}")
     public void aDeleteRequestIsSentTo(String path) {
         scenarioContext.setLastResponse(apiClient.delete(scenarioContext.resolvePath(path)));

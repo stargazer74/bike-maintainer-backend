@@ -159,6 +159,18 @@ Feature: Authentication
     And I log in as "rider@example.org" with password "correct-horse-battery"
     Then the response status code is 429
 
+  Scenario: The account lock ends after the lockout duration
+    Given a verified user "rider@example.org" with password "correct-horse-battery" exists
+    And the client IP is "198.51.100.204"
+    When I fail to log in as "rider@example.org" 10 times
+    And the account lock of "rider@example.org" has expired
+    And the client IP is "198.51.100.205"
+    And I log in as "rider@example.org" with password "correct-horse-battery"
+    Then the response status code is 200
+    When I log out
+    And I log in as "rider@example.org" with password "wrong-password"
+    Then the response status code is 401
+
   Scenario: Percent-encoded login paths count towards the same rate limit
     Given a verified user "rider@example.org" with password "correct-horse-battery" exists
     And the client IP is "198.51.100.203"

@@ -115,6 +115,25 @@ Feature: Household mode – profile selection instead of login
       """
     Then the response status code is 409
 
+  Scenario: Renaming to a blank name is rejected
+    Given a profile "Anna" exists
+    When a PUT request is sent to "/api/v1/profiles/{Anna}" with body:
+      """
+      { "displayName": "   " }
+      """
+    Then the response status code is 400
+    When a GET request is sent to "/api/v1/profiles"
+    Then the response body contains "Anna"
+
+  Scenario: Renaming or deleting an unknown profile answers 404
+    When a PUT request is sent to "/api/v1/profiles/999999" with body:
+      """
+      { "displayName": "Anna" }
+      """
+    Then the response status code is 404
+    When a DELETE request is sent to "/api/v1/profiles/999999"
+    Then the response status code is 404
+
   Scenario: A profile with vehicles cannot be deleted
     Given I have selected a new profile "Anna"
     And a vehicle "annasBike" exists with body:
