@@ -181,6 +181,54 @@ class MaintenanceChecklistPdfHelperTest {
         assertThat(helper.fileName(vehicle, PRINTED, Locale.GERMANY)).isEqualTo("checkliste-2026-10-29.pdf");
     }
 
+    @Test
+    void headerShowsOnlyTheVehicleDataThatExists() throws IOException {
+        Vehicle makeOnly = vehicle();
+        makeOnly.setModel(null);
+        makeOnly.setModelYear(null);
+        Vehicle modelOnly = vehicle();
+        modelOnly.setMake(null);
+        Vehicle neither = vehicle();
+        neither.setMake(null);
+        neither.setModel(null);
+
+        assertThat(text(helper.generate(makeOnly, List.of(BRAKES_LATER), PRINTED, Locale.GERMANY)))
+                .contains("Marke/Modell: Honda")
+                .doesNotContain("Baujahr");
+        assertThat(text(helper.generate(modelOnly, List.of(BRAKES_LATER), PRINTED, Locale.GERMANY)))
+                .contains("Marke/Modell: CB500");
+        assertThat(text(helper.generate(neither, List.of(BRAKES_LATER), PRINTED, Locale.GERMANY)))
+                .doesNotContain("Marke/Modell");
+    }
+
+    @Test
+    void intervalAndLastServiceVariants() throws IOException {
+        MaintenanceChecklistEntry monthly = new MaintenanceChecklistEntry("Reifendruck", "   ", false, 0, 1,
+                status(MaintenanceTaskStatus.OK, null, 20, null, LocalDate.of(2026, 10, 1)));
+        MaintenanceChecklistEntry zeroIntervals = new MaintenanceChecklistEntry("Sichtprüfung", null, false, 0, 0,
+                status(MaintenanceTaskStatus.OK, null, null, null, null));
+
+        String text = text(helper.generate(vehicle(), List.of(monthly, zeroIntervals), PRINTED, Locale.GERMANY));
+
+        assertThat(text)
+                .contains("Jeden Monat")
+                .contains("Zuletzt: 01.10.2026")
+                .doesNotContain("Zuletzt: 01.10.2026 bei")
+                .contains("Kein Intervall");
+    }
+
+    @Test
+    void fileNameWithoutOrWithAVeryLongVehicleName() {
+        Vehicle unnamed = vehicle();
+        unnamed.setName(null);
+        Vehicle longName = vehicle();
+        longName.setName("Meine treue Reiseenduro mit Koffersystem und Heizgriffen");
+
+        assertThat(helper.fileName(unnamed, PRINTED, Locale.GERMANY)).isEqualTo("checkliste-2026-10-29.pdf");
+        assertThat(helper.fileName(longName, PRINTED, Locale.GERMANY))
+                .isEqualTo("checkliste-meine-treue-reiseenduro-mit-koffersystem-2026-10-29.pdf");
+    }
+
     private static MaintenanceTaskStatusResult status(MaintenanceTaskStatus status, Integer kmRemaining,
                                                       Integer daysRemaining, Integer lastMileage,
                                                       LocalDate lastDate) {

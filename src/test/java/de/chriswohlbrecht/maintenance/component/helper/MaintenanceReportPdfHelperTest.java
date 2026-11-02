@@ -151,6 +151,30 @@ class MaintenanceReportPdfHelperTest {
                 .doesNotContain("Material:");
     }
 
+    @Test
+    void generate_showsOnlyTheDataThatExists() throws IOException {
+        Vehicle vehicle = vehicle();
+        vehicle.setModel(null);
+        vehicle.setModelYear(null);
+        Vehicle modelOnly = vehicle();
+        modelOnly.setMake(null);
+        MaintenanceReportEntry sparse = new MaintenanceReportEntry(LocalDate.of(2026, 10, 9), null, "  ", List.of(),
+                List.of(new ReportMaterial("Kettenspray", " ", BigDecimal.ONE, MaterialUnit.PIECE, new BigDecimal("9.90"))), null,
+                new BigDecimal("9.90"), "EUR");
+
+        String text = normalized(text(helper.generate(vehicle, List.of(sparse), CREATED, Locale.GERMANY)));
+
+        assertThat(text)
+                .contains("Marke/Modell: Honda")
+                .doesNotContain("Baujahr")
+                .doesNotContain("Notizen")
+                .doesNotContain("Teilenr.")
+                .doesNotContain("Arbeitskosten")
+                .contains("Kettenspray – 1 Stk. – 9,90 €");
+        assertThat(text(helper.generate(modelOnly, List.of(ENTRY), CREATED, Locale.GERMANY)))
+                .contains("Marke/Modell: CB500");
+    }
+
     /** NumberFormat uses (narrow) no-break spaces between amount and currency; the font text contains them as is. */
     private static String normalized(String text) {
         return text.replace('\u00A0', ' ').replace('\u202F', ' ');

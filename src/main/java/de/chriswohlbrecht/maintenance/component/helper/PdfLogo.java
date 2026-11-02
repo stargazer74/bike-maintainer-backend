@@ -60,9 +60,9 @@ final class PdfLogo {
 
     /**
      * Minimal SVG path interpreter for the commands Material Symbols use (no arcs). SVG coordinates grow downwards
-     * and the view box spans y from -960 to 0, so y = 0 is the bottom of the icon.
+     * and the view box spans y from -960 to 0, so y = 0 is the bottom of the icon. Package-private for tests.
      */
-    private static final class PathDrawer {
+    static final class PathDrawer {
         private final PDPageContentStream stream;
         private final float originX;
         private final float originY;
@@ -76,14 +76,14 @@ final class PdfLogo {
         private float controlY;
         private char previous;
 
-        private PathDrawer(PDPageContentStream stream, float originX, float originY, float scale) {
+        PathDrawer(PDPageContentStream stream, float originX, float originY, float scale) {
             this.stream = stream;
             this.originX = originX;
             this.originY = originY;
             this.scale = scale;
         }
 
-        private void draw(String path) throws IOException {
+        void draw(String path) throws IOException {
             List<String> tokens = new ArrayList<>();
             Matcher matcher = TOKEN.matcher(path);
             while (matcher.find()) {
