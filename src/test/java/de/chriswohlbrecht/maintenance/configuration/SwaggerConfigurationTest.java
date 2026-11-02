@@ -18,6 +18,7 @@ class SwaggerConfigurationTest {
     @Nested
     @SpringBootTest
     @AutoConfigureMockMvc
+    @ActiveProfiles("test")
     @WithMockUser
     class WithoutProfile {
 
@@ -38,7 +39,7 @@ class SwaggerConfigurationTest {
     @Nested
     @SpringBootTest
     @AutoConfigureMockMvc
-    @ActiveProfiles("local")
+    @ActiveProfiles({"test", "local"})
     @WithMockUser
     class WithLocalProfile {
 
