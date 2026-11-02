@@ -52,7 +52,9 @@ src/
 
 ### Sample Test Process
 1. Create a test class in `src/test/java/...`.
-2. Annotate with `@SpringBootTest` for integration tests.
+2. Annotate with `@SpringBootTest` and `@ActiveProfiles("test")` for integration tests. The profile `test`
+   (`src/test/resources/application-test.properties`) only holds the deviations from the main
+   `application.properties` (H2, fixed `bm.mode`, test secrets); `SpringTestProfileTest` fails if it is missing.
 3. Use `@Autowired` to inject dependencies.
 4. Run with `./mvnw test -Dtest=YourTestClass`.
 
