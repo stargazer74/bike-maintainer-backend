@@ -12,7 +12,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Swagger UI and the generated API docs exist only in local development, never in the published image. */
+/**
+ * Swagger UI and the generated API docs exist only in local development, never in the published image.
+ *
+ * <p>One of the few tests with the whole application context: what is checked is the interplay of the profile,
+ * springdoc, Spring MVC and Spring Security, which no slice contains completely.
+ */
 class SwaggerConfigurationTest {
 
     @Nested
