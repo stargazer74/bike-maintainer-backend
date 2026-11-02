@@ -41,22 +41,30 @@ src/
 ## Testing Information
 ### Running Tests
 - Run all tests: `./mvnw test`
-- Run a specific test: `./mvnw test -Dtest=MaintenanceApplicationTests`
+- Run a specific test: `./mvnw test -Dtest=VehicleComponentImplTest`
 - Skip tests: `./mvnw package -DskipTests`
 
 ### Adding New Tests
-- **Integration Tests**: Use `Cucumber` for integration/bdd tests.
-- **Unit Tests**: Do not use `@SpringBootTest` if not neccessary. Standard JUnit 5 / AssertJ tests.
+**Do not load the whole Spring context unless it is really needed.** A unit test must not start the application;
+`@SpringBootTest` is reserved for the Cucumber suites and the rare test that needs MVC, security and configuration
+together (currently only `SwaggerConfigurationTest`). `SpringTestRulesTest` (ArchUnit) fails the build for any
+other `@SpringBootTest`. Pick the lightest option that tests what matters:
+
+| What is tested | How |
+|---|---|
+| Logic of a component, helper, mapper | Plain JUnit 5 + AssertJ, collaborators mocked with Mockito, objects built with builders |
+| Controller: request mapping, validation, status codes | `@WebMvcTest(controllers = …)` (web slice only), components mocked |
+| SQL, JPA mapping, repository queries, transactions | `@DataJpaTest` + `@AutoConfigureTestDatabase(replace = NONE)` + `@ActiveProfiles("test")` (only JPA, Flyway, H2) |
+| Flyway migrations | Plain JUnit: `Flyway.configure()` against a fresh in-memory H2 (see `FlywayMigrationTest`) |
+| Configuration properties, conditions, auto-configuration settings | `ApplicationContextRunner` with only the configuration under test (see `MailConfigurationTest`, `PortalStartupCheckTest`) |
+| HTTP behaviour end to end (status codes, security, ownership, both operating modes) | Cucumber scenario in `src/test/resources/features` |
+
+- **Profile `test`:** every test that starts Spring (`@SpringBootTest`, `@DataJpaTest`) activates
+  `@ActiveProfiles("test")`. `src/test/resources/application-test.properties` only holds the deviations from the
+  main `application.properties` (H2, fixed `bm.mode`, test secrets); `SpringTestRulesTest` fails if it is missing.
 - **Architectural Tests**: The project uses **ArchUnit** to enforce layer dependencies. See `ArchitecturalLayerTest` for existing rules.
   - *Note*: Ensure the package name in `@AnalyzeClasses` matches the project structure.
-
-### Sample Test Process
-1. Create a test class in `src/test/java/...`.
-2. Annotate with `@SpringBootTest` and `@ActiveProfiles("test")` for integration tests. The profile `test`
-   (`src/test/resources/application-test.properties`) only holds the deviations from the main
-   `application.properties` (H2, fixed `bm.mode`, test secrets); `SpringTestProfileTest` fails if it is missing.
-3. Use `@Autowired` to inject dependencies.
-4. Run with `./mvnw test -Dtest=YourTestClass`.
+- **Coverage**: `./mvnw verify` fails below 90 % lines and 90 % branches (JaCoCo, unit and Cucumber tests together).
 
 ## Development Guidelines
 - **Code Style**:
@@ -75,5 +83,9 @@ src/
 - Ask when uncertain or unclear
 - Respect test structure: use @Order for ordered test execution
 - Never use `var` for variable declarations.
-- Use builder pattern for object creation in tests.
+- Test data: use **Instancio** (`Instancio.create(...)`, `@ExtendWith(InstancioExtension.class)`) for filler objects
+  whose concrete values do not matter to the test. As soon as the test checks or depends on specific values, build
+  the object with the **builder pattern** (or constructor) and fixed values, so the expectation is visible in the test.
 - Write version numbers in the pom.xml in the properties section.
+- In the pom.xml, separate every `<dependency>` block from the next one with an empty line (in `<dependencies>` as
+  well as in `<dependencyManagement>`).

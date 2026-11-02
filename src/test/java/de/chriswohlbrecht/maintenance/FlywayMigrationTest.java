@@ -3,26 +3,35 @@ package de.chriswohlbrecht.maintenance;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.MigrationState;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@ActiveProfiles("test")
-@SpringBootTest
+/** All migrations on a fresh H2 database in MariaDB mode, without starting Spring. */
 class FlywayMigrationTest {
 
-    @Autowired
     private Flyway flyway;
-
-    @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void migrate() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(
+                "jdbc:h2:mem:migration-" + UUID.randomUUID() + ";MODE=MariaDB;DB_CLOSE_DELAY=-1", "sa", "");
+        flyway = Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .placeholders(Map.of("initialAdminEmail", "admin@localhost"))
+                .load();
+        flyway.migrate();
+        jdbcTemplate = new JdbcTemplate(dataSource);
+    }
 
     @Test
     void appliesAllMigrationsSuccessfully() {
