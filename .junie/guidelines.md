@@ -85,3 +85,5 @@ other `@SpringBootTest`. Pick the lightest option that tests what matters:
 - Never use `var` for variable declarations.
 - Use builder pattern for object creation in tests.
 - Write version numbers in the pom.xml in the properties section.
+- In the pom.xml, separate every `<dependency>` block from the next one with an empty line (in `<dependencies>` as
+  well as in `<dependencyManagement>`).
