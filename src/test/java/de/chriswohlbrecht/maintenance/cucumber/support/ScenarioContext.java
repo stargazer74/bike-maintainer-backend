@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.test.web.servlet.client.EntityExchangeResult;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -15,6 +16,8 @@ import java.util.regex.Pattern;
 public class ScenarioContext {
 
     private static final Pattern ALIAS_PATTERN = Pattern.compile("\\{(\\w+)}");
+    /** Dates relative to today, e.g. {today}, {today-20d}, {today-13m}, for checks that depend on the date. */
+    private static final Pattern DATE_PATTERN = Pattern.compile("\\{today(?:([+-]\\d+)([dm]))?}");
 
     private final Map<String, Long> ids = new HashMap<>();
 
@@ -33,10 +36,25 @@ public class ScenarioContext {
     }
 
     public String resolvePath(String template) {
-        Matcher matcher = ALIAS_PATTERN.matcher(template);
+        Matcher matcher = ALIAS_PATTERN.matcher(resolveDates(template));
         StringBuilder result = new StringBuilder();
         while (matcher.find()) {
             matcher.appendReplacement(result, String.valueOf(resolveId(matcher.group(1))));
+        }
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    private static String resolveDates(String template) {
+        Matcher matcher = DATE_PATTERN.matcher(template);
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            LocalDate date = LocalDate.now();
+            if (matcher.group(1) != null) {
+                int amount = Integer.parseInt(matcher.group(1));
+                date = "d".equals(matcher.group(2)) ? date.plusDays(amount) : date.plusMonths(amount);
+            }
+            matcher.appendReplacement(result, date.toString());
         }
         matcher.appendTail(result);
         return result.toString();

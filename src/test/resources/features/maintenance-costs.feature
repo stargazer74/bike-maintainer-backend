@@ -40,3 +40,29 @@ Feature: Maintenance cost summary
     Given I am logged in as "other@example.org"
     When a GET request is sent to "/api/v1/vehicles/{bike}/cost-summary"
     Then the response status code is 404
+
+  Scenario: Costs are summed per currency and split into the current year
+    Given a maintenance log "lastYear" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2020-06-01", "mileageAtPerformed": 8100, "laborCost": 100 }
+      """
+    And a maintenance log "thisYear" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "{today}", "mileageAtPerformed": 8200, "laborCost": 40.25 }
+      """
+    When a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "currency": "CHF" }
+      """
+    And a maintenance log "swiss" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "{today}", "mileageAtPerformed": 8300,
+        "materials": [ { "name": "Brake pads", "quantity": 2, "unit": "PIECE", "price": 35 } ] }
+      """
+    And a GET request is sent to "/api/v1/vehicles/{bike}/cost-summary"
+    Then the response status code is 200
+    And the JSON response array has 2 elements
+    And the JSON response array contains the elements:
+      | currency | total  | currentYear |
+      | EUR      | 140.25 | 40.25       |
+      | CHF      | 35.00  | 35.00       |
