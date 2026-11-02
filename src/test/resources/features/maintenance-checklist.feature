@@ -75,3 +75,7 @@ Feature: Maintenance checklist download
     Given I am logged in as "bob@example.org"
     When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-checklist?taskId={oil}"
     Then the response status code is 404
+
+  Scenario: The checklist of an unknown vehicle answers 404
+    When a GET request is sent to "/api/v1/vehicles/999999/maintenance-checklist?taskId={oil}"
+    Then the response status code is 404

@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.cucumber.steps;
 
 import de.chriswohlbrecht.maintenance.cucumber.support.ScenarioContext;
 import io.cucumber.java.en.Then;
+import io.cucumber.datatable.DataTable;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -10,7 +11,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,6 +49,28 @@ public class ResponseAssertionSteps {
             }
         }
         assertThat(found).as("array field \"%s\" to contain \"%s\"", field, resolvedExpected).isTrue();
+    }
+
+    /** Every row must match one element of the JSON array in the body; numbers are compared by value. */
+    @Then("the JSON response array contains the elements:")
+    public void theJsonResponseArrayContainsTheElements(DataTable table) {
+        JsonNode array = parseLastResponseBody();
+        assertThat(array.isArray()).as("response body is an array: %s", array).isTrue();
+        for (Map<String, String> row : table.asMaps()) {
+            boolean found = false;
+            for (JsonNode element : array) {
+                if (matches(element, row)) {
+                    found = true;
+                    break;
+                }
+            }
+            assertThat(found).as("element %s in %s", row, array).isTrue();
+        }
+    }
+
+    @Then("the JSON response array has {int} element(s)")
+    public void theJsonResponseArrayHasElements(int count) {
+        assertThat(parseLastResponseBody().size()).isEqualTo(count);
     }
 
     @Then("the response body contains {string}")
@@ -99,6 +124,23 @@ public class ResponseAssertionSteps {
         String text = lastResponsePdfText();
         assertThat(text).contains(first, second);
         assertThat(text.indexOf(first)).as("%s before %s", first, second).isLessThan(text.indexOf(second));
+    }
+
+    private boolean matches(JsonNode element, Map<String, String> expected) {
+        for (Map.Entry<String, String> field : expected.entrySet()) {
+            JsonNode actual = element.get(field.getKey());
+            String expectedValue = scenarioContext.resolvePath(field.getValue());
+            if (actual == null) {
+                return false;
+            }
+            boolean equal = actual.isNumber()
+                    ? actual.decimalValue().compareTo(new BigDecimal(expectedValue)) == 0
+                    : actual.asText().equals(expectedValue);
+            if (!equal) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private String lastResponsePdfText() throws IOException {

@@ -103,3 +103,18 @@ Feature: Maintenance report download
     Given I am logged in as "bob@example.org"
     When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-report?logId={service}"
     Then the response status code is 404
+
+  Scenario: The report lists materials, labor cost and totals
+    Given a maintenance log "withCosts" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-02-01", "mileageAtPerformed": 19800, "laborCost": 60.50,
+        "materials": [ { "name": "Motoroel 10W-40", "quantity": 4, "unit": "LITER", "price": 39.50, "partNumber": "OIL-1040" } ] }
+      """
+    When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-report?logId={withCosts}"
+    Then the response status code is 200
+    And the PDF document contains "Motoroel 10W-40"
+    And the PDF document contains "Teilenr. OIL-1040"
+    And the PDF document contains "Arbeitskosten: 60,50"
+    And the PDF document contains "Summe: 100,00"
+    And the PDF document contains "Gesamtsummen"
+    And the PDF document does not contain "Annual service"

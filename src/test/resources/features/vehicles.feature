@@ -115,3 +115,31 @@ Feature: Vehicle management
     Then the response status code is 204
     When a GET request is sent to "/api/v1/vehicles/{withHistory}"
     Then the response status code is 404
+
+  Scenario Outline: Reject creating or updating a vehicle with invalid values
+    Given a vehicle "bike" exists with body:
+      """
+      { "name": "Trail Bike", "type": "MOTORCYCLE", "modelYear": 2021, "firstRegistrationDate": "2021-01-01", "currentMileage": 5000 }
+      """
+    When a POST request is sent to "/api/v1/vehicles" with body:
+      """
+      { "name": "Invalid", "type": <type>, "modelYear": <modelYear>, "firstRegistrationDate": <date>, "currentMileage": <mileage> }
+      """
+    Then the response status code is 400
+    When a PUT request is sent to "/api/v1/vehicles/{bike}" with body:
+      """
+      { "name": "Invalid", "type": <type>, "modelYear": <modelYear>, "firstRegistrationDate": <date>, "currentMileage": <mileage> }
+      """
+    Then the response status code is 400
+    When a GET request is sent to "/api/v1/vehicles/{bike}"
+    Then the JSON response field "name" equals "Trail Bike"
+
+    Examples:
+      | case                  | type         | modelYear | date         | mileage |
+      | unknown type          | "BICYCLE"    | 2021      | "2021-01-01" | 5000    |
+      | missing type          | null         | 2021      | "2021-01-01" | 5000    |
+      | model year too early  | "MOTORCYCLE" | 1899      | "2021-01-01" | 5000    |
+      | model year too late   | "MOTORCYCLE" | 2101      | "2021-01-01" | 5000    |
+      | negative mileage      | "MOTORCYCLE" | 2021      | "2021-01-01" | -1      |
+      | invalid date          | "MOTORCYCLE" | 2021      | "2021-13-45" | 5000    |
+      | missing date          | "MOTORCYCLE" | 2021      | null         | 5000    |

@@ -129,3 +129,140 @@ Feature: Maintenance task management
     When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-tasks/{freshFilter}"
     Then the response status code is 200
     And the JSON response field "status" equals "OK"
+
+  Scenario: Update a maintenance task that does not exist
+    When a PUT request is sent to "/api/v1/vehicles/{bike}/maintenance-tasks/999999" with body:
+      """
+      { "name": "Ghost task", "intervalKm": 1000 }
+      """
+    Then the response status code is 404
+
+  Scenario Outline: Reject updating a maintenance task with invalid values
+    Given a maintenance task "chain" exists for vehicle "bike" with body:
+      """
+      { "name": "Lube chain", "intervalKm": 500 }
+      """
+    When a PUT request is sent to "/api/v1/vehicles/{bike}/maintenance-tasks/{chain}" with body:
+      """
+      <body>
+      """
+    Then the response status code is 400
+    And the vehicle "bike" has the maintenance tasks:
+      | name       | intervalKm |
+      | Lube chain | 500        |
+
+    Examples:
+      | case                | body                                         |
+      | blank name          | { "name": "", "intervalKm": 500 }            |
+      | zero km interval    | { "name": "Lube chain", "intervalKm": 0 }    |
+      | zero month interval | { "name": "Lube chain", "intervalMonths": 0 } |
+      | no interval         | { "name": "Lube chain" }                     |
+
+  Scenario: A deactivated task stays in the history but cannot go on the checklist
+    Given a maintenance task "chain" exists for vehicle "bike" with body:
+      """
+      { "name": "Lube chain", "intervalKm": 1000 }
+      """
+    And a maintenance log "lubed" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-01-15", "mileageAtPerformed": 4800, "performedTaskIds": [{chain}] }
+      """
+    When a PUT request is sent to "/api/v1/vehicles/{bike}/maintenance-tasks/{chain}" with body:
+      """
+      { "name": "Lube chain", "intervalKm": 1000, "active": false }
+      """
+    Then the response status code is 200
+    And the JSON response field "active" equals "false"
+    And the vehicle "bike" has the maintenance tasks:
+      | name       | active |
+      | Lube chain | false  |
+    When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{lubed}"
+    Then the JSON response array field "performedTaskIds" contains "{chain}"
+    When a GET request is sent to "/api/v1/vehicles/{bike}/maintenance-checklist?taskId={chain}"
+    Then the response status code is 400
+
+  Scenario: A task is due soon within 1000 km of its interval
+    Given a maintenance task "oil" exists for vehicle "bike" with body:
+      """
+      { "name": "Oil change", "intervalKm": 5500 }
+      """
+    Then the vehicle "bike" has the maintenance tasks:
+      | name       | status   | kmRemaining |
+      | Oil change | DUE_SOON | 500         |
+
+  Scenario: A task with an interval in months is measured from the first registration
+    Given a vehicle "newBike" exists with body:
+      """
+      { "name": "New Bike", "type": "MOTORCYCLE", "modelYear": 2026, "firstRegistrationDate": "{today-20d}", "currentMileage": 0 }
+      """
+    And a maintenance task "inspection" exists for vehicle "newBike" with body:
+      """
+      { "name": "First inspection", "intervalMonths": 1 }
+      """
+    And a maintenance task "service" exists for vehicle "newBike" with body:
+      """
+      { "name": "Annual service", "intervalMonths": 12 }
+      """
+    And a maintenance task "tyres" exists for vehicle "bike" with body:
+      """
+      { "name": "Tyre check", "intervalMonths": 12 }
+      """
+    Then the vehicle "newBike" has the maintenance tasks:
+      | name             | status   |
+      | First inspection | DUE_SOON |
+      | Annual service   | OK       |
+    And the vehicle "bike" has the maintenance tasks:
+      | name       | status  |
+      | Tyre check | OVERDUE |
+
+  Scenario: Whichever comes first: the time interval makes a task overdue despite low mileage
+    Given a maintenance task "service" exists for vehicle "bike" with body:
+      """
+      { "name": "Service", "intervalKm": 20000, "intervalMonths": 12 }
+      """
+    Then the vehicle "bike" has the maintenance tasks:
+      | name    | status  |
+      | Service | OVERDUE |
+
+  Scenario: Whichever comes first: the mileage makes a task overdue despite recent maintenance
+    Given a maintenance task "service" exists for vehicle "bike" with body:
+      """
+      { "name": "Service", "intervalKm": 1000, "intervalMonths": 24 }
+      """
+    And a maintenance log "lastService" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "{today-30d}", "mileageAtPerformed": 3500, "performedTaskIds": [{service}] }
+      """
+    Then the vehicle "bike" has the maintenance tasks:
+      | name    | status  | kmRemaining |
+      | Service | OVERDUE | -500        |
+
+  Scenario: Recording maintenance resets the status of the task
+    Given a maintenance task "oil" exists for vehicle "bike" with body:
+      """
+      { "name": "Oil change", "intervalKm": 3000 }
+      """
+    And the vehicle "bike" has the maintenance tasks:
+      | name       | status  |
+      | Oil change | OVERDUE |
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "performedAt": "{today}", "mileageAtPerformed": 5000, "performedTaskIds": [{oil}] }
+      """
+    Then the response status code is 201
+    And the vehicle "bike" has the maintenance tasks:
+      | name       | status | kmRemaining | lastServiceMileage | lastServiceDate |
+      | Oil change | OK     | 3000        | 5000               | {today}         |
+
+  Scenario: A performed one-time task is done
+    Given a maintenance task "battery" exists for vehicle "bike" with body:
+      """
+      { "name": "Replace battery", "oneTime": true }
+      """
+    And a maintenance log "replaced" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-01-15", "mileageAtPerformed": 4900, "performedTaskIds": [{battery}] }
+      """
+    Then the vehicle "bike" has the maintenance tasks:
+      | name            | status |
+      | Replace battery | DONE   |

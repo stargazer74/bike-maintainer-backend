@@ -366,3 +366,57 @@ Feature: Maintenance log management
     Then the response status code is 200
     And the JSON response field "currency" equals "EUR"
     And the JSON response field "totalCost" equals "15"
+
+  Scenario: Reject creating a maintenance log without a date
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "mileageAtPerformed": 8200 }
+      """
+    Then the response status code is 400
+    And the vehicle "bike" has 0 maintenance logs
+
+  Scenario: Update a maintenance log that does not exist
+    When a PUT request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/999999" with body:
+      """
+      { "performedAt": "2026-01-02", "mileageAtPerformed": 8150 }
+      """
+    Then the response status code is 404
+
+  Scenario: Changing the performed tasks of a log moves the status
+    Given a maintenance task "chain" exists for vehicle "bike" with body:
+      """
+      { "name": "Lube chain", "intervalKm": 5000 }
+      """
+    And a maintenance log "service" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "{today}", "mileageAtPerformed": 8000, "performedTaskIds": [{oilChange}] }
+      """
+    And the vehicle "bike" has the maintenance tasks:
+      | name       | status  |
+      | Oil change | OK      |
+      | Lube chain | OVERDUE |
+    When a PUT request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{service}" with body:
+      """
+      { "performedAt": "{today}", "mileageAtPerformed": 8000, "performedTaskIds": [{chain}] }
+      """
+    Then the response status code is 200
+    And the JSON response array field "performedTaskIds" contains "{chain}"
+    And the response body does not contain "[{oilChange}]"
+    And the vehicle "bike" has the maintenance tasks:
+      | name       | status  |
+      | Oil change | OVERDUE |
+      | Lube chain | OK      |
+
+  Scenario: Deleting the only log of a task makes it due again
+    Given a maintenance log "service" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "{today}", "mileageAtPerformed": 8000, "performedTaskIds": [{oilChange}] }
+      """
+    And the vehicle "bike" has the maintenance tasks:
+      | name       | status | lastServiceMileage |
+      | Oil change | OK     | 8000               |
+    When a DELETE request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{service}"
+    Then the response status code is 204
+    And the vehicle "bike" has the maintenance tasks:
+      | name       | status  | lastServiceMileage |
+      | Oil change | OVERDUE |                    |
