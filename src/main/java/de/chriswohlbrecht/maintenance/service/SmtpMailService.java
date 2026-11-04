@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.service;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,7 @@ public class SmtpMailService implements IMailService {
 
     private final JavaMailSender mailSender;
     private final AccountMailProperties mailProperties;
+    private final MeterRegistry meterRegistry;
 
     @Async
     @Override
@@ -33,10 +35,17 @@ public class SmtpMailService implements IMailService {
         message.setText(body);
         try {
             mailSender.send(message);
+            countDelivery("success");
         } catch (MailException e) {
+            countDelivery("failure");
             // Only the domain: the log must not become a list of email addresses.
             log.error("Sending email to *@{} failed", domainOf(to), e);
         }
+    }
+
+    /** Only here is it known whether the SMTP server accepted the email (sending is asynchronous). */
+    private void countDelivery(String result) {
+        meterRegistry.counter("bm.mail.delivery", "result", result).increment();
     }
 
     private static String domainOf(String address) {

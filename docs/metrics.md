@@ -35,3 +35,7 @@ Namen oder freie Pfade.
 | `bm.auth.password_reset` | Zähler | `step`: `requested` (Mail an ein aktives Konto unterwegs), `completed` (neues Passwort gesetzt) | Passwort-Zurücksetzen; Anfragen für unbekannte Adressen zählen nicht |
 | `bm.protection.altcha_failed` | Zähler | – | Abgelehnte ALTCHA-Lösungen (fehlend, ungültig, abgelaufen, schon benutzt) |
 | `bm.protection.rate_limited` | Zähler | `group`: `login`, `registration`, `verification_resend`, `password_reset`, `password_change` | Wegen des Rate-Limits pro IP abgewiesene Anfragen (429) |
+| `bm.mail.sent` | Zähler | `type`: `verification`, `password_reset`, `registration_exists`; `result`: `queued` (an den Versand übergeben), `quota_exceeded` (wegen Tageslimit verworfen) | Mails, die die App verschicken wollte |
+| `bm.mail.delivery` | Zähler | `result`: `success`, `failure` | Zustellversuche beim SMTP-Server (asynchron, daher getrennt von `bm.mail.sent`) |
+| `bm.mail.quota.used` | Gauge | – | Heute gezählte Mails; `NaN`, wenn die Datenbank nicht lesbar ist |
+| `bm.mail.quota.limit` | Gauge | – | Tageslimit (`bm.mail.daily-limit`) |
