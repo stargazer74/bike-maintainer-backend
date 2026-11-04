@@ -29,3 +29,5 @@ Namen oder freie Pfade.
 
 | Name | Art | Tags | Bedeutung |
 |---|---|---|---|
+| `bm.auth.login` | Zähler | `result`: `success`, `bad_credentials` (unbekannte E-Mail oder falsches Passwort), `locked` (Konto gesperrt), `disabled` (Konto deaktiviert), `unverified` (E-Mail nicht bestätigt) | Anmeldeversuche nach Ergebnis |
+| `bm.auth.lockout` | Zähler | – | Konto wegen zu vieler Fehlversuche gesperrt |
