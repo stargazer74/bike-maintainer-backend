@@ -20,6 +20,24 @@ Feature: Vehicle management
     And the JSON response field "type" equals "MOTORCYCLE"
     And the JSON response field "currentMileage" equals "1500"
 
+  Scenario Outline: Create and retrieve a vehicle of every type
+    Given a vehicle "typed" exists with body:
+      """
+      { "name": "Typed", "type": "<type>", "modelYear": 2022, "firstRegistrationDate": "2022-01-01", "currentMileage": 100 }
+      """
+    When a GET request is sent to "/api/v1/vehicles/{typed}"
+    Then the response status code is 200
+    And the JSON response field "type" equals "<type>"
+
+    Examples:
+      | type       |
+      | MOTORCYCLE |
+      | CAR        |
+      | BICYCLE    |
+      | E_BIKE     |
+      | QUAD       |
+      | SCOOTER    |
+
   Scenario: Reject creating a vehicle without a name
     When a POST request is sent to "/api/v1/vehicles" with body:
       """
@@ -136,7 +154,7 @@ Feature: Vehicle management
 
     Examples:
       | case                  | type         | modelYear | date         | mileage |
-      | unknown type          | "BICYCLE"    | 2021      | "2021-01-01" | 5000    |
+      | unknown type          | "TRIKE"      | 2021      | "2021-01-01" | 5000    |
       | missing type          | null         | 2021      | "2021-01-01" | 5000    |
       | model year too early  | "MOTORCYCLE" | 1899      | "2021-01-01" | 5000    |
       | model year too late   | "MOTORCYCLE" | 2101      | "2021-01-01" | 5000    |

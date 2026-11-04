@@ -2,5 +2,9 @@ package de.chriswohlbrecht.maintenance.persistence.type;
 
 public enum VehicleType {
     MOTORCYCLE,
-    CAR
+    CAR,
+    BICYCLE,
+    E_BIKE,
+    QUAD,
+    SCOOTER
 }
