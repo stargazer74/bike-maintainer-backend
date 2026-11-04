@@ -10,13 +10,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
-import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -112,13 +114,37 @@ class MailQuotaComponentImplTest {
     }
 
     @Test
-    void usedGaugeIsNaNWhenRepositoryFails() {
+    void gaugeDoesNotReadTheDatabaseOnScrape() {
         MailQuotaRepository failing = mock(MailQuotaRepository.class);
-        when(failing.findById(any())).thenThrow(new DataAccessResourceFailureException("database down"));
+        when(failing.findById(any())).thenThrow(new CannotCreateTransactionException("database down"));
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         new MailQuotaComponentImpl(failing, clock, PROPERTIES, registry);
 
-        assertThat(registry.get("bm.mail.quota.used").gauge().value()).isNaN();
-        assertThat(registry.get("bm.mail.quota.used").gauge().value()).isNaN();
+        assertThat(registry.get("bm.mail.quota.used").gauge().value()).isZero();
+        verifyNoInteractions(failing);
+    }
+
+    @Test
+    void refreshKeepsLastValueWhenDatabaseFails() {
+        MailQuotaRepository failing = mock(MailQuotaRepository.class);
+        when(failing.findById(any())).thenThrow(new CannotCreateTransactionException("database down"));
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        MailQuotaComponentImpl failingComponent = new MailQuotaComponentImpl(failing, clock, PROPERTIES, registry);
+
+        assertThatCode(failingComponent::refreshUsedGauge).doesNotThrowAnyException();
+
+        assertThat(registry.get("bm.mail.quota.used").gauge().value()).isZero();
+    }
+
+    @Test
+    void refreshReadsTodaysCountFromTheDatabase() {
+        component.tryReserve();
+        component.tryReserve();
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        MailQuotaComponentImpl afterRestart = new MailQuotaComponentImpl(mailQuotaRepository, clock, PROPERTIES, registry);
+
+        afterRestart.refreshUsedGauge();
+
+        assertThat(registry.get("bm.mail.quota.used").gauge().value()).isEqualTo(2.0);
     }
 }

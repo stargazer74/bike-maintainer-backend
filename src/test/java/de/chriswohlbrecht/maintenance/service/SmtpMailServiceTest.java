@@ -63,4 +63,10 @@ class SmtpMailServiceTest {
     private double deliveryCount(String result) {
         return meterRegistry.counter("bm.mail.delivery", "result", result).count();
     }
+
+    @Test
+    void registersDeliveryCountersUpFront() {
+        assertThat(meterRegistry.find("bm.mail.delivery").counters()).hasSize(2);
+        assertThat(deliveryCount("failure")).isZero();
+    }
 }

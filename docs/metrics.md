@@ -23,7 +23,7 @@ Jede Metrik trägt:
 
 ## Fachliche Metriken
 
-Präfix `bm.`; im Prometheus-Format werden Punkte zu Unterstrichen, Zähler bekommen `_total`
+Präfix `bm.`; Zähler mit festen Tag-Werten (Anmeldung, Mail-Zustellung) sind ab dem Start mit 0 registriert. Im Prometheus-Format werden Punkte zu Unterstrichen, Zähler bekommen `_total`
 (`bm.auth.login` → `bm_auth_login_total`). Tags haben nur wenige feste Werte – nie Nutzer-IDs, E-Mail-Adressen,
 Namen oder freie Pfade.
 
@@ -37,7 +37,7 @@ Namen oder freie Pfade.
 | `bm.protection.rate_limited` | Zähler | `group`: `login`, `registration`, `verification_resend`, `password_reset`, `password_change` | Wegen des Rate-Limits pro IP abgewiesene Anfragen (429) |
 | `bm.mail.sent` | Zähler | `type`: `verification`, `password_reset`, `registration_exists`; `result`: `queued` (an den Versand übergeben), `quota_exceeded` (wegen Tageslimit verworfen) | Mails, die die App verschicken wollte |
 | `bm.mail.delivery` | Zähler | `result`: `success`, `failure` | Zustellversuche beim SMTP-Server (asynchron, daher getrennt von `bm.mail.sent`) |
-| `bm.mail.quota.used` | Gauge | – | Heute gezählte Mails; `NaN`, wenn die Datenbank nicht lesbar ist |
+| `bm.mail.quota.used` | Gauge | – | Heute gezählte Mails; im Speicher gehalten und jede Minute aus der Datenbank nachgelesen, damit das Abholen der Metriken nie auf die Datenbank wartet |
 | `bm.mail.quota.limit` | Gauge | – | Tageslimit (`bm.mail.daily-limit`) |
 | `bm.report.generated` | Timer | `type`: `report` (Wartungsbericht), `checklist` (Wartungs-Checkliste); `result`: `success`, `failure` | Anzahl und Dauer der PDF-Erzeugung (nur das Rendern, ohne Datenbankzugriffe) |
 

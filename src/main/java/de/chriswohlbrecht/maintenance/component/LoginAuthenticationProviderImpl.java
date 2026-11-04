@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -33,6 +34,9 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
 
     static final String BAD_CREDENTIALS_MESSAGE = "Invalid email or password";
     private static final String LOGIN_METRIC = "bm.auth.login";
+    private static final String LOCKOUT_METRIC = "bm.auth.lockout";
+    private static final List<String> LOGIN_RESULTS =
+            List.of("success", "bad_credentials", "locked", "disabled", "unverified");
 
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
@@ -51,6 +55,11 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
         this.clock = clock;
         this.securityProperties = securityProperties;
         this.meterRegistry = meterRegistry;
+        // Registered with 0 up front: a counter that only appears with its first events hides them from increase().
+        for (String result : LOGIN_RESULTS) {
+            meterRegistry.counter(LOGIN_METRIC, "result", result);
+        }
+        meterRegistry.counter(LOCKOUT_METRIC);
         this.dummyHash = passwordEncoder.encode("dummy-password-for-timing");
     }
 
@@ -116,7 +125,7 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
         user.setFailedLoginAttempts(attempts);
         if (attempts >= securityProperties.lockoutMaxFailedAttempts()) {
             user.setLockedUntil(now.plus(securityProperties.lockoutDuration()));
-            meterRegistry.counter("bm.auth.lockout").increment();
+            meterRegistry.counter(LOCKOUT_METRIC).increment();
         }
         appUserRepository.save(user);
     }

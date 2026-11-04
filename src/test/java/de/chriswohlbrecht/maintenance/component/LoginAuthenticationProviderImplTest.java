@@ -247,6 +247,12 @@ class LoginAuthenticationProviderImplTest {
         assertThat(meterRegistry.counter("bm.auth.lockout").count()).isEqualTo(1.0);
     }
 
+    @Test
+    void registersLoginCountersUpFront() {
+        assertThat(meterRegistry.find("bm.auth.login").counters()).hasSize(5);
+        assertThat(meterRegistry.find("bm.auth.lockout").counters()).hasSize(1);
+    }
+
     private double loginCount(String result) {
         return meterRegistry.counter("bm.auth.login", "result", result).count();
     }
