@@ -35,14 +35,14 @@
         <springdoc.version>3.2.0</springdoc.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <archunit-junit5.version>1.5.1</archunit-junit5.version>
-        <instancio-junit.version>6.1.0</instancio-junit.version>
+        <instancio-junit.version>6.2.0</instancio-junit.version>
         <pdfbox.version>3.0.8</pdfbox.version>
         <altcha.version>2.1.1</altcha.version>
         <org-json.version>20260814</org-json.version>
         <spotbugs-maven-plugin.version>4.10.5.0</spotbugs-maven-plugin.version>
         <spotbugs.version>4.10.5</spotbugs.version>
         <findsecbugs-plugin.version>1.14.0</findsecbugs-plugin.version>
-        <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
+        <jacoco-maven-plugin.version>0.8.16</jacoco-maven-plugin.version>
 
         <maintenance.api.base-package>
             de.chriswohlbrecht.maintenance.api
