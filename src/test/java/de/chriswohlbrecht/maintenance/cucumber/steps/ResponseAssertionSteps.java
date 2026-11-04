@@ -29,6 +29,11 @@ public class ResponseAssertionSteps {
         assertThat(scenarioContext.getLastResponse().getStatus().value()).isEqualTo(expectedStatus);
     }
 
+    @Then("the response status code is not {int}")
+    public void theResponseStatusCodeIsNot(int unexpectedStatus) {
+        assertThat(scenarioContext.getLastResponse().getStatus().value()).isNotEqualTo(unexpectedStatus);
+    }
+
     @Then("the JSON response field {string} equals {string}")
     public void theJsonResponseFieldEquals(String field, String expectedValue) {
         JsonNode node = parseLastResponseBody();

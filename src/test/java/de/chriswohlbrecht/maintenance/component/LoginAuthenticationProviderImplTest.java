@@ -7,6 +7,7 @@ import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,11 +48,13 @@ class LoginAuthenticationProviderImplTest {
     private AppUserRepository appUserRepository;
 
     private LoginAuthenticationProviderImpl provider;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         provider = new LoginAuthenticationProviderImpl(appUserRepository, PASSWORD_ENCODER, CLOCK,
-                new SecurityProperties(10, Duration.ofMinutes(15), 3, Duration.ofMinutes(15)));
+                new SecurityProperties(10, Duration.ofMinutes(15), 3, Duration.ofMinutes(15)), meterRegistry);
     }
 
     @Test
@@ -171,6 +174,87 @@ class LoginAuthenticationProviderImplTest {
 
     private static UsernamePasswordAuthenticationToken token(String email, String password) {
         return UsernamePasswordAuthenticationToken.unauthenticated(email, password);
+    }
+
+    @Test
+    void countsSuccessfulLogin() {
+        when(appUserRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(user().build()));
+
+        provider.authenticate(token(EMAIL, PASSWORD));
+
+        assertThat(loginCount("success")).isEqualTo(1.0);
+    }
+
+    @Test
+    void countsUnknownEmailAsBadCredentials() {
+        when(appUserRepository.findByEmailIgnoreCase(anyString())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> provider.authenticate(token("nobody@example.org", PASSWORD)));
+
+        assertThat(loginCount("bad_credentials")).isEqualTo(1.0);
+    }
+
+    @Test
+    void countsWrongPasswordAsBadCredentials() {
+        when(appUserRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(user().build()));
+
+        assertThatThrownBy(() -> provider.authenticate(token(EMAIL, "wrong")));
+
+        assertThat(loginCount("bad_credentials")).isEqualTo(1.0);
+        assertThat(loginCount("success")).isZero();
+    }
+
+    @Test
+    void countsLoginWhileLockedAsLocked() {
+        when(appUserRepository.findByEmailIgnoreCase(EMAIL))
+                .thenReturn(Optional.of(user().failedLoginAttempts(3).lockedUntil(NOW.plusMinutes(5)).build()));
+
+        assertThatThrownBy(() -> provider.authenticate(token(EMAIL, PASSWORD)));
+
+        assertThat(loginCount("locked")).isEqualTo(1.0);
+    }
+
+    @Test
+    void countsDisabledAccount() {
+        when(appUserRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(user().active(false).build()));
+
+        assertThatThrownBy(() -> provider.authenticate(token(EMAIL, PASSWORD)));
+
+        assertThat(loginCount("disabled")).isEqualTo(1.0);
+    }
+
+    @Test
+    void countsUnverifiedAccount() {
+        when(appUserRepository.findByEmailIgnoreCase(EMAIL))
+                .thenReturn(Optional.of(user().emailVerified(false).build()));
+
+        assertThatThrownBy(() -> provider.authenticate(token(EMAIL, PASSWORD)));
+
+        assertThat(loginCount("unverified")).isEqualTo(1.0);
+    }
+
+    @Test
+    void countsLockoutWhenMaxAttemptsReached() {
+        AppUser user = user().build();
+        when(appUserRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> provider.authenticate(token(EMAIL, "wrong")));
+        assertThatThrownBy(() -> provider.authenticate(token(EMAIL, "wrong")));
+        assertThat(meterRegistry.counter("bm.auth.lockout").count()).isZero();
+
+        assertThatThrownBy(() -> provider.authenticate(token(EMAIL, "wrong")));
+
+        assertThat(meterRegistry.counter("bm.auth.lockout").count()).isEqualTo(1.0);
+    }
+
+    @Test
+    void registersLoginCountersUpFront() {
+        assertThat(meterRegistry.find("bm.auth.login").counters()).hasSize(5);
+        assertThat(meterRegistry.find("bm.auth.lockout").counters()).hasSize(1);
+    }
+
+    private double loginCount(String result) {
+        return meterRegistry.counter("bm.auth.login", "result", result).count();
     }
 
     private static AppUser.AppUserBuilder user() {

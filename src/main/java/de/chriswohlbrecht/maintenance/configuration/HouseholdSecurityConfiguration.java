@@ -51,6 +51,8 @@ public class HouseholdSecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/v1/config").permitAll()
                         .requestMatchers("/api/v1/profiles", "/api/v1/profiles/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        // Only exists on the management port (internal network), never on the application port.
+                        .requestMatchers("/actuator/prometheus").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new UnavailableEndpointFilter(errorWriter, PORTAL_ONLY_ENDPOINTS), CsrfFilter.class);
         return http.build();

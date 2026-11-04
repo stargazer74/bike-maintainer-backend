@@ -52,6 +52,8 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/config", "/api/v1/auth/challenge").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        // Only exists on the management port (internal network), never on the application port.
+                        .requestMatchers("/actuator/prometheus").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(new UnavailableEndpointFilter(errorWriter, HOUSEHOLD_ONLY_ENDPOINTS), CsrfFilter.class)

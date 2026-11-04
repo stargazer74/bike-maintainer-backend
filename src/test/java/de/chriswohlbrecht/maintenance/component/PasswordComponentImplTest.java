@@ -1,6 +1,7 @@
 package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.ChangePasswordRequest;
+import de.chriswohlbrecht.maintenance.api.model.EmailRequest;
 import de.chriswohlbrecht.maintenance.api.model.PasswordResetConfirmRequest;
 import de.chriswohlbrecht.maintenance.exception.InvalidPasswordException;
 import de.chriswohlbrecht.maintenance.exception.InvalidTokenException;
@@ -8,10 +9,12 @@ import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
 import de.chriswohlbrecht.maintenance.persistence.type.UserTokenType;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -49,6 +52,9 @@ class PasswordComponentImplTest {
     private AppUserRepository appUserRepository;
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Spy
+    private SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @InjectMocks
     private PasswordComponentImpl component;
@@ -122,6 +128,38 @@ class PasswordComponentImplTest {
         assertThat(user.getPasswordHash()).isEqualTo("{bcrypt}new");
         verify(userTokenComponent).revokeOpen(user, UserTokenType.PASSWORD_RESET);
         verify(sessionComponent).invalidateOtherSessionsOf(7L, "session-1");
+    }
+
+    @Test
+    void countsResetRequestForExistingAccount() {
+        when(appUserRepository.findByEmailIgnoreCase("rider@example.org")).thenReturn(Optional.of(user(true)));
+
+        component.requestReset(new EmailRequest().email(" Rider@example.org").altcha("solved"));
+
+        assertThat(resetCount("requested")).isEqualTo(1.0);
+    }
+
+    @Test
+    void doesNotCountResetRequestForUnknownEmail() {
+        when(appUserRepository.findByEmailIgnoreCase("nobody@example.org")).thenReturn(Optional.empty());
+
+        component.requestReset(new EmailRequest().email("nobody@example.org").altcha("solved"));
+
+        assertThat(resetCount("requested")).isZero();
+    }
+
+    @Test
+    void countsCompletedReset() {
+        when(userTokenComponent.consume("token", UserTokenType.PASSWORD_RESET)).thenReturn(Optional.of(user(true)));
+        when(passwordEncoder.encode("brand-new-password")).thenReturn("{bcrypt}new");
+
+        component.confirmReset(new PasswordResetConfirmRequest().token("token").newPassword("brand-new-password"));
+
+        assertThat(resetCount("completed")).isEqualTo(1.0);
+    }
+
+    private double resetCount(String step) {
+        return meterRegistry.counter("bm.auth.password_reset", "step", step).count();
     }
 
     private static AppUser user(boolean active) {

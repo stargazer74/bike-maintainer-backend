@@ -1,7 +1,8 @@
 package de.chriswohlbrecht.maintenance.service;
 
 import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
-import lombok.RequiredArgsConstructor;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.mail.MailException;
@@ -17,11 +18,22 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @Profile("!local")
-@RequiredArgsConstructor
 public class SmtpMailService implements IMailService {
 
     private final JavaMailSender mailSender;
     private final AccountMailProperties mailProperties;
+    private final MeterRegistry meterRegistry;
+
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
+    public SmtpMailService(JavaMailSender mailSender, AccountMailProperties mailProperties,
+                           MeterRegistry meterRegistry) {
+        this.mailSender = mailSender;
+        this.mailProperties = mailProperties;
+        this.meterRegistry = meterRegistry;
+        // Registered with 0 up front: a counter that only appears with its first failures hides them from increase().
+        countDelivery("success", 0);
+        countDelivery("failure", 0);
+    }
 
     @Async
     @Override
@@ -33,10 +45,18 @@ public class SmtpMailService implements IMailService {
         message.setText(body);
         try {
             mailSender.send(message);
+            countDelivery("success", 1);
         } catch (MailException e) {
+            countDelivery("failure", 1);
             // Only the domain: the log must not become a list of email addresses.
-            log.error("Sending email to *@{} failed", domainOf(to), e);
+            // Without the exception: SMTP replies in its message and stack trace often repeat the recipient address.
+            log.error("Sending email to *@{} failed: {}", domainOf(to), e.getClass().getSimpleName());
         }
+    }
+
+    /** Only here is it known whether the SMTP server accepted the email (sending is asynchronous). */
+    private void countDelivery(String result, double amount) {
+        meterRegistry.counter("bm.mail.delivery", "result", result).increment(amount);
     }
 
     private static String domainOf(String address) {

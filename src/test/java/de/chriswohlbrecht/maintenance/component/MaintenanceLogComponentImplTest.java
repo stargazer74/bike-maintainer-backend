@@ -1,32 +1,33 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
-import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.api.model.CostSummaryEntry;
 import de.chriswohlbrecht.maintenance.api.model.Currency;
+import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
+import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceMaterialRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaterialUnit;
 import de.chriswohlbrecht.maintenance.api.model.NewMaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceCostHelper;
-import de.chriswohlbrecht.maintenance.exception.InvalidMaterialException;
-import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
-import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLogMaterial;
-import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogMaterialRepository;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportEntry;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportPdfHelper;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
 import de.chriswohlbrecht.maintenance.exception.InvalidLogReferenceException;
+import de.chriswohlbrecht.maintenance.exception.InvalidMaterialException;
 import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
 import de.chriswohlbrecht.maintenance.mapper.MaintenanceLogMapperImpl;
+import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLog;
+import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLogMaterial;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLogTask;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLogTaskId;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceTask;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
+import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogMaterialRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.instancio.Instancio;
 import org.instancio.Select;
 import org.instancio.junit.InstancioExtension;
@@ -53,10 +54,10 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, InstancioExtension.class})
@@ -88,8 +89,11 @@ class MaintenanceLogComponentImplTest {
 
     private MaintenanceLogComponentImpl maintenanceLogComponent;
 
+    private SimpleMeterRegistry meterRegistry;
+
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
         AppUser user = new AppUser();
         user.setCurrency("CHF");
@@ -98,7 +102,47 @@ class MaintenanceLogComponentImplTest {
                 vehicleRepository, maintenanceLogRepository, maintenanceLogMaterialRepository,
                 maintenanceLogTaskRepository, maintenanceTaskRepository, new MaintenanceLogMapperImpl(),
                 maintenanceReportPdfHelper, new MaintenanceCostHelper(),
-                new UserLocaleComponentImpl(), currentUserComponent, CLOCK);
+                new UserLocaleComponentImpl(), currentUserComponent, CLOCK, meterRegistry);
+    }
+
+    @Test
+    void recordsReportGeneration() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of());
+        when(maintenanceReportPdfHelper.generate(eq(vehicle), any(), any(), any())).thenReturn(new byte[]{1});
+
+        maintenanceLogComponent.generateMaintenanceReport(vehicle.getId(), null);
+
+        assertThat(reportTimerCount("success")).isEqualTo(1L);
+    }
+
+    @Test
+    void recordsFailedReportGeneration() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of());
+        when(maintenanceReportPdfHelper.generate(eq(vehicle), any(), any(), any()))
+                .thenThrow(new IllegalStateException("font missing"));
+
+        assertThatThrownBy(() -> maintenanceLogComponent.generateMaintenanceReport(vehicle.getId(), null))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(reportTimerCount("failure")).isEqualTo(1L);
+        assertThat(reportTimerCount("success")).isZero();
+    }
+
+    @Test
+    void recordsNoReportForForeignVehicle() {
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
+
+        maintenanceLogComponent.generateMaintenanceReport(99L, null);
+
+        assertThat(meterRegistry.find("bm.report.generated").timers()).isEmpty();
+    }
+
+    private long reportTimerCount(String result) {
+        return meterRegistry.timer("bm.report.generated", "type", "report", "result", result).count();
     }
 
     private static MaintenanceLog eurLog() {

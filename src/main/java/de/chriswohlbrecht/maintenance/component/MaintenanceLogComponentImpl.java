@@ -7,9 +7,9 @@ import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceMaterialRequest;
 import de.chriswohlbrecht.maintenance.api.model.NewMaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceCostHelper;
-import de.chriswohlbrecht.maintenance.component.helper.ReportMaterial;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportEntry;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportPdfHelper;
+import de.chriswohlbrecht.maintenance.component.helper.ReportMaterial;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
 import de.chriswohlbrecht.maintenance.exception.InvalidLogReferenceException;
 import de.chriswohlbrecht.maintenance.exception.InvalidMaterialException;
@@ -26,6 +26,8 @@ import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogRepos
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Component
@@ -59,6 +62,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     private final IUserLocaleComponent userLocaleComponent;
     private final ICurrentUserComponent currentUserComponent;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
 
     private static final int MAX_AMOUNT_SCALE = 2;
     private static final int MAX_QUANTITY_SCALE = 3;
@@ -149,8 +153,8 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
             List<MaintenanceReportEntry> entries = logs.stream()
                     .map(log -> toReportEntry(log, materialsByLog.getOrDefault(log.getId(), List.of())))
                     .toList();
-            byte[] content = maintenanceReportPdfHelper.generate(vehicle, entries, LocalDate.now(clock),
-                    userLocaleComponent.localeOf(vehicle.getUser()));
+            byte[] content = timedGeneration("report", () -> maintenanceReportPdfHelper.generate(vehicle, entries,
+                    LocalDate.now(clock), userLocaleComponent.localeOf(vehicle.getUser())));
             return new MaintenanceReport(reportFileName(vehicleId, logIds, logs), content);
         });
     }
@@ -350,5 +354,18 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     /** Vehicles of other users are treated like non-existent ones (404), so foreign ids cannot be probed. */
     private Optional<Vehicle> findOwnVehicle(Long vehicleId) {
         return vehicleRepository.findByIdAndUser_Id(vehicleId, currentUserComponent.getCurrentUserId());
+    }
+
+    /** Times the PDF generation for the monitoring ({@code bm.report.generated}); failures are counted, then rethrown. */
+    private byte[] timedGeneration(String type, Supplier<byte[]> generation) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        String result = "failure";
+        try {
+            byte[] content = generation.get();
+            result = "success";
+            return content;
+        } finally {
+            sample.stop(meterRegistry.timer("bm.report.generated", "type", type, "result", result));
+        }
     }
 }

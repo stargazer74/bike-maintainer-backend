@@ -7,6 +7,7 @@ import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -31,21 +33,33 @@ import java.util.Optional;
 public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
 
     static final String BAD_CREDENTIALS_MESSAGE = "Invalid email or password";
+    private static final String LOGIN_METRIC = "bm.auth.login";
+    private static final String LOCKOUT_METRIC = "bm.auth.lockout";
+    private static final List<String> LOGIN_RESULTS =
+            List.of("success", "bad_credentials", "locked", "disabled", "unverified");
 
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
     private final SecurityProperties securityProperties;
+    private final MeterRegistry meterRegistry;
     /** Hash of a random value, compared against for unknown emails so they take as long as known ones. */
     private final String dummyHash;
 
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
     public LoginAuthenticationProviderImpl(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder,
-                                           Clock clock, SecurityProperties securityProperties) {
+                                           Clock clock, SecurityProperties securityProperties,
+                                           MeterRegistry meterRegistry) {
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.clock = clock;
         this.securityProperties = securityProperties;
+        this.meterRegistry = meterRegistry;
+        // Registered with 0 up front: a counter that only appears with its first events hides them from increase().
+        for (String result : LOGIN_RESULTS) {
+            meterRegistry.counter(LOGIN_METRIC, "result", result);
+        }
+        meterRegistry.counter(LOCKOUT_METRIC);
         this.dummyHash = passwordEncoder.encode("dummy-password-for-timing");
     }
 
@@ -57,6 +71,7 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
         Optional<AppUser> found = appUserRepository.findByEmailIgnoreCase(email);
         if (found.isEmpty() || found.get().getPasswordHash() == null) {
             passwordEncoder.matches(password, dummyHash);
+            countLogin("bad_credentials");
             throw new BadCredentialsException(BAD_CREDENTIALS_MESSAGE);
         }
         AppUser user = found.get();
@@ -65,6 +80,7 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
         boolean lockExpired = false;
         if (user.getLockedUntil() != null) {
             if (user.getLockedUntil().isAfter(now)) {
+                countLogin("locked");
                 throw new TooManyRequestsException(Duration.between(now, user.getLockedUntil()));
             }
             user.setLockedUntil(null);
@@ -74,13 +90,16 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
 
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             registerFailedAttempt(user, now);
+            countLogin("bad_credentials");
             throw new BadCredentialsException(BAD_CREDENTIALS_MESSAGE);
         }
 
         if (!Boolean.TRUE.equals(user.getActive())) {
+            countLogin("disabled");
             throw new AccountUnusableException(AccountUnusableException.ACCOUNT_DISABLED, "Account is deactivated");
         }
         if (!Boolean.TRUE.equals(user.getEmailVerified())) {
+            countLogin("unverified");
             throw new AccountUnusableException(AccountUnusableException.EMAIL_NOT_VERIFIED,
                     "Email address is not verified");
         }
@@ -91,6 +110,7 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
             appUserRepository.save(user);
         }
 
+        countLogin("success");
         return SessionUser.authenticationFor(user);
     }
 
@@ -105,7 +125,13 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
         user.setFailedLoginAttempts(attempts);
         if (attempts >= securityProperties.lockoutMaxFailedAttempts()) {
             user.setLockedUntil(now.plus(securityProperties.lockoutDuration()));
+            meterRegistry.counter(LOCKOUT_METRIC).increment();
         }
         appUserRepository.save(user);
+    }
+
+    /** Login outcome for the monitoring ({@code bm.auth.login}); never the email or the user. */
+    private void countLogin(String result) {
+        meterRegistry.counter(LOGIN_METRIC, "result", result).increment();
     }
 }

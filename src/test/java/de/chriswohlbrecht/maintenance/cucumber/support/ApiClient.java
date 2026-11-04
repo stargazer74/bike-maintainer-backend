@@ -1,6 +1,7 @@
 package de.chriswohlbrecht.maintenance.cucumber.support;
 
 import io.cucumber.spring.ScenarioScope;
+import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -36,6 +37,9 @@ public class ApiClient {
 
     private final String baseUrl;
     private final RestTestClient restTestClient;
+    /** Actuator on its own port (management.server.port), randomised by the test like the server port. */
+    @LocalManagementPort
+    private int managementPort;
     private final Map<String, String> cookies = new LinkedHashMap<>();
     private String clientIp = nextTestNetIp();
     private String acceptLanguage;
@@ -45,6 +49,12 @@ public class ApiClient {
         this.restTestClient = RestTestClient.bindToServer()
                 .baseUrl(baseUrl)
                 .build();
+    }
+
+    /** GET on the management port, without cookies or session: as a metrics collector in the internal network. */
+    public EntityExchangeResult<byte[]> getFromManagementPort(String path) {
+        return RestTestClient.bindToServer().baseUrl("http://localhost:" + managementPort).build()
+                .get().uri(path).exchange().returnResult(byte[].class);
     }
 
     public EntityExchangeResult<byte[]> get(String path) {

@@ -13,4 +13,7 @@ public interface IMailQuotaComponent {
 
     /** Counts one email; {@code false} (and nothing counted) if that would exceed today's limit. */
     boolean tryReserve();
+
+    /** Emails counted today, {@code 0} before the first one. */
+    int sentToday();
 }

@@ -9,6 +9,7 @@ import de.chriswohlbrecht.maintenance.exception.InvalidTokenException;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import de.chriswohlbrecht.maintenance.persistence.type.UserTokenType;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +26,7 @@ import java.util.Locale;
 public class PasswordComponentImpl implements IPasswordComponent {
 
     static final Duration RESET_VALIDITY = Duration.ofHours(1);
+    private static final String RESET_METRIC = "bm.auth.password_reset";
 
     private final IAltchaComponent altchaComponent;
     private final IMailQuotaComponent mailQuotaComponent;
@@ -34,6 +36,7 @@ public class PasswordComponentImpl implements IPasswordComponent {
     private final ICurrentUserComponent currentUserComponent;
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
+    private final MeterRegistry meterRegistry;
 
     @Override
     public void requestReset(EmailRequest request) {
@@ -41,8 +44,11 @@ public class PasswordComponentImpl implements IPasswordComponent {
         mailQuotaComponent.ensureAvailable();
         appUserRepository.findByEmailIgnoreCase(request.getEmail().trim().toLowerCase(Locale.ROOT))
                 .filter(user -> Boolean.TRUE.equals(user.getActive()))
-                .ifPresent(user -> accountMailComponent.sendPasswordReset(user,
-                        userTokenComponent.issue(user, UserTokenType.PASSWORD_RESET, RESET_VALIDITY)));
+                .ifPresent(user -> {
+                    accountMailComponent.sendPasswordReset(user,
+                            userTokenComponent.issue(user, UserTokenType.PASSWORD_RESET, RESET_VALIDITY));
+                    meterRegistry.counter(RESET_METRIC, "step", "requested").increment();
+                });
     }
 
     /** The length is checked before the token is used up, so the user can retry with the same link. */
@@ -59,6 +65,7 @@ public class PasswordComponentImpl implements IPasswordComponent {
         user.setLockedUntil(null);
         appUserRepository.save(user);
         sessionComponent.invalidateSessionsOf(user.getId());
+        meterRegistry.counter(RESET_METRIC, "step", "completed").increment();
     }
 
     @Override

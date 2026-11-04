@@ -4,6 +4,7 @@ import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
 import de.chriswohlbrecht.maintenance.service.IMailService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -21,6 +22,7 @@ class AccountMailComponentImplTest {
 
     private final IMailService mailService = mock(IMailService.class);
     private final IMailQuotaComponent mailQuotaComponent = mock(IMailQuotaComponent.class);
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private AccountMailComponentImpl component;
 
     @BeforeEach
@@ -31,7 +33,7 @@ class AccountMailComponentImplTest {
         messageSource.setFallbackToSystemLocale(false);
         component = new AccountMailComponentImpl(mailService, mailQuotaComponent, messageSource,
                 new UserLocaleComponentImpl(),
-                new AccountMailProperties("noreply@example.org", 100, "https://app.example.org/"));
+                new AccountMailProperties("noreply@example.org", 100, "https://app.example.org/"), meterRegistry);
         when(mailQuotaComponent.tryReserve()).thenReturn(true);
     }
 
@@ -72,6 +74,36 @@ class AccountMailComponentImplTest {
         component.sendVerification(user("de"), "abc");
 
         verify(mailService, never()).send(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void countsQueuedVerificationMail() {
+        component.sendVerification(user("de"), "abc");
+
+        assertThat(sentCount("verification", "queued")).isEqualTo(1.0);
+    }
+
+    @Test
+    void countsQueuedMailsByType() {
+        component.sendPasswordReset(user("de"), "abc");
+        component.sendRegistrationExists(user("de"));
+
+        assertThat(sentCount("password_reset", "queued")).isEqualTo(1.0);
+        assertThat(sentCount("registration_exists", "queued")).isEqualTo(1.0);
+    }
+
+    @Test
+    void countsQuotaExceeded() {
+        when(mailQuotaComponent.tryReserve()).thenReturn(false);
+
+        component.sendVerification(user("de"), "abc");
+
+        assertThat(sentCount("verification", "quota_exceeded")).isEqualTo(1.0);
+        assertThat(sentCount("verification", "queued")).isZero();
+    }
+
+    private double sentCount(String type, String result) {
+        return meterRegistry.counter("bm.mail.sent", "type", type, "result", result).count();
     }
 
     private static AppUser user(String language) {

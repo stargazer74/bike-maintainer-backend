@@ -30,8 +30,9 @@ public class InitialAdminComponentImpl implements IInitialAdminComponent {
     public void initializePassword() {
         Optional<AppUser> initialAdmin = appUserRepository.findByEmailIgnoreCase(initialAdminProperties.email().trim());
         if (initialAdmin.isEmpty()) {
-            log.warn("Initial admin {} not found; BM_INITIAL_ADMIN_EMAIL is only applied by the first migration run",
-                    initialAdminProperties.email());
+            // Never the address itself: logs are collected centrally (monitoring) and must not contain emails.
+            log.warn("Initial admin from BM_INITIAL_ADMIN_EMAIL not found; "
+                    + "BM_INITIAL_ADMIN_EMAIL is only applied by the first migration run");
             return;
         }
         AppUser admin = initialAdmin.get();
@@ -40,14 +41,14 @@ public class InitialAdminComponentImpl implements IInitialAdminComponent {
         }
         String password = initialAdminProperties.password();
         if (password == null || password.isBlank()) {
-            log.warn("Initial admin {} has no password and BM_INITIAL_ADMIN_PASSWORD is not set; "
-                    + "the account cannot log in until it is set", admin.getEmail());
+            log.warn("Initial admin (id {}) has no password and BM_INITIAL_ADMIN_PASSWORD is not set; "
+                    + "the account cannot log in until it is set", admin.getId());
             return;
         }
         validate(password);
         admin.setPasswordHash(passwordEncoder.encode(password));
         appUserRepository.save(admin);
-        log.info("Initial password set for admin {}", admin.getEmail());
+        log.info("Initial password set for admin (id {})", admin.getId());
     }
 
     private static void validate(String password) {
