@@ -1,16 +1,16 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.MeterRegistry;
-import java.util.Map;
 import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.service.IMailService;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
 import java.util.Locale;
+import java.util.Map;
 
 @Slf4j
 @Component

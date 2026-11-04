@@ -1,7 +1,5 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskStatus;
@@ -20,6 +18,7 @@ import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
 import org.junit.jupiter.api.BeforeEach;

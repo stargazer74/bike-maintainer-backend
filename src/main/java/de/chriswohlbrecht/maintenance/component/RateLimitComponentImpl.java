@@ -1,8 +1,9 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import de.chriswohlbrecht.maintenance.component.model.RateLimitWindow;
 import de.chriswohlbrecht.maintenance.configuration.SecurityProperties;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -29,6 +30,7 @@ public class RateLimitComponentImpl implements IRateLimitComponent {
     private final AtomicInteger callsSinceCleanup = new AtomicInteger();
     private final MeterRegistry meterRegistry;
 
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
     public RateLimitComponentImpl(Clock clock, SecurityProperties securityProperties, MeterRegistry meterRegistry) {
         this.clock = clock;
         this.meterRegistry = meterRegistry;

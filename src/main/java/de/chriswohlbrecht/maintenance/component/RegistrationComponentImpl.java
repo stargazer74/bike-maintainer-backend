@@ -1,6 +1,5 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import de.chriswohlbrecht.maintenance.api.model.EmailRequest;
 import de.chriswohlbrecht.maintenance.api.model.RegisterRequest;
 import de.chriswohlbrecht.maintenance.api.model.TokenRequest;
@@ -11,6 +10,7 @@ import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
 import de.chriswohlbrecht.maintenance.persistence.type.UserTokenType;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Conditional;

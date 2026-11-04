@@ -1,20 +1,16 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.springframework.dao.DataAccessResourceFailureException;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import static org.assertj.core.api.Assertions.assertThat;
 import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
 import de.chriswohlbrecht.maintenance.exception.MailQuotaExceededException;
 import de.chriswohlbrecht.maintenance.persistence.repository.MailQuotaRepository;
 import de.chriswohlbrecht.maintenance.support.MutableClock;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Duration;
@@ -24,6 +20,9 @@ import java.time.ZoneId;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /** Real SQL against H2 (MariaDB mode) with only the JPA slice, not the whole application. */
 @DataJpaTest

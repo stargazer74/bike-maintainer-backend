@@ -1,9 +1,10 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import de.chriswohlbrecht.maintenance.configuration.AltchaProperties;
 import de.chriswohlbrecht.maintenance.configuration.OperatingModeCondition;
 import de.chriswohlbrecht.maintenance.exception.CaptchaInvalidException;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.altcha.altcha.v2.Altcha;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
@@ -29,6 +30,7 @@ public class AltchaComponentImpl implements IAltchaComponent {
     /** Signature of each used challenge → when it expires. */
     private final Map<String, Instant> usedChallenges = new ConcurrentHashMap<>();
 
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
     public AltchaComponentImpl(AltchaProperties properties, Clock clock, MeterRegistry meterRegistry) {
         this.properties = properties;
         this.clock = clock;

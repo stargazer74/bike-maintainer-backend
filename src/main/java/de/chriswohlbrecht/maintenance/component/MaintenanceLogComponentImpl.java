@@ -1,8 +1,5 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
-import java.util.function.Supplier;
 import de.chriswohlbrecht.maintenance.api.model.CostSummaryEntry;
 import de.chriswohlbrecht.maintenance.api.model.Currency;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
@@ -10,9 +7,9 @@ import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceMaterialRequest;
 import de.chriswohlbrecht.maintenance.api.model.NewMaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceCostHelper;
-import de.chriswohlbrecht.maintenance.component.helper.ReportMaterial;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportEntry;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportPdfHelper;
+import de.chriswohlbrecht.maintenance.component.helper.ReportMaterial;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
 import de.chriswohlbrecht.maintenance.exception.InvalidLogReferenceException;
 import de.chriswohlbrecht.maintenance.exception.InvalidMaterialException;
@@ -29,6 +26,8 @@ import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogRepos
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +44,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Component

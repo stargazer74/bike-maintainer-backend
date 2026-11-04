@@ -40,3 +40,11 @@ Namen oder freie Pfade.
 | `bm.mail.quota.used` | Gauge | – | Heute gezählte Mails; `NaN`, wenn die Datenbank nicht lesbar ist |
 | `bm.mail.quota.limit` | Gauge | – | Tageslimit (`bm.mail.daily-limit`) |
 | `bm.report.generated` | Timer | `type`: `report` (Wartungsbericht), `checklist` (Wartungs-Checkliste); `result`: `success`, `failure` | Anzahl und Dauer der PDF-Erzeugung (nur das Rendern, ohne Datenbankzugriffe) |
+
+## Logs
+
+Im Portal setzt `portal/compose.yaml` `LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`: jede Logzeile ist ECS-JSON
+(`log.level`, `log.logger`, `message`, …). Während einer Anfrage enthält sie zusätzlich `http.method` und
+`http.route` – das Pfad-Muster wie `/api/v1/vehicles/{vehicleId}`, nie die konkrete URL oder Query-Parameter.
+Ohne die Variable (Haushalt, lokale Entwicklung) bleibt es bei lesbaren Textzeilen. Logs enthalten keine
+E-Mail-Adressen, Tokens oder Passwörter.

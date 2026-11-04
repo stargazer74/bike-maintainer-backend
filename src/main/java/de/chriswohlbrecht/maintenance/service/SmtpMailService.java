@@ -1,7 +1,7 @@
 package de.chriswohlbrecht.maintenance.service;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;

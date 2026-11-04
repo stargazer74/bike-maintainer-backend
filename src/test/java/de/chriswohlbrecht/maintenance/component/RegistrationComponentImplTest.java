@@ -1,28 +1,28 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.mockito.Spy;
-import de.chriswohlbrecht.maintenance.api.model.TokenRequest;
-import de.chriswohlbrecht.maintenance.exception.InvalidTokenException;
-import de.chriswohlbrecht.maintenance.persistence.type.UserTokenType;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.chriswohlbrecht.maintenance.api.model.Language;
 import de.chriswohlbrecht.maintenance.api.model.RegisterRequest;
+import de.chriswohlbrecht.maintenance.api.model.TokenRequest;
+import de.chriswohlbrecht.maintenance.exception.InvalidTokenException;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
+import de.chriswohlbrecht.maintenance.persistence.type.UserTokenType;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;

@@ -1,7 +1,7 @@
 package de.chriswohlbrecht.maintenance.service;
 
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mail.MailSendException;

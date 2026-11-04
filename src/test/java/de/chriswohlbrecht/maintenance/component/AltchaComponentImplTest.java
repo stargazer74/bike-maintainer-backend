@@ -1,10 +1,9 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import static org.assertj.core.api.Assertions.assertThat;
 import de.chriswohlbrecht.maintenance.configuration.AltchaProperties;
 import de.chriswohlbrecht.maintenance.exception.CaptchaInvalidException;
 import de.chriswohlbrecht.maintenance.support.AltchaTestSupport;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.altcha.altcha.v2.Altcha;
 import org.json.JSONObject;
 import org.junit.jupiter.api.Test;

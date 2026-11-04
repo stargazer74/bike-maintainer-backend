@@ -81,6 +81,7 @@ Requirements: Java 25.
 | `BM_MAIL_FROM` | sender address (default `noreply@bike-maintainer.de`) |
 | `BM_PUBLIC_URL` | address of the app used in email links, e.g. `https://app.bike-maintainer.de` |
 | `BM_ALTCHA_HMAC_KEY` | secret for the registration captcha, e.g. `openssl rand -hex 32` |
+| `LOGGING_STRUCTURED_FORMAT_CONSOLE` | `ecs` for JSON log lines (portal operation, collected by the monitoring); unset = readable text |
 
 In portal mode the backend refuses to start without `BM_ALTCHA_HMAC_KEY`, and without `SPRING_MAIL_HOST` unless the
 Spring profile `local` is active. At most `bm.mail.daily-limit` (100) emails are sent per day; unverified accounts are
@@ -90,6 +91,14 @@ deleted after 7 days.
 fixed ALTCHA key is used (`application-local.properties`). Swagger UI (`/swagger-ui.html`) and `/v3/api-docs` are
 only available in this profile. `./mvnw spring-boot:run` and the development
 `compose.yaml` activate it; the published image never does. Never use it in production.
+
+### Monitoring
+
+Metrics in Prometheus format at `/actuator/prometheus` on the **management port 8081** only (not reachable through
+the proxy); list and meaning in [`docs/metrics.md`](docs/metrics.md). With `LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`
+every log line is ECS JSON; during a request it carries `http.method` and the route pattern `http.route`
+(e.g. `/api/v1/vehicles/{vehicleId}`), never the concrete URL or query string. Logs never contain email addresses,
+tokens or passwords.
 
 ## Static analysis
 

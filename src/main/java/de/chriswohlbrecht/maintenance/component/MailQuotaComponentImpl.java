@@ -1,14 +1,13 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.MeterRegistry;
-import org.springframework.dao.DataAccessException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
 import de.chriswohlbrecht.maintenance.exception.MailQuotaExceededException;
 import de.chriswohlbrecht.maintenance.persistence.model.MailQuota;
 import de.chriswohlbrecht.maintenance.persistence.repository.MailQuotaRepository;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +15,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Component

@@ -1,6 +1,5 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import de.chriswohlbrecht.maintenance.api.model.ChangePasswordRequest;
 import de.chriswohlbrecht.maintenance.api.model.EmailRequest;
 import de.chriswohlbrecht.maintenance.api.model.PasswordResetConfirmRequest;
@@ -10,6 +9,7 @@ import de.chriswohlbrecht.maintenance.exception.InvalidTokenException;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import de.chriswohlbrecht.maintenance.persistence.type.UserTokenType;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.security.crypto.password.PasswordEncoder;

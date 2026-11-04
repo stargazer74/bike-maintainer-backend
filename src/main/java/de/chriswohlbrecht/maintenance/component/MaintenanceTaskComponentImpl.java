@@ -1,8 +1,5 @@
 package de.chriswohlbrecht.maintenance.component;
 
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
-import java.util.function.Supplier;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskStatus;
@@ -22,6 +19,8 @@ import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +34,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Component
