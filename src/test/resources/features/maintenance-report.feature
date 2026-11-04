@@ -118,3 +118,27 @@ Feature: Maintenance report download
     And the PDF document contains "Summe: 100,00"
     And the PDF document contains "Gesamtsummen"
     And the PDF document does not contain "Annual service"
+
+  Scenario Outline: The report shows the vehicle type in the user's language
+    Given a PATCH request is sent to "/api/v1/auth/me" with body:
+      """
+      { "language": "<language>" }
+      """
+    And a vehicle "typed" exists with body:
+      """
+      { "name": "Typed", "type": "<type>", "modelYear": 2022, "firstRegistrationDate": "2022-01-01", "currentMileage": 100 }
+      """
+    When a GET request is sent to "/api/v1/vehicles/{typed}/maintenance-report"
+    Then the response status code is 200
+    And the PDF document contains "<label>"
+
+    Examples:
+      | language | type    | label           |
+      | de       | BICYCLE | Typ: Fahrrad    |
+      | de       | E_BIKE  | Typ: E-Bike     |
+      | de       | QUAD    | Typ: Quad       |
+      | de       | SCOOTER | Typ: Roller     |
+      | en       | BICYCLE | Type: Bicycle   |
+      | en       | E_BIKE  | Type: E-bike    |
+      | en       | QUAD    | Type: Quad      |
+      | en       | SCOOTER | Type: Scooter   |
