@@ -8,7 +8,10 @@ public interface IRateLimitComponent {
     /**
      * Counts one attempt for the given key (e.g. endpoint + client IP).
      *
+     * @param group fixed name of the endpoint group (e.g. {@code login}); tag of the metric for rejected attempts,
+     *              never a client-specific value
+     * @param key   bucket key, e.g. endpoint + client IP
      * @return empty if the attempt is allowed, otherwise the time until the next attempt is allowed
      */
-    Optional<Duration> tryConsume(String key);
+    Optional<Duration> tryConsume(String group, String key);
 }

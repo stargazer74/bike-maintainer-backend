@@ -13,8 +13,8 @@ import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Limits public, brute-forceable auth endpoints per client IP. Runs before CSRF and authentication so that
@@ -27,12 +27,13 @@ import java.util.Set;
 class RateLimitFilter extends OncePerRequestFilter {
 
     /** Method and path; changing the password needs a session, but the current password can be guessed there. */
-    static final Set<String> LIMITED_REQUESTS = Set.of(
-            "POST /api/v1/auth/login",
-            "POST /api/v1/auth/register",
-            "POST /api/v1/auth/verify-email/resend",
-            "POST /api/v1/auth/password-reset/request",
-            "PUT /api/v1/auth/password");
+    /** Limited request → its group, the tag of {@code bm.protection.rate_limited}. */
+    static final Map<String, String> LIMITED_REQUESTS = Map.of(
+            "POST /api/v1/auth/login", "login",
+            "POST /api/v1/auth/register", "registration",
+            "POST /api/v1/auth/verify-email/resend", "verification_resend",
+            "POST /api/v1/auth/password-reset/request", "password_reset",
+            "PUT /api/v1/auth/password", "password_change");
 
     private final IRateLimitComponent rateLimitComponent;
     private final SecurityErrorWriter errorWriter;
@@ -44,13 +45,14 @@ class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !LIMITED_REQUESTS.contains(request.getMethod() + " " + decodedPath(request));
+        return !LIMITED_REQUESTS.containsKey(request.getMethod() + " " + decodedPath(request));
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         Optional<Duration> retryAfter = rateLimitComponent.tryConsume(
+                LIMITED_REQUESTS.get(request.getMethod() + " " + decodedPath(request)),
                 decodedPath(request) + "|" + request.getRemoteAddr());
         if (retryAfter.isPresent()) {
             response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(ErrorResponses.retryAfterSeconds(retryAfter.get())));

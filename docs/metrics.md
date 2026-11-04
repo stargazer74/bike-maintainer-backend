@@ -34,3 +34,4 @@ Namen oder freie Pfade.
 | `bm.auth.registration` | Zähler | `step`: `started` (neues Konto angelegt, Bestätigungsmail unterwegs), `verified` (E-Mail-Adresse bestätigt) | Registrierungen; Versuche mit bereits registrierter Adresse zählen nicht |
 | `bm.auth.password_reset` | Zähler | `step`: `requested` (Mail an ein aktives Konto unterwegs), `completed` (neues Passwort gesetzt) | Passwort-Zurücksetzen; Anfragen für unbekannte Adressen zählen nicht |
 | `bm.protection.altcha_failed` | Zähler | – | Abgelehnte ALTCHA-Lösungen (fehlend, ungültig, abgelaufen, schon benutzt) |
+| `bm.protection.rate_limited` | Zähler | `group`: `login`, `registration`, `verification_resend`, `password_reset`, `password_change` | Wegen des Rate-Limits pro IP abgewiesene Anfragen (429) |

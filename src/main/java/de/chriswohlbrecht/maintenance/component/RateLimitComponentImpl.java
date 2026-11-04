@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import de.chriswohlbrecht.maintenance.component.model.RateLimitWindow;
 import de.chriswohlbrecht.maintenance.configuration.SecurityProperties;
 import org.springframework.stereotype.Component;
@@ -26,21 +27,24 @@ public class RateLimitComponentImpl implements IRateLimitComponent {
     private final Duration window;
     private final Map<String, RateLimitWindow> windows = new ConcurrentHashMap<>();
     private final AtomicInteger callsSinceCleanup = new AtomicInteger();
+    private final MeterRegistry meterRegistry;
 
-    public RateLimitComponentImpl(Clock clock, SecurityProperties securityProperties) {
+    public RateLimitComponentImpl(Clock clock, SecurityProperties securityProperties, MeterRegistry meterRegistry) {
         this.clock = clock;
+        this.meterRegistry = meterRegistry;
         this.maxAttempts = securityProperties.rateLimitMaxAttempts();
         this.window = securityProperties.rateLimitWindow();
     }
 
     @Override
-    public Optional<Duration> tryConsume(String key) {
+    public Optional<Duration> tryConsume(String group, String key) {
         Instant now = clock.instant();
         cleanupOccasionally(now);
         RateLimitWindow current = windows.compute(key, (k, existing) ->
                 existing == null || existing.isExpired(now, window) ? new RateLimitWindow(now) : existing);
         synchronized (current) {
             if (current.getCount() >= maxAttempts) {
+                meterRegistry.counter("bm.protection.rate_limited", "group", group).increment();
                 return Optional.of(Duration.between(now, current.getStart().plus(window)));
             }
             current.increment();
