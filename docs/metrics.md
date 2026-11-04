@@ -39,3 +39,4 @@ Namen oder freie Pfade.
 | `bm.mail.delivery` | Zähler | `result`: `success`, `failure` | Zustellversuche beim SMTP-Server (asynchron, daher getrennt von `bm.mail.sent`) |
 | `bm.mail.quota.used` | Gauge | – | Heute gezählte Mails; `NaN`, wenn die Datenbank nicht lesbar ist |
 | `bm.mail.quota.limit` | Gauge | – | Tageslimit (`bm.mail.daily-limit`) |
+| `bm.report.generated` | Timer | `type`: `report` (Wartungsbericht), `checklist` (Wartungs-Checkliste); `result`: `success`, `failure` | Anzahl und Dauer der PDF-Erzeugung (nur das Rendern, ohne Datenbankzugriffe) |

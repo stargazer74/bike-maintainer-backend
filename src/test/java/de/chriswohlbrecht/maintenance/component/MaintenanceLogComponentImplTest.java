@@ -1,5 +1,7 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.api.model.CostSummaryEntry;
@@ -88,8 +90,11 @@ class MaintenanceLogComponentImplTest {
 
     private MaintenanceLogComponentImpl maintenanceLogComponent;
 
+    private SimpleMeterRegistry meterRegistry;
+
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
         AppUser user = new AppUser();
         user.setCurrency("CHF");
@@ -98,7 +103,47 @@ class MaintenanceLogComponentImplTest {
                 vehicleRepository, maintenanceLogRepository, maintenanceLogMaterialRepository,
                 maintenanceLogTaskRepository, maintenanceTaskRepository, new MaintenanceLogMapperImpl(),
                 maintenanceReportPdfHelper, new MaintenanceCostHelper(),
-                new UserLocaleComponentImpl(), currentUserComponent, CLOCK);
+                new UserLocaleComponentImpl(), currentUserComponent, CLOCK, meterRegistry);
+    }
+
+    @Test
+    void recordsReportGeneration() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of());
+        when(maintenanceReportPdfHelper.generate(eq(vehicle), any(), any(), any())).thenReturn(new byte[]{1});
+
+        maintenanceLogComponent.generateMaintenanceReport(vehicle.getId(), null);
+
+        assertThat(reportTimerCount("success")).isEqualTo(1L);
+    }
+
+    @Test
+    void recordsFailedReportGeneration() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of());
+        when(maintenanceReportPdfHelper.generate(eq(vehicle), any(), any(), any()))
+                .thenThrow(new IllegalStateException("font missing"));
+
+        assertThatThrownBy(() -> maintenanceLogComponent.generateMaintenanceReport(vehicle.getId(), null))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(reportTimerCount("failure")).isEqualTo(1L);
+        assertThat(reportTimerCount("success")).isZero();
+    }
+
+    @Test
+    void recordsNoReportForForeignVehicle() {
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
+
+        maintenanceLogComponent.generateMaintenanceReport(99L, null);
+
+        assertThat(meterRegistry.find("bm.report.generated").timers()).isEmpty();
+    }
+
+    private long reportTimerCount(String result) {
+        return meterRegistry.timer("bm.report.generated", "type", "report", "result", result).count();
     }
 
     private static MaintenanceLog eurLog() {

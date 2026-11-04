@@ -1,5 +1,7 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskStatus;
@@ -79,13 +81,16 @@ class MaintenanceTaskComponentImplTest {
 
     private MaintenanceTaskComponentImpl maintenanceTaskComponent;
 
+    private SimpleMeterRegistry meterRegistry;
+
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
         maintenanceTaskComponent = new MaintenanceTaskComponentImpl(
                 vehicleRepository, maintenanceTaskRepository, maintenanceLogTaskRepository,
                 new MaintenanceTaskMapperImpl(), maintenanceTaskStatusHelper, currentUserComponent,
-                maintenanceChecklistPdfHelper, userLocaleComponent, CLOCK);
+                maintenanceChecklistPdfHelper, userLocaleComponent, CLOCK, meterRegistry);
         lenient().when(maintenanceLogTaskRepository.findAllByLog_Vehicle_Id(any())).thenReturn(List.<MaintenanceLogTask>of());
         lenient().when(maintenanceTaskStatusHelper.compute(any(), anyInt(), any(), any())).thenReturn(DUMMY_STATUS);
     }
@@ -401,6 +406,47 @@ class MaintenanceTaskComponentImplTest {
         when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
         assertThat(maintenanceTaskComponent.generateMaintenanceChecklist(99L, List.of(1L))).isEmpty();
+    }
+
+    @Test
+    void recordsChecklistGeneration() {
+        Vehicle vehicle = ownVehicle();
+        MaintenanceTask oil = task(1L, vehicle, "oil");
+        when(maintenanceTaskRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(oil));
+        status(oil, MaintenanceTaskStatus.OK, 0.5);
+        when(maintenanceChecklistPdfHelper.generate(eq(vehicle), any(), any(), any())).thenReturn(new byte[]{1});
+
+        maintenanceTaskComponent.generateMaintenanceChecklist(vehicle.getId(), List.of(1L));
+
+        assertThat(checklistTimerCount("success")).isEqualTo(1L);
+    }
+
+    @Test
+    void recordsFailedChecklistGeneration() {
+        Vehicle vehicle = ownVehicle();
+        MaintenanceTask oil = task(1L, vehicle, "oil");
+        when(maintenanceTaskRepository.findAllByVehicle_Id(vehicle.getId())).thenReturn(List.of(oil));
+        status(oil, MaintenanceTaskStatus.OK, 0.5);
+        when(maintenanceChecklistPdfHelper.generate(eq(vehicle), any(), any(), any()))
+                .thenThrow(new IllegalStateException("font missing"));
+
+        assertThatThrownBy(() -> maintenanceTaskComponent.generateMaintenanceChecklist(vehicle.getId(), List.of(1L)))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(checklistTimerCount("failure")).isEqualTo(1L);
+    }
+
+    @Test
+    void recordsNoChecklistForForeignVehicle() {
+        when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
+
+        maintenanceTaskComponent.generateMaintenanceChecklist(99L, List.of(1L));
+
+        assertThat(meterRegistry.find("bm.report.generated").timers()).isEmpty();
+    }
+
+    private long checklistTimerCount(String result) {
+        return meterRegistry.timer("bm.report.generated", "type", "checklist", "result", result).count();
     }
 
     private Vehicle ownVehicle() {

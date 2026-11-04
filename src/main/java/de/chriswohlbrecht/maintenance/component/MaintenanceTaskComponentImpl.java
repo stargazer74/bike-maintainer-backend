@@ -1,5 +1,8 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import java.util.function.Supplier;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskStatus;
@@ -47,6 +50,7 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
     private final MaintenanceChecklistPdfHelper maintenanceChecklistPdfHelper;
     private final IUserLocaleComponent userLocaleComponent;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
 
     /** Most urgent first: overdue, due soon, the rest; within a status the smallest remaining fraction first. */
     private static final Comparator<MaintenanceChecklistEntry> BY_URGENCY = Comparator
@@ -95,7 +99,8 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
             Locale locale = userLocaleComponent.localeOf(vehicle.getUser());
             return new MaintenanceChecklist(
                     maintenanceChecklistPdfHelper.fileName(vehicle, today, locale),
-                    maintenanceChecklistPdfHelper.generate(vehicle, entries, today, locale));
+                    timedGeneration("checklist",
+                            () -> maintenanceChecklistPdfHelper.generate(vehicle, entries, today, locale)));
         });
     }
 
@@ -199,5 +204,18 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
     /** Vehicles of other users are treated like non-existent ones (404), so foreign ids cannot be probed. */
     private Optional<Vehicle> findOwnVehicle(Long vehicleId) {
         return vehicleRepository.findByIdAndUser_Id(vehicleId, currentUserComponent.getCurrentUserId());
+    }
+
+    /** Times the PDF generation for the monitoring ({@code bm.report.generated}); failures are counted, then rethrown. */
+    private byte[] timedGeneration(String type, Supplier<byte[]> generation) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        String result = "failure";
+        try {
+            byte[] content = generation.get();
+            result = "success";
+            return content;
+        } finally {
+            sample.stop(meterRegistry.timer("bm.report.generated", "type", type, "result", result));
+        }
     }
 }
