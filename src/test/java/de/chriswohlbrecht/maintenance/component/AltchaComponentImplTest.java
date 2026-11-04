@@ -1,5 +1,7 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import static org.assertj.core.api.Assertions.assertThat;
 import de.chriswohlbrecht.maintenance.configuration.AltchaProperties;
 import de.chriswohlbrecht.maintenance.exception.CaptchaInvalidException;
 import de.chriswohlbrecht.maintenance.support.AltchaTestSupport;
@@ -21,8 +23,9 @@ class AltchaComponentImplTest {
 
     private static final String KEY = "test-key";
 
-    private final AltchaComponentImpl component =
-            new AltchaComponentImpl(new AltchaProperties(KEY, 1, Duration.ofMinutes(5)), Clock.systemUTC());
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final AltchaComponentImpl component = new AltchaComponentImpl(
+            new AltchaProperties(KEY, 1, Duration.ofMinutes(5)), Clock.systemUTC(), meterRegistry);
 
     @Test
     void challengeJsonHasParametersAndSignature() {
@@ -64,7 +67,8 @@ class AltchaComponentImplTest {
     @Test
     void foreignSignatureFails() {
         AltchaComponentImpl foreign =
-                new AltchaComponentImpl(new AltchaProperties("other-key", 1, Duration.ofMinutes(5)), Clock.systemUTC());
+                new AltchaComponentImpl(new AltchaProperties("other-key", 1, Duration.ofMinutes(5)), Clock.systemUTC(),
+                        new SimpleMeterRegistry());
         String payload = AltchaTestSupport.solve(foreign.createChallengeJson());
 
         assertThatThrownBy(() -> component.verify(payload)).isInstanceOf(CaptchaInvalidException.class);
@@ -78,5 +82,40 @@ class AltchaComponentImplTest {
         assertThatThrownBy(() -> component.verify(emptyObject)).isInstanceOf(CaptchaInvalidException.class);
         assertThatThrownBy(() -> component.verify("")).isInstanceOf(CaptchaInvalidException.class);
         assertThatThrownBy(() -> component.verify(null)).isInstanceOf(CaptchaInvalidException.class);
+    }
+
+    @Test
+    void countsMissingSolution() {
+        assertThatThrownBy(() -> component.verify(" ")).isInstanceOf(CaptchaInvalidException.class);
+
+        assertThat(failedCount()).isEqualTo(1.0);
+    }
+
+    @Test
+    void countsMalformedSolution() {
+        assertThatThrownBy(() -> component.verify("not-base64-json")).isInstanceOf(CaptchaInvalidException.class);
+
+        assertThat(failedCount()).isEqualTo(1.0);
+    }
+
+    @Test
+    void countsReusedSolution() {
+        String payload = AltchaTestSupport.solve(component.createChallengeJson());
+        component.verify(payload);
+
+        assertThatThrownBy(() -> component.verify(payload)).isInstanceOf(CaptchaInvalidException.class);
+
+        assertThat(failedCount()).isEqualTo(1.0);
+    }
+
+    @Test
+    void doesNotCountValidSolution() {
+        component.verify(AltchaTestSupport.solve(component.createChallengeJson()));
+
+        assertThat(failedCount()).isZero();
+    }
+
+    private double failedCount() {
+        return meterRegistry.counter("bm.protection.altcha_failed").count();
     }
 }

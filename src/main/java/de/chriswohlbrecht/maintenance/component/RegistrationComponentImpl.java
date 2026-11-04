@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import de.chriswohlbrecht.maintenance.api.model.EmailRequest;
 import de.chriswohlbrecht.maintenance.api.model.RegisterRequest;
 import de.chriswohlbrecht.maintenance.api.model.TokenRequest;
@@ -34,6 +35,7 @@ import java.util.Optional;
 public class RegistrationComponentImpl implements IRegistrationComponent {
 
     static final Duration VERIFICATION_VALIDITY = Duration.ofHours(24);
+    private static final String REGISTRATION_METRIC = "bm.auth.registration";
 
     private final IAltchaComponent altchaComponent;
     private final IMailQuotaComponent mailQuotaComponent;
@@ -42,6 +44,7 @@ public class RegistrationComponentImpl implements IRegistrationComponent {
     private final IUserLocaleComponent userLocaleComponent;
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
+    private final MeterRegistry meterRegistry;
 
     @Override
     public String createChallengeJson() {
@@ -86,6 +89,7 @@ public class RegistrationComponentImpl implements IRegistrationComponent {
             appUserRepository.findByEmailIgnoreCase(email).ifPresent(accountMailComponent::sendRegistrationExists);
             return;
         }
+        meterRegistry.counter(REGISTRATION_METRIC, "step", "started").increment();
         accountMailComponent.sendVerification(user,
                 userTokenComponent.issue(user, UserTokenType.EMAIL_VERIFICATION, VERIFICATION_VALIDITY));
     }
@@ -97,6 +101,7 @@ public class RegistrationComponentImpl implements IRegistrationComponent {
                 .orElseThrow(() -> new InvalidTokenException("Token is invalid, expired or already used"));
         user.setEmailVerified(true);
         appUserRepository.save(user);
+        meterRegistry.counter(REGISTRATION_METRIC, "step", "verified").increment();
     }
 
     @Override

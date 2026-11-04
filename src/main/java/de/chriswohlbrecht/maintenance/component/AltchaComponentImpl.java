@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import de.chriswohlbrecht.maintenance.configuration.AltchaProperties;
 import de.chriswohlbrecht.maintenance.configuration.OperatingModeCondition;
 import de.chriswohlbrecht.maintenance.exception.CaptchaInvalidException;
@@ -24,12 +25,14 @@ public class AltchaComponentImpl implements IAltchaComponent {
 
     private final AltchaProperties properties;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
     /** Signature of each used challenge → when it expires. */
     private final Map<String, Instant> usedChallenges = new ConcurrentHashMap<>();
 
-    public AltchaComponentImpl(AltchaProperties properties, Clock clock) {
+    public AltchaComponentImpl(AltchaProperties properties, Clock clock, MeterRegistry meterRegistry) {
         this.properties = properties;
         this.clock = clock;
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
@@ -47,8 +50,18 @@ public class AltchaComponentImpl implements IAltchaComponent {
         }
     }
 
+    /** Every rejected solution counts towards {@code bm.protection.altcha_failed}. */
     @Override
     public void verify(String payload) {
+        try {
+            check(payload);
+        } catch (CaptchaInvalidException e) {
+            meterRegistry.counter("bm.protection.altcha_failed").increment();
+            throw e;
+        }
+    }
+
+    private void check(String payload) {
         if (payload == null || payload.isBlank()) {
             throw new CaptchaInvalidException("ALTCHA solution missing");
         }
