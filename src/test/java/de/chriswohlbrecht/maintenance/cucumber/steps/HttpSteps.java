@@ -19,6 +19,11 @@ public class HttpSteps {
         scenarioContext.setLastResponse(apiClient.get(scenarioContext.resolvePath(path)));
     }
 
+    @When("a GET request is sent to the management path {string}")
+    public void aGetRequestIsSentToTheManagementPath(String path) {
+        scenarioContext.setLastResponse(apiClient.getFromManagementPort(path));
+    }
+
     @When("a POST request is sent to {string} with body:")
     public void aPostRequestIsSentToWithBody(String path, String body) {
         scenarioContext.setLastResponse(
