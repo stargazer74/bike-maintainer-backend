@@ -4,6 +4,7 @@ Feature: Portal mode (default)
     When a GET request is sent to "/api/v1/config"
     Then the response status code is 200
     And the JSON response field "mode" equals "portal"
+    And the JSON response field "websiteUrl" equals "https://www.example.com"
     And the client has a "XSRF-TOKEN" cookie
 
   Scenario: Profile endpoints do not exist

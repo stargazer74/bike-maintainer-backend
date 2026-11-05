@@ -80,6 +80,7 @@ Requirements: Java 25.
 | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT` (587), `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` | SMTP for registration emails (STARTTLS required) |
 | `BM_MAIL_FROM` | sender address (default: `SPRING_MAIL_USERNAME`) |
 | `BM_PUBLIC_URL` | address of the app used in email links, e.g. `https://app.example.com` |
+| `BM_WEBSITE_URL` | public website (portal only), e.g. `https://www.example.com`; the app links to it and to its legal notice and privacy policy. Unset = no links; anything but an http(s) address stops the startup |
 | `BM_ALTCHA_HMAC_KEY` | secret for the registration captcha, e.g. `openssl rand -hex 32` |
 | `LOGGING_STRUCTURED_FORMAT_CONSOLE` | `ecs` for JSON log lines (portal operation, collected by the monitoring); unset = readable text |
 

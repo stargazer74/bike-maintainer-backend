@@ -4,11 +4,15 @@ import io.cucumber.spring.CucumberContextConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
-/** Own in-memory database, so the household context does not share data with the portal context. */
+/**
+ * Own in-memory database, so the household context does not share data with the portal context. The website address
+ * is set to show that household mode ignores it.
+ */
 @CucumberContextConfiguration
 @ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "bm.mode=household",
+        "bm.website-url=https://www.example.com",
         "spring.datasource.url=jdbc:h2:mem:household;MODE=MariaDB;DB_CLOSE_DELAY=-1"
 })
 public class HouseholdCucumberSpringConfiguration {

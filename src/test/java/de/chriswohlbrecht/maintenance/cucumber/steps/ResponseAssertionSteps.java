@@ -41,6 +41,14 @@ public class ResponseAssertionSteps {
         assertThat(node.get(field).asText()).isEqualTo(scenarioContext.resolvePath(expectedValue));
     }
 
+    /** Missing or {@code null} – optional fields of the generated models are serialized as {@code null}. */
+    @Then("the JSON response field {string} is empty")
+    public void theJsonResponseFieldIsEmpty(String field) {
+        JsonNode node = parseLastResponseBody();
+        assertThat(node.get(field) == null || node.get(field).isNull())
+                .as("field \"%s\" in response body: %s", field, node).isTrue();
+    }
+
     @Then("the JSON response array field {string} contains {string}")
     public void theJsonResponseArrayFieldContains(String field, String expectedValue) {
         JsonNode array = parseLastResponseBody().get(field);
