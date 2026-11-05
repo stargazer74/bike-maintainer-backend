@@ -78,8 +78,8 @@ Requirements: Java 25.
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD` | MariaDB connection |
 | `BM_INITIAL_ADMIN_EMAIL`, `BM_INITIAL_ADMIN_PASSWORD` | initial admin (portal) |
 | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT` (587), `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` | SMTP for registration emails (STARTTLS required) |
-| `BM_MAIL_FROM` | sender address (default `noreply@bike-maintainer.de`) |
-| `BM_PUBLIC_URL` | address of the app used in email links, e.g. `https://app.bike-maintainer.de` |
+| `BM_MAIL_FROM` | sender address (default: `SPRING_MAIL_USERNAME`) |
+| `BM_PUBLIC_URL` | address of the app used in email links, e.g. `https://app.example.com` |
 | `BM_ALTCHA_HMAC_KEY` | secret for the registration captcha, e.g. `openssl rand -hex 32` |
 | `LOGGING_STRUCTURED_FORMAT_CONSOLE` | `ecs` for JSON log lines (portal operation, collected by the monitoring); unset = readable text |
 

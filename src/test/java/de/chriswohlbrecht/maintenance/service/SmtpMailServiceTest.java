@@ -20,7 +20,7 @@ class SmtpMailServiceTest {
     private final JavaMailSender mailSender = mock(JavaMailSender.class);
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private final SmtpMailService mailService = new SmtpMailService(mailSender,
-            new AccountMailProperties("noreply@bike-maintainer.de", 100, "https://app.example.org"), meterRegistry);
+            new AccountMailProperties("noreply@example.org", 100, "https://app.example.org"), meterRegistry);
 
     @Test
     void sendsPlainTextMailFromConfiguredSender() {
@@ -29,7 +29,7 @@ class SmtpMailServiceTest {
         ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender).send(captor.capture());
         SimpleMailMessage message = captor.getValue();
-        assertThat(message.getFrom()).isEqualTo("noreply@bike-maintainer.de");
+        assertThat(message.getFrom()).isEqualTo("noreply@example.org");
         assertThat(message.getTo()).containsExactly("rider@example.org");
         assertThat(message.getSubject()).isEqualTo("Betreff");
         assertThat(message.getText()).isEqualTo("Text mit Link");
