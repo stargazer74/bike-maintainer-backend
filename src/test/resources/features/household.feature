@@ -5,6 +5,7 @@ Feature: Household mode – profile selection instead of login
     When a GET request is sent to "/api/v1/config"
     Then the response status code is 200
     And the JSON response field "mode" equals "household"
+    And the JSON response field "websiteUrl" is empty
 
   Scenario: The initial admin is offered as a profile
     When a GET request is sent to "/api/v1/profiles"

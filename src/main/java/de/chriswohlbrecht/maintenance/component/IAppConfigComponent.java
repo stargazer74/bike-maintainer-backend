@@ -4,6 +4,6 @@ import de.chriswohlbrecht.maintenance.api.model.AppConfigResponse;
 
 public interface IAppConfigComponent {
 
-    /** Public configuration the client needs at startup, e.g. the operating mode. */
+    /** Public configuration the client needs at startup: operating mode and, in portal mode, the website address. */
     AppConfigResponse getAppConfig();
 }
