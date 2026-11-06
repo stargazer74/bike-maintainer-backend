@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.DeviceLoginRequest;
 import de.chriswohlbrecht.maintenance.api.model.DeviceLoginResponse;
+import de.chriswohlbrecht.maintenance.api.model.DeviceResponse;
 import de.chriswohlbrecht.maintenance.api.model.DeviceSessionRequest;
 import de.chriswohlbrecht.maintenance.component.helper.SecureTokenHelper;
 import de.chriswohlbrecht.maintenance.component.model.SessionUser;
@@ -30,6 +31,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -244,6 +246,75 @@ class DeviceLoginComponentImplTest {
         verify(deviceLoginRepository, never()).delete(any());
         verify(deviceLoginRepository, never()).rotate(any(), any(), any(), any());
         verifyNoInteractions(sessionComponent);
+    }
+
+    @Test
+    void listMarksTheDeviceOfTheCurrentSession() {
+        DeviceLogin phone = device(NOW);
+        DeviceLogin tablet = device(NOW.minusDays(2));
+        tablet.setId(4L);
+        tablet.setName("Tablet");
+        when(currentUserComponent.getCurrentUserId()).thenReturn(7L);
+        when(deviceLoginRepository.findAllByUser_IdOrderByLastUsedAtDesc(7L)).thenReturn(List.of(phone, tablet));
+
+        List<DeviceResponse> devices = component.listDevices(4L);
+
+        assertThat(devices).extracting(DeviceResponse::getId).containsExactly(3L, 4L);
+        assertThat(devices).extracting(DeviceResponse::getCurrent).containsExactly(false, true);
+        assertThat(devices.getFirst().getName()).isEqualTo("Pixel 8");
+        assertThat(devices.getFirst().getLastUsedAt()).isNotNull();
+    }
+
+    @Test
+    void listWithoutDeviceSessionMarksNothing() {
+        when(currentUserComponent.getCurrentUserId()).thenReturn(7L);
+        when(deviceLoginRepository.findAllByUser_IdOrderByLastUsedAtDesc(7L)).thenReturn(List.of(device(NOW)));
+
+        assertThat(component.listDevices(null)).extracting(DeviceResponse::getCurrent).containsExactly(false);
+    }
+
+    @Test
+    void deletingOwnDeviceEndsItsSessions() {
+        DeviceLogin device = device(NOW);
+        when(currentUserComponent.getCurrentUserId()).thenReturn(7L);
+        when(deviceLoginRepository.findByIdAndUser_Id(3L, 7L)).thenReturn(Optional.of(device));
+
+        assertThat(component.deleteDevice(3L)).isTrue();
+
+        verify(deviceLoginRepository).delete(device);
+        verify(sessionComponent).invalidateSessionsOfDevice(7L, 3L);
+    }
+
+    @Test
+    void foreignOrUnknownDeviceIsNotDeleted() {
+        when(currentUserComponent.getCurrentUserId()).thenReturn(7L);
+        when(deviceLoginRepository.findByIdAndUser_Id(9L, 7L)).thenReturn(Optional.empty());
+
+        assertThat(component.deleteDevice(9L)).isFalse();
+
+        verify(deviceLoginRepository, never()).delete(any());
+        verifyNoInteractions(sessionComponent);
+    }
+
+    @Test
+    void revokeDeviceDeletesItById() {
+        component.revokeDevice(3L);
+
+        verify(deviceLoginRepository).deleteById(3L);
+    }
+
+    @Test
+    void revokeAllDeletesEveryDeviceOfTheUser() {
+        component.revokeAllOf(7L);
+
+        verify(deviceLoginRepository).deleteAllByUser_Id(7L);
+    }
+
+    @Test
+    void deleteUnusedUsesTheIdleTimeout() {
+        when(deviceLoginRepository.deleteUnusedSince(NOW.minusDays(90))).thenReturn(2);
+
+        assertThat(component.deleteUnused()).isEqualTo(2);
     }
 
     private DeviceLogin device(LocalDateTime lastUsedAt) {

@@ -12,7 +12,9 @@ import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -34,6 +36,8 @@ public class AuthComponentImpl implements IAuthComponent {
     private final ICurrentUserComponent currentUserComponent;
     private final UserMapper userMapper;
     private final AppUserRepository appUserRepository;
+    /** Device logins exist only in portal mode. */
+    private final ObjectProvider<IDeviceLoginComponent> deviceLoginComponent;
 
     @Override
     public UserResponse login(LoginRequest request, HttpServletRequest httpRequest,
@@ -50,9 +54,19 @@ public class AuthComponentImpl implements IAuthComponent {
         return userMapper.toResponse(currentUserComponent.getCurrentUser());
     }
 
-    /** Spring Session expires the session cookie itself when the session is invalidated. */
+    /**
+     * Spring Session expires the session cookie itself when the session is invalidated. A session started by a device
+     * (app) removes that device too, so logging out in the app really logs the app out.
+     */
     @Override
     public void logout(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        HttpSession session = httpRequest.getSession(false);
+        if (session != null && session.getAttribute(DeviceLoginComponentImpl.SESSION_ATTRIBUTE) instanceof Long deviceId) {
+            IDeviceLoginComponent devices = deviceLoginComponent.getIfAvailable();
+            if (devices != null) {
+                devices.revokeDevice(deviceId);
+            }
+        }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         new CsrfLogoutHandler(csrfTokenRepository).logout(httpRequest, httpResponse, authentication);
         new SecurityContextLogoutHandler().logout(httpRequest, httpResponse, authentication);

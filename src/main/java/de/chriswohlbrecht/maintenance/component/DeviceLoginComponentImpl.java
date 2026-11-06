@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.DeviceLoginRequest;
 import de.chriswohlbrecht.maintenance.api.model.DeviceLoginResponse;
+import de.chriswohlbrecht.maintenance.api.model.DeviceResponse;
 import de.chriswohlbrecht.maintenance.api.model.DeviceSessionRequest;
 import de.chriswohlbrecht.maintenance.component.helper.SecureTokenHelper;
 import de.chriswohlbrecht.maintenance.component.model.SessionUser;
@@ -144,6 +145,53 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
         httpRequest.getSession().setAttribute(SESSION_ATTRIBUTE, device.getId());
         meterRegistry.counter(SESSION_METRIC, "result", "success").increment();
         return new DeviceLoginResponse().user(userMapper.toResponse(user)).deviceToken(token);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DeviceResponse> listDevices(Long currentDeviceId) {
+        return deviceLoginRepository.findAllByUser_IdOrderByLastUsedAtDesc(currentUserComponent.getCurrentUserId())
+                .stream()
+                .map(device -> new DeviceResponse()
+                        .id(device.getId())
+                        .name(device.getName())
+                        .createdAt(userMapper.toOffsetDateTime(device.getCreatedAt()))
+                        .lastUsedAt(userMapper.toOffsetDateTime(device.getLastUsedAt()))
+                        .current(device.getId().equals(currentDeviceId)))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public boolean deleteDevice(Long deviceId) {
+        Long userId = currentUserComponent.getCurrentUserId();
+        return deviceLoginRepository.findByIdAndUser_Id(deviceId, userId)
+                .map(device -> {
+                    deviceLoginRepository.delete(device);
+                    sessionComponent.invalidateSessionsOfDevice(userId, deviceId);
+                    log.info("User {} removed device {}", userId, deviceId);
+                    return true;
+                })
+                .orElse(false);
+    }
+
+    @Override
+    @Transactional
+    public void revokeDevice(Long deviceId) {
+        deviceLoginRepository.deleteById(deviceId);
+    }
+
+    @Override
+    @Transactional
+    public void revokeAllOf(Long userId) {
+        deviceLoginRepository.deleteAllByUser_Id(userId);
+    }
+
+    @Override
+    @Transactional
+    public int deleteUnused() {
+        return deviceLoginRepository.deleteUnusedSince(
+                LocalDateTime.now(clock).minus(securityProperties.deviceLoginIdleTimeout()));
     }
 
     private Authentication authenticate(DeviceLoginRequest request) {

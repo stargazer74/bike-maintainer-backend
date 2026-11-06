@@ -20,6 +20,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /** Real SQL against H2 (MariaDB mode) with only the JPA slice, not the whole application. */
 @DataJpaTest
@@ -39,12 +41,14 @@ class AccountCleanupComponentImplTest {
     private MutableClock clock;
     private UserTokenComponentImpl userTokenComponent;
     private AccountCleanupComponentImpl component;
+    private IDeviceLoginComponent deviceLoginComponent;
 
     @BeforeEach
     void setUp() {
         clock = new MutableClock(Instant.parse("2026-10-29T03:30:00Z"), ZoneId.of("Europe/Berlin"));
         userTokenComponent = new UserTokenComponentImpl(userTokenRepository, clock);
-        component = new AccountCleanupComponentImpl(appUserRepository, userTokenComponent, clock);
+        deviceLoginComponent = mock(IDeviceLoginComponent.class);
+        component = new AccountCleanupComponentImpl(appUserRepository, userTokenComponent, deviceLoginComponent, clock);
     }
 
     @Test
@@ -100,5 +104,12 @@ class AccountCleanupComponentImplTest {
         jdbcTemplate.update("UPDATE app_user SET created_at = ? WHERE id = ?",
                 LocalDateTime.now(clock).minusDays(ageInDays), user.getId());
         return user;
+    }
+
+    @Test
+    void deletesDevicesUnusedForTooLong() {
+        component.cleanUp();
+
+        verify(deviceLoginComponent).deleteUnused();
     }
 }

@@ -36,6 +36,7 @@ public class PasswordComponentImpl implements IPasswordComponent {
     private final ICurrentUserComponent currentUserComponent;
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
+    private final IDeviceLoginComponent deviceLoginComponent;
     private final MeterRegistry meterRegistry;
 
     @Override
@@ -65,6 +66,7 @@ public class PasswordComponentImpl implements IPasswordComponent {
         user.setLockedUntil(null);
         appUserRepository.save(user);
         sessionComponent.invalidateSessionsOf(user.getId());
+        deviceLoginComponent.revokeAllOf(user.getId());
         meterRegistry.counter(RESET_METRIC, "step", "completed").increment();
     }
 
@@ -80,6 +82,7 @@ public class PasswordComponentImpl implements IPasswordComponent {
         appUserRepository.save(user);
         userTokenComponent.revokeOpen(user, UserTokenType.PASSWORD_RESET);
         sessionComponent.invalidateOtherSessionsOf(user.getId(), currentSessionId);
+        deviceLoginComponent.revokeAllOf(user.getId());
     }
 
     private static void ensureNotTooLong(String password) {

@@ -13,6 +13,8 @@ import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 @Component
 @RequiredArgsConstructor
 public class SessionComponentImpl implements ISessionComponent {
@@ -43,6 +45,15 @@ public class SessionComponentImpl implements ISessionComponent {
     public void invalidateOtherSessionsOf(Long userId, String keptSessionId) {
         sessionRepository.findByPrincipalName(String.valueOf(userId)).keySet().stream()
                 .filter(sessionId -> !sessionId.equals(keptSessionId))
+                .forEach(sessionRepository::deleteById);
+    }
+
+    @Override
+    public void invalidateSessionsOfDevice(Long userId, Long deviceId) {
+        sessionRepository.findByPrincipalName(String.valueOf(userId)).entrySet().stream()
+                .filter(entry -> deviceId.equals(entry.getValue().getAttribute(DeviceLoginComponentImpl.SESSION_ATTRIBUTE)))
+                .map(Map.Entry::getKey)
+                .toList()
                 .forEach(sessionRepository::deleteById);
     }
 
