@@ -19,10 +19,28 @@ Feature: Apps stay logged in with a device token
   Scenario: A token that was already exchanged removes the device
     Given I log in on a device "Pixel 8" as "rider@example.org" with password "correct-horse-battery"
     And the app exchanges its device token
+    And the device "Pixel 8" was last used 2 minutes ago
     When the app exchanges its previous device token
     Then the response status code is 401
     When the app exchanges its device token
     Then the response status code is 401
+
+  Scenario: The previous token right after an exchange fails but keeps the device
+    Given I log in on a device "Pixel 8" as "rider@example.org" with password "correct-horse-battery"
+    And the app exchanges its device token
+    When the app exchanges its previous device token
+    Then the response status code is 401
+    And the user "rider@example.org" has 1 device
+    When the app exchanges its device token
+    Then the response status code is 200
+
+  Scenario: A detected copy also ends the session the thief opened with it
+    Given I log in on a device "Pixel 8" as "rider@example.org" with password "correct-horse-battery"
+    And a thief exchanges a copy of the device token
+    And the device "Pixel 8" was last used 2 minutes ago
+    When the app exchanges its device token
+    Then the response status code is 401
+    And the thief is no longer logged in
 
   Scenario: Two exchanges with the same token at once keep the device
     Given I log in on a device "Pixel 8" as "rider@example.org" with password "correct-horse-battery"

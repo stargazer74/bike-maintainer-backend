@@ -73,7 +73,13 @@ Index auf `user_id`. Keine IP-Adressen, kein Ort, keine Gerätekennungen außer 
   Sitzungsattribut `bm.deviceId` speichern.
 - **device-session:**
   1. Token hashen; Treffer in `token_hash` suchen.
-  2. Kein Treffer, aber Treffer in `previous_token_hash` → Gerät löschen, `401` (Wiederverwendung).
+  2. Kein Treffer, aber Treffer in `previous_token_hash`:
+     - innerhalb von 60 Sekunden nach dem letzten Tausch → nur `401` (fast immer die App selbst, z. B.
+       Hintergrund-Job und Vordergrund gleichzeitig); Gerät bleibt;
+     - später → Gerät löschen **und** alle Sitzungen beenden, die mit ihm gestartet wurden (auch die eines Diebs,
+       der die Kopie zuerst getauscht hat), `401` (Wiederverwendung).
+     Apps tauschen ein Token nach dem anderen und versuchen es nach einer `401` einmal erneut, wenn sich das
+     gespeicherte Token inzwischen geändert hat.
   3. Kein Treffer → `401`.
   4. `last_used_at` älter als `bm.security.device-login-idle-timeout` → Gerät löschen, `401`.
   5. Konto nicht aktiv oder E-Mail nicht bestätigt → `401` (Gerät bleibt; ein reaktiviertes Konto kann es wieder

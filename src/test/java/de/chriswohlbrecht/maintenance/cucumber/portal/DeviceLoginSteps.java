@@ -44,6 +44,7 @@ public class DeviceLoginSteps {
     private String previousDeviceToken;
     private List<Integer> parallelStatuses;
     private ApiClient webApp;
+    private ApiClient thief;
     private EntityExchangeResult<byte[]> webAppResponse;
 
     @Given("I log in on a device {string} as {string} with password {string}")
@@ -130,6 +131,24 @@ public class DeviceLoginSteps {
     @Then("the device {string} is not marked as current")
     public void theDeviceIsNotMarkedAsCurrent(String name) {
         assertThat(deviceInLastResponse(name).getBoolean("current")).isFalse();
+    }
+
+    @Given("the device {string} was last used {int} minutes ago")
+    public void theDeviceWasLastUsedMinutesAgo(String name, int minutes) {
+        jdbcTemplate.update("UPDATE device_login SET last_used_at = ? WHERE name = ?",
+                Timestamp.valueOf(LocalDateTime.now().minusMinutes(minutes)), name);
+    }
+
+    @Given("a thief exchanges a copy of the device token")
+    public void aThiefExchangesACopyOfTheDeviceToken() {
+        thief = new ApiClient(port);
+        assertThat(exchange(thief, deviceToken).getStatus().value()).as("thief's exchange").isEqualTo(200);
+        assertThat(thief.get("/api/v1/vehicles").getStatus().value()).isEqualTo(200);
+    }
+
+    @Then("the thief is no longer logged in")
+    public void theThiefIsNoLongerLoggedIn() {
+        assertThat(thief.get("/api/v1/vehicles").getStatus().value()).isEqualTo(401);
     }
 
     @Given("the device {string} was last used {int} days ago")

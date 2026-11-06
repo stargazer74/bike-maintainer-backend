@@ -14,6 +14,7 @@ import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
 import de.chriswohlbrecht.maintenance.mapper.UserMapper;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.model.DeviceLogin;
+import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.DeviceLoginRepository;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -29,6 +30,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -48,12 +50,15 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
     private static final String LOGIN_METRIC = "bm.auth.device_login";
     private static final String SESSION_METRIC = "bm.auth.device_session";
     private static final String INVALID_TOKEN = "Invalid device token";
+    /** Time after an exchange during which the previous token only fails instead of revoking the device. */
+    static final Duration REUSE_GRACE = Duration.ofSeconds(60);
 
     private final AuthenticationManager authenticationManager;
     private final ISessionComponent sessionComponent;
     private final ICurrentUserComponent currentUserComponent;
     private final UserMapper userMapper;
     private final DeviceLoginRepository deviceLoginRepository;
+    private final AppUserRepository appUserRepository;
     private final SecurityProperties securityProperties;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
@@ -62,13 +67,14 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
     public DeviceLoginComponentImpl(AuthenticationManager authenticationManager, ISessionComponent sessionComponent,
                                     ICurrentUserComponent currentUserComponent, UserMapper userMapper,
-                                    DeviceLoginRepository deviceLoginRepository,
+                                    DeviceLoginRepository deviceLoginRepository, AppUserRepository appUserRepository,
                                     SecurityProperties securityProperties, Clock clock, MeterRegistry meterRegistry) {
         this.authenticationManager = authenticationManager;
         this.sessionComponent = sessionComponent;
         this.currentUserComponent = currentUserComponent;
         this.userMapper = userMapper;
         this.deviceLoginRepository = deviceLoginRepository;
+        this.appUserRepository = appUserRepository;
         this.securityProperties = securityProperties;
         this.clock = clock;
         this.meterRegistry = meterRegistry;
@@ -89,8 +95,12 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
     public DeviceLoginResponse login(DeviceLoginRequest request, HttpServletRequest httpRequest,
                                      HttpServletResponse httpResponse) {
         Authentication authentication = authenticate(request);
-        sessionComponent.startSession(authentication, httpRequest, httpResponse);
-        AppUser user = currentUserComponent.getCurrentUser();
+        // Device first: if saving fails, no session without a device is left behind.
+        if (authentication == null || !(authentication.getPrincipal() instanceof SessionUser sessionUser)) {
+            throw new IllegalStateException("Login provider returned no session user");
+        }
+        AppUser user = appUserRepository.findById(sessionUser.id())
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
 
         LocalDateTime now = LocalDateTime.now(clock);
         String token = SecureTokenHelper.generate();
@@ -102,6 +112,7 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
         device.setLastUsedAt(now);
         DeviceLogin saved = deviceLoginRepository.save(device);
 
+        sessionComponent.startSession(authentication, httpRequest, httpResponse);
         httpRequest.getSession().setAttribute(SESSION_ATTRIBUTE, saved.getId());
         countLogin("success");
         log.info("User {} registered device {}", user.getId(), saved.getId());
@@ -118,9 +129,7 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
         if (found.isEmpty()) {
             Optional<DeviceLogin> reused = deviceLoginRepository.findByPreviousTokenHash(hash);
             if (reused.isPresent()) {
-                deviceLoginRepository.delete(reused.get());
-                log.warn("Device {} removed: an already exchanged token was used again", reused.get().getId());
-                throw rejected("reused");
+                revokeReused(reused.get());
             }
             throw rejected("invalid");
         }
@@ -192,6 +201,22 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
     public int deleteUnused() {
         return deviceLoginRepository.deleteUnusedSince(
                 LocalDateTime.now(clock).minus(securityProperties.deviceLoginIdleTimeout()));
+    }
+
+    /**
+     * The previous token right after an exchange is almost always the app itself (background job and foreground
+     * started at the same time): rejected, but the device stays. Later it means a copied token: the device and every
+     * session started with it end, including the one a thief may have opened with the copy.
+     */
+    private void revokeReused(DeviceLogin device) {
+        if (device.getLastUsedAt().isAfter(LocalDateTime.now(clock).minus(REUSE_GRACE))) {
+            return;
+        }
+        Long userId = device.getUser().getId();
+        deviceLoginRepository.delete(device);
+        sessionComponent.invalidateSessionsOfDevice(userId, device.getId());
+        log.warn("Device {} removed: an already exchanged token was used again", device.getId());
+        throw rejected("reused");
     }
 
     private Authentication authenticate(DeviceLoginRequest request) {

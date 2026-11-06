@@ -13,6 +13,7 @@ import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
 import de.chriswohlbrecht.maintenance.mapper.UserMapperImpl;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.model.DeviceLogin;
+import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import de.chriswohlbrecht.maintenance.persistence.repository.DeviceLoginRepository;
 import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -39,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -58,6 +61,8 @@ class DeviceLoginComponentImplTest {
     private ICurrentUserComponent currentUserComponent;
     @Mock
     private DeviceLoginRepository deviceLoginRepository;
+    @Mock
+    private AppUserRepository appUserRepository;
 
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private final MockHttpServletRequest httpRequest = new MockHttpServletRequest();
@@ -68,7 +73,7 @@ class DeviceLoginComponentImplTest {
     @BeforeEach
     void setUp() {
         component = new DeviceLoginComponentImpl(authenticationManager, sessionComponent, currentUserComponent,
-                new UserMapperImpl(), deviceLoginRepository,
+                new UserMapperImpl(), deviceLoginRepository, appUserRepository,
                 new SecurityProperties(10, Duration.ofMinutes(15), 10, Duration.ofMinutes(15), Duration.ofDays(90)),
                 Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC), meterRegistry);
         user = AppUser.builder().id(7L).email("rider@example.org").role(UserRole.USER).active(true)
@@ -88,7 +93,7 @@ class DeviceLoginComponentImplTest {
     @Test
     void loginRegistersDeviceStartsSessionAndReturnsToken() {
         when(authenticationManager.authenticate(any())).thenReturn(SessionUser.authenticationFor(user));
-        when(currentUserComponent.getCurrentUser()).thenReturn(user);
+        when(appUserRepository.findById(7L)).thenReturn(Optional.of(user));
         when(deviceLoginRepository.save(any())).thenAnswer(invocation -> {
             DeviceLogin device = invocation.getArgument(0);
             device.setId(3L);
@@ -106,9 +111,23 @@ class DeviceLoginComponentImplTest {
         assertThat(saved.getValue().getTokenHash()).isEqualTo(SecureTokenHelper.hash(response.getDeviceToken()));
         assertThat(response.getDeviceToken()).matches("^[A-Za-z0-9_-]{43}$");
         assertThat(response.getUser().getEmail()).isEqualTo("rider@example.org");
-        verify(sessionComponent).startSession(any(), eq(httpRequest), eq(httpResponse));
+        InOrder order = inOrder(deviceLoginRepository, sessionComponent);
+        order.verify(deviceLoginRepository).save(any());
+        order.verify(sessionComponent).startSession(any(), eq(httpRequest), eq(httpResponse));
         assertThat(httpRequest.getSession().getAttribute(DeviceLoginComponentImpl.SESSION_ATTRIBUTE)).isEqualTo(3L);
         assertThat(meterRegistry.counter("bm.auth.device_login", "result", "success").count()).isEqualTo(1.0);
+    }
+
+    @Test
+    void failingSaveStartsNoSession() {
+        when(authenticationManager.authenticate(any())).thenReturn(SessionUser.authenticationFor(user));
+        when(appUserRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(deviceLoginRepository.save(any())).thenThrow(new IllegalStateException("Incorrect string value"));
+
+        assertThatThrownBy(() -> component.login(loginRequest("Pixel 8"), httpRequest, httpResponse))
+                .isInstanceOf(IllegalStateException.class);
+
+        verifyNoInteractions(sessionComponent);
     }
 
     @Test
@@ -191,8 +210,23 @@ class DeviceLoginComponentImplTest {
                 .isInstanceOf(AuthenticationFailedException.class);
 
         verify(deviceLoginRepository).delete(device);
-        verifyNoInteractions(sessionComponent);
+        verify(sessionComponent).invalidateSessionsOfDevice(7L, 3L);
+        verify(sessionComponent, never()).startSession(any(), any(), any());
         assertThat(meterRegistry.counter("bm.auth.device_session", "result", "reused").count()).isEqualTo(1.0);
+    }
+
+    @Test
+    void previousTokenRightAfterTheExchangeIsRejectedWithoutRevoking() {
+        DeviceLogin device = device(NOW.minusSeconds(30));
+        when(deviceLoginRepository.findByTokenHash(SecureTokenHelper.hash(TOKEN))).thenReturn(Optional.empty());
+        when(deviceLoginRepository.findByPreviousTokenHash(SecureTokenHelper.hash(TOKEN))).thenReturn(Optional.of(device));
+
+        assertThatThrownBy(() -> component.exchange(sessionRequest(), httpRequest, httpResponse))
+                .isInstanceOf(AuthenticationFailedException.class);
+
+        verify(deviceLoginRepository, never()).delete(any());
+        verifyNoInteractions(sessionComponent);
+        assertThat(meterRegistry.counter("bm.auth.device_session", "result", "invalid").count()).isEqualTo(1.0);
     }
 
     @Test
