@@ -25,6 +25,7 @@ public class AccountCleanupComponentImpl implements IAccountCleanupComponent {
 
     private final AppUserRepository appUserRepository;
     private final IUserTokenComponent userTokenComponent;
+    private final IDeviceLoginComponent deviceLoginComponent;
     private final Clock clock;
 
     /** Tokens of deleted accounts go with them (ON DELETE CASCADE). */
@@ -35,6 +36,8 @@ public class AccountCleanupComponentImpl implements IAccountCleanupComponent {
         int accounts = appUserRepository.deleteUnverifiedCreatedBefore(UserRole.USER,
                 LocalDateTime.now(clock).minus(UNVERIFIED_ACCOUNT_LIFETIME));
         int tokens = userTokenComponent.deleteExpired();
-        log.info("Cleanup: deleted {} unverified accounts and {} used or expired tokens", accounts, tokens);
+        int devices = deviceLoginComponent.deleteUnused();
+        log.info("Cleanup: deleted {} unverified accounts, {} used or expired tokens and {} unused devices", accounts,
+                tokens, devices);
     }
 }

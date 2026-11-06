@@ -3,6 +3,10 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.AuthApi;
 import de.chriswohlbrecht.maintenance.api.model.ChangePasswordRequest;
 import de.chriswohlbrecht.maintenance.api.model.DeleteAccountRequest;
+import de.chriswohlbrecht.maintenance.api.model.DeviceLoginRequest;
+import de.chriswohlbrecht.maintenance.api.model.DeviceLoginResponse;
+import de.chriswohlbrecht.maintenance.api.model.DeviceResponse;
+import de.chriswohlbrecht.maintenance.api.model.DeviceSessionRequest;
 import de.chriswohlbrecht.maintenance.api.model.EmailRequest;
 import de.chriswohlbrecht.maintenance.api.model.LoginRequest;
 import de.chriswohlbrecht.maintenance.api.model.PasswordResetConfirmRequest;
@@ -10,10 +14,13 @@ import de.chriswohlbrecht.maintenance.api.model.RegisterRequest;
 import de.chriswohlbrecht.maintenance.api.model.TokenRequest;
 import de.chriswohlbrecht.maintenance.api.model.UpdateCurrentUserRequest;
 import de.chriswohlbrecht.maintenance.api.model.UserResponse;
+import de.chriswohlbrecht.maintenance.component.DeviceLoginComponentImpl;
 import de.chriswohlbrecht.maintenance.component.IAccountDeletionComponent;
 import de.chriswohlbrecht.maintenance.component.IAuthComponent;
+import de.chriswohlbrecht.maintenance.component.IDeviceLoginComponent;
 import de.chriswohlbrecht.maintenance.component.IPasswordComponent;
 import de.chriswohlbrecht.maintenance.component.IRegistrationComponent;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.CacheControl;
@@ -25,11 +32,12 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.List;
 import java.util.Map;
 
 /**
  * Login, logout, current user and its settings (language), registration, email verification, password change,
- * password reset and deleting the own account.
+ * password reset, deleting the own account and device logins of apps.
  *
  * <p>Registration and passwords exist only in portal mode; in household mode their endpoints answer 404 before
  * reaching this controller ({@code HouseholdSecurityConfiguration}), hence the optional dependencies.
@@ -45,6 +53,7 @@ public class AuthController implements AuthApi {
     private final ObjectProvider<IRegistrationComponent> registrationComponent;
     private final ObjectProvider<IPasswordComponent> passwordComponent;
     private final ObjectProvider<IAccountDeletionComponent> accountDeletionComponent;
+    private final ObjectProvider<IDeviceLoginComponent> deviceLoginComponent;
     private final JsonMapper jsonMapper;
 
     /** The challenge JSON of the library is passed on as is, only parsed into a map for the generated signature. */
@@ -127,6 +136,40 @@ public class AuthController implements AuthApi {
                 attributes.getRequest().getSession().getId());
         authComponent.logout(attributes.getRequest(), attributes.getResponse());
         return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<DeviceLoginResponse> deviceLogin(DeviceLoginRequest deviceLoginRequest) {
+        ServletRequestAttributes attributes = servletRequestAttributes();
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(deviceLoginComponent.getObject().login(deviceLoginRequest, attributes.getRequest(),
+                        attributes.getResponse()));
+    }
+
+    @Override
+    public ResponseEntity<DeviceLoginResponse> createDeviceSession(DeviceSessionRequest deviceSessionRequest) {
+        ServletRequestAttributes attributes = servletRequestAttributes();
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(deviceLoginComponent.getObject().exchange(deviceSessionRequest, attributes.getRequest(),
+                        attributes.getResponse()));
+    }
+
+    /** The device that started this session (if any) is marked as {@code current}. */
+    @Override
+    public ResponseEntity<List<DeviceResponse>> listDevices() {
+        HttpSession session = servletRequestAttributes().getRequest().getSession(false);
+        Long currentDeviceId = session != null
+                && session.getAttribute(DeviceLoginComponentImpl.SESSION_ATTRIBUTE) instanceof Long id ? id : null;
+        return ResponseEntity.ok(deviceLoginComponent.getObject().listDevices(currentDeviceId));
+    }
+
+    @Override
+    public ResponseEntity<Void> deleteDevice(Long deviceId) {
+        return deviceLoginComponent.getObject().deleteDevice(deviceId)
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
     }
 
     /** The generated interface has no servlet parameters; login, logout, password change and deletion need the session. */

@@ -37,7 +37,7 @@ class FlywayMigrationTest {
     void appliesAllMigrationsSuccessfully() {
         MigrationInfo[] appliedMigrations = flyway.info().applied();
 
-        assertThat(appliedMigrations).hasSize(8);
+        assertThat(appliedMigrations).hasSize(9);
         assertThat(appliedMigrations[0].getDescription()).isEqualTo("init schema");
         assertThat(appliedMigrations[0].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[1].getDescription()).isEqualTo("vehicle model year required");
@@ -54,6 +54,8 @@ class FlywayMigrationTest {
         assertThat(appliedMigrations[6].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[7].getDescription()).isEqualTo("maintenance costs");
         assertThat(appliedMigrations[7].getState()).isEqualTo(MigrationState.SUCCESS);
+        assertThat(appliedMigrations[8].getDescription()).isEqualTo("device login");
+        assertThat(appliedMigrations[8].getState()).isEqualTo(MigrationState.SUCCESS);
     }
 
     @Test

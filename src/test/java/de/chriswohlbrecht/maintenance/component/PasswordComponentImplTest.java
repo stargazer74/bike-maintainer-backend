@@ -51,6 +51,8 @@ class PasswordComponentImplTest {
     @Mock
     private AppUserRepository appUserRepository;
     @Mock
+    private IDeviceLoginComponent deviceLoginComponent;
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @Spy
@@ -85,6 +87,7 @@ class PasswordComponentImplTest {
         assertThat(user.getLockedUntil()).isNull();
         verify(appUserRepository).save(user);
         verify(sessionComponent).invalidateSessionsOf(7L);
+        verify(deviceLoginComponent).revokeAllOf(7L);
     }
 
     @Test
@@ -113,6 +116,7 @@ class PasswordComponentImplTest {
 
         verify(appUserRepository, never()).save(any());
         verify(sessionComponent, never()).invalidateOtherSessionsOf(anyLong(), anyString());
+        verify(deviceLoginComponent, never()).revokeAllOf(anyLong());
     }
 
     @Test
@@ -128,6 +132,7 @@ class PasswordComponentImplTest {
         assertThat(user.getPasswordHash()).isEqualTo("{bcrypt}new");
         verify(userTokenComponent).revokeOpen(user, UserTokenType.PASSWORD_RESET);
         verify(sessionComponent).invalidateOtherSessionsOf(7L, "session-1");
+        verify(deviceLoginComponent).revokeAllOf(7L);
     }
 
     @Test

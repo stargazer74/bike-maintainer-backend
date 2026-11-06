@@ -33,6 +33,10 @@ public class HouseholdSecurityConfiguration {
             "/api/v1/auth/password",
             "/api/v1/auth/password-reset/**",
             "DELETE /api/v1/auth/me",
+            "/api/v1/auth/device-login",
+            "/api/v1/auth/device-session",
+            "/api/v1/auth/devices",
+            "/api/v1/auth/devices/**",
             "/api/v1/admin/**"
     };
 

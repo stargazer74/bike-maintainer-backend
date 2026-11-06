@@ -28,7 +28,9 @@ public class SecurityConfiguration {
             "/api/v1/auth/verify-email",
             "/api/v1/auth/verify-email/resend",
             "/api/v1/auth/password-reset/request",
-            "/api/v1/auth/password-reset/confirm"
+            "/api/v1/auth/password-reset/confirm",
+            "/api/v1/auth/device-login",
+            "/api/v1/auth/device-session"
     };
 
     private static final String[] HOUSEHOLD_ONLY_ENDPOINTS = {

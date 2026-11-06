@@ -17,4 +17,7 @@ public interface ISessionComponent {
 
     /** Deletes all sessions of the user except the given one, e.g. after the user changed the password. */
     void invalidateOtherSessionsOf(Long userId, String keptSessionId);
+
+    /** Deletes the sessions of the user that were started with the given device (app). */
+    void invalidateSessionsOfDevice(Long userId, Long deviceId);
 }

@@ -54,7 +54,7 @@ class LoginAuthenticationProviderImplTest {
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         provider = new LoginAuthenticationProviderImpl(appUserRepository, PASSWORD_ENCODER, CLOCK,
-                new SecurityProperties(10, Duration.ofMinutes(15), 3, Duration.ofMinutes(15)), meterRegistry);
+                new SecurityProperties(10, Duration.ofMinutes(15), 3, Duration.ofMinutes(15), Duration.ofDays(90)), meterRegistry);
     }
 
     @Test

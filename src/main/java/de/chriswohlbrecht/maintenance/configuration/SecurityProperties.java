@@ -12,6 +12,7 @@ import java.time.Duration;
  * @param rateLimitWindow          fixed window for the per-IP rate limit
  * @param lockoutMaxFailedAttempts failed logins after which an account is locked
  * @param lockoutDuration          how long a locked account stays locked
+ * @param deviceLoginIdleTimeout   unused time after which a device (app) that stays logged in has to log in again
  */
 @Validated
 @ConfigurationProperties(prefix = "bm.security")
@@ -19,5 +20,6 @@ public record SecurityProperties(
         @Positive int rateLimitMaxAttempts,
         @NotNull Duration rateLimitWindow,
         @Positive int lockoutMaxFailedAttempts,
-        @NotNull Duration lockoutDuration) {
+        @NotNull Duration lockoutDuration,
+        @NotNull Duration deviceLoginIdleTimeout) {
 }

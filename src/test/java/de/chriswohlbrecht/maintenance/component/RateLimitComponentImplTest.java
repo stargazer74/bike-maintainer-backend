@@ -24,7 +24,7 @@ class RateLimitComponentImplTest {
         clock = new MutableClock(Instant.parse("2026-10-09T12:00:00Z"));
         meterRegistry = new SimpleMeterRegistry();
         rateLimit = new RateLimitComponentImpl(clock,
-                new SecurityProperties(3, Duration.ofMinutes(15), 10, Duration.ofMinutes(15)), meterRegistry);
+                new SecurityProperties(3, Duration.ofMinutes(15), 10, Duration.ofMinutes(15), Duration.ofDays(90)), meterRegistry);
     }
 
     @Test

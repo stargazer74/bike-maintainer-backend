@@ -8,6 +8,10 @@ import de.chriswohlbrecht.maintenance.exception.InvalidUserUpdateException;
 import de.chriswohlbrecht.maintenance.mapper.UserMapperImpl;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,14 +33,20 @@ class AuthComponentImplTest {
     private ICurrentUserComponent currentUserComponent;
     @Mock
     private AppUserRepository appUserRepository;
+    @Mock
+    private CsrfTokenRepository csrfTokenRepository;
+    @Mock
+    private ObjectProvider<IDeviceLoginComponent> deviceLoginComponentProvider;
+    @Mock
+    private IDeviceLoginComponent deviceLoginComponent;
 
     private AuthComponentImpl component;
     private AppUser user;
 
     @BeforeEach
     void setUp() {
-        component = new AuthComponentImpl(null, null, null, currentUserComponent, new UserMapperImpl(),
-                appUserRepository);
+        component = new AuthComponentImpl(null, null, csrfTokenRepository, currentUserComponent,
+                new UserMapperImpl(), appUserRepository, deviceLoginComponentProvider);
         user = new AppUser();
         user.setLanguage("de");
     }
@@ -70,5 +81,44 @@ class AuthComponentImplTest {
                 .isInstanceOf(InvalidUserUpdateException.class);
 
         verify(appUserRepository, never()).save(any());
+    }
+
+    @Test
+    void logoutFromDeviceSessionRevokesTheDevice() {
+        when(deviceLoginComponentProvider.getIfAvailable()).thenReturn(deviceLoginComponent);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession().setAttribute(DeviceLoginComponentImpl.SESSION_ATTRIBUTE, 3L);
+
+        component.logout(request, new MockHttpServletResponse());
+
+        verify(deviceLoginComponent).revokeDevice(3L);
+        assertThat(request.getSession(false)).isNull();
+    }
+
+    @Test
+    void logoutFromBrowserSessionLeavesDevicesAlone() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession();
+
+        component.logout(request, new MockHttpServletResponse());
+
+        verifyNoInteractions(deviceLoginComponentProvider, deviceLoginComponent);
+    }
+
+    @Test
+    void logoutWithoutSessionLeavesDevicesAlone() {
+        component.logout(new MockHttpServletRequest(), new MockHttpServletResponse());
+
+        verifyNoInteractions(deviceLoginComponentProvider, deviceLoginComponent);
+    }
+
+    @Test
+    void logoutWithDeviceAttributeButWithoutDeviceLoginsStillLogsOut() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession().setAttribute(DeviceLoginComponentImpl.SESSION_ATTRIBUTE, 3L);
+
+        component.logout(request, new MockHttpServletResponse());
+
+        assertThat(request.getSession(false)).isNull();
     }
 }

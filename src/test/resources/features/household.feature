@@ -196,3 +196,19 @@ Feature: Household mode – profile selection instead of login
     Then the response status code is 404
     When a GET request is sent to "/api/v1/auth/me"
     Then the response status code is 200
+
+  Scenario: Device logins of apps do not exist
+    Given I have selected a new profile "Anna"
+    When a GET request is sent to "/api/v1/auth/devices"
+    Then the response status code is 404
+    When a POST request is sent to "/api/v1/auth/device-session" with body:
+      """
+      { "deviceToken": "ttttttttttttttttttttttttttttttttttttttttttt" }
+      """
+    Then the response status code is 404
+    When a POST request is sent to "/api/v1/auth/device-login" with body:
+      """
+      { "email": "rider@example.org", "password": "correct-horse-battery", "deviceName": "Pixel 8" }
+      """
+    Then the response status code is 404
+
