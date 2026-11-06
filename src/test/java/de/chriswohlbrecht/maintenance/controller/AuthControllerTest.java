@@ -2,13 +2,17 @@ package de.chriswohlbrecht.maintenance.controller;
 
 import de.chriswohlbrecht.maintenance.api.handler.AuthApi;
 import de.chriswohlbrecht.maintenance.api.model.Currency;
+import de.chriswohlbrecht.maintenance.api.model.DeviceLoginResponse;
+import de.chriswohlbrecht.maintenance.api.model.DeviceResponse;
 import de.chriswohlbrecht.maintenance.api.model.Language;
 import de.chriswohlbrecht.maintenance.api.model.PasswordResetConfirmRequest;
 import de.chriswohlbrecht.maintenance.api.model.RegisterRequest;
 import de.chriswohlbrecht.maintenance.api.model.UserResponse;
 import de.chriswohlbrecht.maintenance.api.model.UserRole;
 import de.chriswohlbrecht.maintenance.component.IAccountDeletionComponent;
+import de.chriswohlbrecht.maintenance.component.DeviceLoginComponentImpl;
 import de.chriswohlbrecht.maintenance.component.IAuthComponent;
+import de.chriswohlbrecht.maintenance.component.IDeviceLoginComponent;
 import de.chriswohlbrecht.maintenance.component.IPasswordComponent;
 import de.chriswohlbrecht.maintenance.component.IRegistrationComponent;
 import de.chriswohlbrecht.maintenance.exception.AccountUnusableException;
@@ -28,6 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -64,6 +69,89 @@ class AuthControllerTest {
 
     @MockitoBean
     private IAccountDeletionComponent accountDeletionComponent;
+
+    @MockitoBean
+    private IDeviceLoginComponent deviceLoginComponent;
+
+    @Test
+    void deviceLogin_returnsUserAndToken() throws Exception {
+        when(deviceLoginComponent.login(any(), any(), any())).thenReturn(new DeviceLoginResponse()
+                .user(new UserResponse().email("rider@example.org").role(UserRole.USER))
+                .deviceToken("t".repeat(43)));
+
+        mockMvc.perform(post(AuthApi.PATH_DEVICE_LOGIN).contentType(MediaType.APPLICATION_JSON).content(
+                        "{\"email\": \"rider@example.org\", \"password\": \"secret-password\", \"deviceName\": \"Pixel 8\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.email").value("rider@example.org"))
+                .andExpect(jsonPath("$.deviceToken").value("t".repeat(43)));
+    }
+
+    @Test
+    void deviceLogin_blankDeviceName_returns400() throws Exception {
+        mockMvc.perform(post(AuthApi.PATH_DEVICE_LOGIN).contentType(MediaType.APPLICATION_JSON).content(
+                        "{\"email\": \"rider@example.org\", \"password\": \"secret-password\", \"deviceName\": \"   \"}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(deviceLoginComponent);
+    }
+
+    @Test
+    void deviceLogin_nameWithEmoji_isAccepted() throws Exception {
+        when(deviceLoginComponent.login(any(), any(), any())).thenReturn(new DeviceLoginResponse()
+                .user(new UserResponse().email("rider@example.org")).deviceToken("t".repeat(43)));
+
+        mockMvc.perform(post(AuthApi.PATH_DEVICE_LOGIN).contentType(MediaType.APPLICATION_JSON).content(
+                        "{\"email\": \"rider@example.org\", \"password\": \"secret-password\", \"deviceName\": \"Pixel 🏍\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void deviceSession_invalidToken_returns401() throws Exception {
+        when(deviceLoginComponent.exchange(any(), any(), any()))
+                .thenThrow(new AuthenticationFailedException("Invalid device token"));
+
+        mockMvc.perform(post(AuthApi.PATH_CREATE_DEVICE_SESSION).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"deviceToken\": \"" + "t".repeat(43) + "\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void deviceSession_tokenOfWrongLength_returns400() throws Exception {
+        mockMvc.perform(post(AuthApi.PATH_CREATE_DEVICE_SESSION).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"deviceToken\": \"short\"}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(deviceLoginComponent);
+    }
+
+    @Test
+    void listDevices_passesTheDeviceOfTheSession() throws Exception {
+        when(deviceLoginComponent.listDevices(3L)).thenReturn(List.of(new DeviceResponse().id(3L).name("Pixel 8")
+                .current(true)));
+
+        mockMvc.perform(get(AuthApi.PATH_LIST_DEVICES)
+                        .sessionAttr(DeviceLoginComponentImpl.SESSION_ATTRIBUTE, 3L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Pixel 8"))
+                .andExpect(jsonPath("$[0].current").value(true));
+    }
+
+    @Test
+    void listDevices_fromBrowserSession_passesNull() throws Exception {
+        when(deviceLoginComponent.listDevices(null)).thenReturn(List.of());
+
+        mockMvc.perform(get(AuthApi.PATH_LIST_DEVICES))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void deleteDevice_returns204OrNotFound() throws Exception {
+        when(deviceLoginComponent.deleteDevice(3L)).thenReturn(true);
+
+        mockMvc.perform(delete(AuthApi.PATH_DELETE_DEVICE, 3L)).andExpect(status().isNoContent());
+        mockMvc.perform(delete(AuthApi.PATH_DELETE_DEVICE, 9L)).andExpect(status().isNotFound());
+    }
 
     @Test
     void deleteCurrentUser_deletesAndLogsOut() throws Exception {
