@@ -189,3 +189,10 @@ Feature: Household mode – profile selection instead of login
     Then the response status code is 404
     When a GET request is sent to "/api/v1/admin/users"
     Then the response status code is 404
+
+  Scenario: Deleting the own account does not exist, profiles are deleted via the profile endpoints
+    Given I have selected a new profile "Anna"
+    When a DELETE request is sent to "/api/v1/auth/me"
+    Then the response status code is 404
+    When a GET request is sent to "/api/v1/auth/me"
+    Then the response status code is 200

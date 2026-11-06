@@ -69,6 +69,20 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponses.of(HttpStatus.BAD_REQUEST, null, ex.getMessage(), request.getRequestURI()));
     }
 
+    @ExceptionHandler(WrongPasswordException.class)
+    public ResponseEntity<ErrorResponse> handleWrongPassword(WrongPasswordException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponses.of(HttpStatus.FORBIDDEN, WrongPasswordException.CODE, ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    @ExceptionHandler(LastAdminException.class)
+    public ResponseEntity<ErrorResponse> handleLastAdmin(LastAdminException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponses.of(HttpStatus.CONFLICT, LastAdminException.CODE, ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<ErrorResponse> handleInvalidToken(InvalidTokenException ex, HttpServletRequest request) {
         return ResponseEntity.badRequest()

@@ -23,7 +23,7 @@ Jede Metrik trägt:
 
 ## Fachliche Metriken
 
-Präfix `bm.`; Zähler mit festen Tag-Werten (Anmeldung, Mail-Zustellung) sind ab dem Start mit 0 registriert. Im Prometheus-Format werden Punkte zu Unterstrichen, Zähler bekommen `_total`
+Präfix `bm.`; Zähler mit festen Tag-Werten (Anmeldung, Mail-Zustellung) und `bm.accounts.deleted` sind ab dem Start mit 0 registriert. Im Prometheus-Format werden Punkte zu Unterstrichen, Zähler bekommen `_total`
 (`bm.auth.login` → `bm_auth_login_total`). Tags haben nur wenige feste Werte – nie Nutzer-IDs, E-Mail-Adressen,
 Namen oder freie Pfade.
 
@@ -33,8 +33,9 @@ Namen oder freie Pfade.
 | `bm.auth.lockout` | Zähler | – | Konto wegen zu vieler Fehlversuche gesperrt |
 | `bm.auth.registration` | Zähler | `step`: `started` (neues Konto angelegt, Bestätigungsmail unterwegs), `verified` (E-Mail-Adresse bestätigt) | Registrierungen; Versuche mit bereits registrierter Adresse zählen nicht |
 | `bm.auth.password_reset` | Zähler | `step`: `requested` (Mail an ein aktives Konto unterwegs), `completed` (neues Passwort gesetzt) | Passwort-Zurücksetzen; Anfragen für unbekannte Adressen zählen nicht |
+| `bm.accounts.deleted` | Zähler | – | Von ihren Nutzern selbst gelöschte Konten (Portal) |
 | `bm.protection.altcha_failed` | Zähler | – | Abgelehnte ALTCHA-Lösungen (fehlend, ungültig, abgelaufen, schon benutzt) |
-| `bm.protection.rate_limited` | Zähler | `group`: `login`, `registration`, `verification_resend`, `password_reset`, `password_change` | Wegen des Rate-Limits pro IP abgewiesene Anfragen (429) |
+| `bm.protection.rate_limited` | Zähler | `group`: `login`, `registration`, `verification_resend`, `password_reset`, `password_change`, `account_deletion` | Wegen des Rate-Limits pro IP abgewiesene Anfragen (429) |
 | `bm.mail.sent` | Zähler | `type`: `verification`, `password_reset`, `registration_exists`; `result`: `queued` (an den Versand übergeben), `quota_exceeded` (wegen Tageslimit verworfen) | Mails, die die App verschicken wollte |
 | `bm.mail.delivery` | Zähler | `result`: `success`, `failure` | Zustellversuche beim SMTP-Server (asynchron, daher getrennt von `bm.mail.sent`) |
 | `bm.mail.quota.used` | Gauge | – | Heute gezählte Mails; im Speicher gehalten und jede Minute aus der Datenbank nachgelesen, damit das Abholen der Metriken nie auf die Datenbank wartet |

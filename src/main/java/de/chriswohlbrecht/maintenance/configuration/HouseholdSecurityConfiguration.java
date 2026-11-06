@@ -32,6 +32,7 @@ public class HouseholdSecurityConfiguration {
             "/api/v1/auth/verify-email/resend",
             "/api/v1/auth/password",
             "/api/v1/auth/password-reset/**",
+            "DELETE /api/v1/auth/me",
             "/api/v1/admin/**"
     };
 

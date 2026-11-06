@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.controller;
 
 import de.chriswohlbrecht.maintenance.api.handler.AuthApi;
 import de.chriswohlbrecht.maintenance.api.model.ChangePasswordRequest;
+import de.chriswohlbrecht.maintenance.api.model.DeleteAccountRequest;
 import de.chriswohlbrecht.maintenance.api.model.EmailRequest;
 import de.chriswohlbrecht.maintenance.api.model.LoginRequest;
 import de.chriswohlbrecht.maintenance.api.model.PasswordResetConfirmRequest;
@@ -9,6 +10,7 @@ import de.chriswohlbrecht.maintenance.api.model.RegisterRequest;
 import de.chriswohlbrecht.maintenance.api.model.TokenRequest;
 import de.chriswohlbrecht.maintenance.api.model.UpdateCurrentUserRequest;
 import de.chriswohlbrecht.maintenance.api.model.UserResponse;
+import de.chriswohlbrecht.maintenance.component.IAccountDeletionComponent;
 import de.chriswohlbrecht.maintenance.component.IAuthComponent;
 import de.chriswohlbrecht.maintenance.component.IPasswordComponent;
 import de.chriswohlbrecht.maintenance.component.IRegistrationComponent;
@@ -26,8 +28,8 @@ import tools.jackson.databind.json.JsonMapper;
 import java.util.Map;
 
 /**
- * Login, logout, current user and its settings (language), registration, email verification, password change and
- * password reset.
+ * Login, logout, current user and its settings (language), registration, email verification, password change,
+ * password reset and deleting the own account.
  *
  * <p>Registration and passwords exist only in portal mode; in household mode their endpoints answer 404 before
  * reaching this controller ({@code HouseholdSecurityConfiguration}), hence the optional dependencies.
@@ -42,6 +44,7 @@ public class AuthController implements AuthApi {
     private final IAuthComponent authComponent;
     private final ObjectProvider<IRegistrationComponent> registrationComponent;
     private final ObjectProvider<IPasswordComponent> passwordComponent;
+    private final ObjectProvider<IAccountDeletionComponent> accountDeletionComponent;
     private final JsonMapper jsonMapper;
 
     /** The challenge JSON of the library is passed on as is, only parsed into a map for the generated signature. */
@@ -116,7 +119,17 @@ public class AuthController implements AuthApi {
         return ResponseEntity.ok(authComponent.updateCurrentUser(updateCurrentUserRequest));
     }
 
-    /** The generated interface has no servlet parameters; login, logout and password change need the session. */
+    /** Other sessions are deleted with the account; the current one ends like on logout (cookie and CSRF token). */
+    @Override
+    public ResponseEntity<Void> deleteCurrentUser(DeleteAccountRequest deleteAccountRequest) {
+        ServletRequestAttributes attributes = servletRequestAttributes();
+        accountDeletionComponent.getObject().deleteCurrentUser(deleteAccountRequest,
+                attributes.getRequest().getSession().getId());
+        authComponent.logout(attributes.getRequest(), attributes.getResponse());
+        return ResponseEntity.noContent().build();
+    }
+
+    /** The generated interface has no servlet parameters; login, logout, password change and deletion need the session. */
     private static ServletRequestAttributes servletRequestAttributes() {
         return (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
     }

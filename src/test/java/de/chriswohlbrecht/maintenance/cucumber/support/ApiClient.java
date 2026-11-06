@@ -86,6 +86,10 @@ public class ApiClient {
         return exchange(HttpMethod.DELETE, path, null, true);
     }
 
+    public EntityExchangeResult<byte[]> delete(String path, String jsonBody) {
+        return exchange(HttpMethod.DELETE, path, jsonBody, true);
+    }
+
     public void useAcceptLanguage(String acceptLanguage) {
         this.acceptLanguage = acceptLanguage;
     }

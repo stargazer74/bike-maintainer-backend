@@ -24,7 +24,8 @@ class RateLimitFilterTest {
             "POST, /api/v1/auth/register, registration",
             "POST, /api/v1/auth/verify-email/resend, verification_resend",
             "POST, /api/v1/auth/password-reset/request, password_reset",
-            "PUT, /api/v1/auth/password, password_change"
+            "PUT, /api/v1/auth/password, password_change",
+            "DELETE, /api/v1/auth/me, account_deletion"
     })
     void passesGroupOfRequest(String method, String path, String group) throws Exception {
         IRateLimitComponent rateLimitComponent = mock(IRateLimitComponent.class);
