@@ -232,6 +232,6 @@ Cucumber; Angular 22, Vitest, Transloco.
 ### Task 8: Wrap-up
 
 - [ ] **Step 1:** Ask the user for the OK to push the three branches and open the PRs (`Closes #25`, `#103`, `#79`,
-  labels api/backend/frontend, cross-linked); then comment the PRs in the tickets and in epic backend#13 (standing
+  labels api/backend/frontend, cross-linked); then comment the PRs in the tickets and in epic backend#104 (standing
   rule).
 - [ ] **Step 2:** Remind the user of the privacy policy sentence from the spec (after the 0.11.0 release).

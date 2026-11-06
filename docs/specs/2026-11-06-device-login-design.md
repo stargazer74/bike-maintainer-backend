@@ -1,6 +1,6 @@
 # Geräte-Anmeldung („angemeldet bleiben“) – Design
 
-Stand: 2026-11-06 · Teilprojekt A der Android-App (Teilprojekt B: Android-App Version 1, eigene Spec) · Tickets:
+Stand: 2026-11-06 · Epic stargazer74/bike-maintainer-backend#104, Teilprojekt A der Android-App (Teilprojekt B: Android-App Version 1, eigene Spec) · Tickets:
 stargazer74/bike-maintainer-api#25, stargazer74/bike-maintainer-backend#103, stargazer74/bike-maintainer-frontend#79
 
 ## Ziel
