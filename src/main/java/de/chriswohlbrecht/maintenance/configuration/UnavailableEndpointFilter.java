@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -23,11 +24,21 @@ class UnavailableEndpointFilter extends OncePerRequestFilter {
     private final List<RequestMatcher> unavailable;
     private final SecurityErrorWriter errorWriter;
 
+    /** @param pathPatterns path patterns for every method, or {@code "METHOD /path"} for a single method */
     UnavailableEndpointFilter(SecurityErrorWriter errorWriter, String... pathPatterns) {
         this.errorWriter = errorWriter;
         this.unavailable = Arrays.stream(pathPatterns)
-                .map(pattern -> (RequestMatcher) PathPatternRequestMatcher.withDefaults().matcher(pattern))
+                .map(UnavailableEndpointFilter::matcher)
                 .toList();
+    }
+
+    private static RequestMatcher matcher(String pattern) {
+        int space = pattern.indexOf(' ');
+        if (space < 0) {
+            return PathPatternRequestMatcher.withDefaults().matcher(pattern);
+        }
+        return PathPatternRequestMatcher.withDefaults()
+                .matcher(HttpMethod.valueOf(pattern.substring(0, space)), pattern.substring(space + 1));
     }
 
     @Override

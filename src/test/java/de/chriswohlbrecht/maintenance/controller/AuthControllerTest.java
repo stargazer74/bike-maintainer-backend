@@ -7,13 +7,16 @@ import de.chriswohlbrecht.maintenance.api.model.PasswordResetConfirmRequest;
 import de.chriswohlbrecht.maintenance.api.model.RegisterRequest;
 import de.chriswohlbrecht.maintenance.api.model.UserResponse;
 import de.chriswohlbrecht.maintenance.api.model.UserRole;
+import de.chriswohlbrecht.maintenance.component.IAccountDeletionComponent;
 import de.chriswohlbrecht.maintenance.component.IAuthComponent;
 import de.chriswohlbrecht.maintenance.component.IPasswordComponent;
 import de.chriswohlbrecht.maintenance.component.IRegistrationComponent;
 import de.chriswohlbrecht.maintenance.exception.AccountUnusableException;
 import de.chriswohlbrecht.maintenance.exception.AuthenticationFailedException;
 import de.chriswohlbrecht.maintenance.exception.InvalidUserUpdateException;
+import de.chriswohlbrecht.maintenance.exception.LastAdminException;
 import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
+import de.chriswohlbrecht.maintenance.exception.WrongPasswordException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -31,6 +34,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -56,6 +61,52 @@ class AuthControllerTest {
 
     @MockitoBean
     private IPasswordComponent passwordComponent;
+
+    @MockitoBean
+    private IAccountDeletionComponent accountDeletionComponent;
+
+    @Test
+    void deleteCurrentUser_deletesAndLogsOut() throws Exception {
+        mockMvc.perform(delete(AuthApi.PATH_DELETE_CURRENT_USER).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\": \"secret-password\"}"))
+                .andExpect(status().isNoContent());
+
+        verify(accountDeletionComponent).deleteCurrentUser(any(), any());
+        verify(authComponent).logout(any(), any());
+    }
+
+    @Test
+    void deleteCurrentUser_wrongPassword_returns403WithCodeAndStaysLoggedIn() throws Exception {
+        doThrow(new WrongPasswordException("Password is wrong"))
+                .when(accountDeletionComponent).deleteCurrentUser(any(), any());
+
+        mockMvc.perform(delete(AuthApi.PATH_DELETE_CURRENT_USER).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\": \"wrong\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("WRONG_PASSWORD"));
+
+        verifyNoInteractions(authComponent);
+    }
+
+    @Test
+    void deleteCurrentUser_lastAdmin_returns409WithCode() throws Exception {
+        doThrow(new LastAdminException("last admin"))
+                .when(accountDeletionComponent).deleteCurrentUser(any(), any());
+
+        mockMvc.perform(delete(AuthApi.PATH_DELETE_CURRENT_USER).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\": \"secret-password\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("LAST_ADMIN"));
+    }
+
+    @Test
+    void deleteCurrentUser_missingPassword_returns400() throws Exception {
+        mockMvc.perform(delete(AuthApi.PATH_DELETE_CURRENT_USER).contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(accountDeletionComponent);
+    }
 
     @Test
     void login_success_returnsUser() throws Exception {

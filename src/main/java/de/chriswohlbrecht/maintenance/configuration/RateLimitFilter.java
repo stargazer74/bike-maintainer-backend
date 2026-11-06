@@ -26,14 +26,17 @@ import java.util.Optional;
  */
 class RateLimitFilter extends OncePerRequestFilter {
 
-    /** Method and path; changing the password needs a session, but the current password can be guessed there. */
-    /** Limited request → its group, the tag of {@code bm.protection.rate_limited}. */
+    /**
+     * Limited request (method and path) → its group, the tag of {@code bm.protection.rate_limited}. Changing the
+     * password and deleting the account need a session, but the current password can be guessed there.
+     */
     static final Map<String, String> LIMITED_REQUESTS = Map.of(
             "POST /api/v1/auth/login", "login",
             "POST /api/v1/auth/register", "registration",
             "POST /api/v1/auth/verify-email/resend", "verification_resend",
             "POST /api/v1/auth/password-reset/request", "password_reset",
-            "PUT /api/v1/auth/password", "password_change");
+            "PUT /api/v1/auth/password", "password_change",
+            "DELETE /api/v1/auth/me", "account_deletion");
 
     private final IRateLimitComponent rateLimitComponent;
     private final SecurityErrorWriter errorWriter;
