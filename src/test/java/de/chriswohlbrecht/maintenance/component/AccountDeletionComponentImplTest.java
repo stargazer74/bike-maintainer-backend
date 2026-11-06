@@ -72,7 +72,7 @@ class AccountDeletionComponentImplTest {
         component = new AccountDeletionComponentImpl(currentUserComponent, sessionComponent, appUserRepository,
                 vehicleRepository, maintenanceTaskRepository, maintenanceLogRepository, maintenanceLogTaskRepository,
                 maintenanceLogMaterialRepository, passwordEncoder,
-                new SecurityProperties(10, Duration.ofMinutes(15), 3, Duration.ofMinutes(15)),
+                new SecurityProperties(10, Duration.ofMinutes(15), 3, Duration.ofMinutes(15), Duration.ofDays(90)),
                 Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC), meterRegistry);
     }
 
