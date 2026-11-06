@@ -88,6 +88,29 @@ In portal mode the backend refuses to start without `BM_ALTCHA_HMAC_KEY`, and wi
 Spring profile `local` is active. At most `bm.mail.daily-limit` (100) emails are sent per day; unverified accounts are
 deleted after 7 days.
 
+### Login & first start (portal mode)
+
+```
+Internet ──443──▶ TLS proxy ──▶ frontend (nginx) ──/api/──▶ backend ──▶ MariaDB
+                                (only upstream)              (internal)  (internal)
+```
+
+Only the frontend container is reachable from outside; it forwards `/api/` to the backend in the internal Docker
+network. Backend and database publish no ports. The compose files, `.env.example` and the proxy setup live in
+`bike-maintainer-deploy/portal/` (see its README).
+
+1. **Initial admin:** set `BM_INITIAL_ADMIN_EMAIL` **before the first start** – migration V4 creates the admin account
+   with this address and reads it only once. `BM_INITIAL_ADMIN_PASSWORD` (at least 10 characters) is set as the
+   password on startup while the account has none; it is never overwritten afterwards. Log in and change it right
+   away.
+2. **SMTP:** `SPRING_MAIL_*` for registration, verification and password-reset emails (STARTTLS); the sender is the
+   SMTP login unless `BM_MAIL_FROM` is set.
+3. **`BM_PUBLIC_URL`:** the address users open (e.g. `https://app.example.com`); email links point there.
+4. **Captcha:** `BM_ALTCHA_HMAC_KEY` (`openssl rand -hex 32`).
+
+Further accounts register themselves (email verification required); admins manage roles and lock accounts under
+`/admin/nutzer` in the web app.
+
 **Profile `local` (development):** emails are not sent but written to the log, including the verification link, and a
 fixed ALTCHA key is used (`application-local.properties`). Swagger UI (`/swagger-ui.html`) and `/v3/api-docs` are
 only available in this profile. `./mvnw spring-boot:run` and the development

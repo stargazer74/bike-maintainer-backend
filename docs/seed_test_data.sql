@@ -4,10 +4,15 @@
 -- Ausführen z. B. mit:
 --   docker compose exec -T mariadb mysql -u maintenance -pmaintenance maintenance < docs/seed_test_data.sql
 --
--- Setzt Migration V4 voraus: Die Fahrzeuge gehören dem Initial-Admin (BM_INITIAL_ADMIN_EMAIL),
--- sichtbar also nach dem Login mit dessen Zugangsdaten.
+-- Setzt Migration V9 voraus. Die Fahrzeuge gehören einem eigenen, bestätigten Testnutzer
+-- (Portalmodus: Anmeldung mit testfahrer@example.org / testfahrer-2026), nicht dem Initial-Admin.
+-- Nur für lokale Entwicklung – nie auf einem öffentlichen Server einspielen.
 
-SET @owner_id = (SELECT id FROM app_user WHERE role = 'ADMIN' ORDER BY id LIMIT 1);
+INSERT INTO app_user (email, password_hash, role, active, email_verified, failed_login_attempts, language, currency,
+                      created_at, updated_at)
+VALUES ('testfahrer@example.org', '{bcrypt}$2y$10$IwD2OozQp0B3pOunGEJUSOZEjhZN2JFyznjjt0cF4AwQPwkare8bq', 'USER', TRUE, TRUE, 0, 'de', 'EUR', NOW(), NOW());
+
+SET @owner_id = (SELECT id FROM app_user WHERE email = 'testfahrer@example.org');
 
 --
 -- Daten für Tabelle vehicle

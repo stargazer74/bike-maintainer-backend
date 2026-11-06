@@ -15,11 +15,15 @@ Note: Flyway's Spring Boot autoconfiguration lives in its own module (`org.sprin
 
 ```
 app_user
-  └──1:n──> vehicle
-              ├──1:n──> maintenance_task
-              └──1:n──> maintenance_log ──m:n──> maintenance_task   (via maintenance_log_task)
+  ├──1:n──> vehicle
+  │           ├──1:n──> maintenance_task
+  │           └──1:n──> maintenance_log ──m:n──> maintenance_task   (via maintenance_log_task)
+  │                       └──1:n──> maintenance_log_material ──n:1──> maintenance_task (optional)
+  ├──1:n──> user_token      (email links: verification, password reset)
+  └──1:n──> device_login    (apps that stay logged in)
 
 SPRING_SESSION ──1:n──> SPRING_SESSION_ATTRIBUTES   (technical, login sessions)
+mail_quota                                          (technical, emails per day)
 ```
 
 The diagram in `db-schema.drawio` shows the same schema.
@@ -37,18 +41,24 @@ The diagram in `db-schema.drawio` shows the same schema.
 | V3 | `vehicle.first_registration_date` (backfill: January 1st of `model_year`) |
 | V4 | `app_user`, initial admin, `vehicle.user_id` (existing vehicles are assigned to the initial admin) |
 | V5 | Spring Session JDBC tables `SPRING_SESSION`, `SPRING_SESSION_ATTRIBUTES` |
+| V6 | Household profiles: `app_user.email` nullable, `app_user.display_name` (unique); the initial admin is named "Admin" |
+| V7 | `user_token` (email links), `mail_quota` (daily email limit) |
+| V8 | `maintenance_log_material`, `maintenance_log.labor_cost`/`currency`, `app_user.currency` |
+| V9 | `device_login` (apps that stay logged in) |
 
 **Initial admin (V4).** The migration creates one `ADMIN` account whose email comes from the Flyway placeholder `initialAdminEmail` (`BM_INITIAL_ADMIN_EMAIL`, default `admin@localhost`; stored trimmed and lower-cased). All vehicles that existed before user accounts are assigned to it. The placeholder is only read when V4 runs, so `BM_INITIAL_ADMIN_EMAIL` must be set **before** the first start of that version; changing it later does not rename the account. The password cannot be hashed in SQL: the account starts without one, and on every startup `InitialAdminComponentImpl` sets `BM_INITIAL_ADMIN_PASSWORD` (BCrypt) if the account still has no password. An existing password is never overwritten.
 
 ## Tables
 
 ### `app_user`
-A user account. Login is by email and password; the session is stored in `SPRING_SESSION`.
+A user account. In portal mode login is by email and password; in household mode a profile without email and password
+is chosen by its display name. The session is stored in `SPRING_SESSION` in both modes.
 
 | Column | Type | Meaning |
 |---|---|---|
 | `id` | BIGINT, PK | Surrogate key |
-| `email` | VARCHAR(255), UNIQUE | Login name; stored trimmed and lower-cased, compared case-insensitively |
+| `email` | VARCHAR(255), UNIQUE, nullable | Login name (portal); stored trimmed and lower-cased, compared case-insensitively. Null for household profiles |
+| `display_name` | VARCHAR(50), UNIQUE, nullable | Name of a household profile; null for portal accounts (the UI shows the email instead) |
 | `password_hash` | VARCHAR(100), nullable | Hash with algorithm prefix, e.g. `{bcrypt}…` (Spring `DelegatingPasswordEncoder`). Null until a password is set — such an account cannot log in |
 | `role` | VARCHAR(20) | `USER` or `ADMIN` |
 | `active` | BOOLEAN | False = deactivated by an admin; login is rejected with `ACCOUNT_DISABLED` |
@@ -56,6 +66,7 @@ A user account. Login is by email and password; the session is stored in `SPRING
 | `failed_login_attempts` | INT | Consecutive failed logins; reset on success |
 | `locked_until` | TIMESTAMP, nullable | Set after too many failed logins (`bm.security.lockout-*`, default 10 attempts / 15 minutes); logins are rejected with 429 until then |
 | `language` | VARCHAR(5) | Preferred language, `de` or `en` (UI, emails, PDF report) |
+| `currency` | VARCHAR(3) | Currency for new maintenance entries (ISO 4217, e.g. `EUR`) |
 | `created_at` | TIMESTAMP | Row creation time |
 | `updated_at` | TIMESTAMP | Last update time |
 
@@ -104,6 +115,8 @@ One row per maintenance/workshop visit on a vehicle — what was checked/replace
 | `performed_at` | DATE | Date the visit took place |
 | `mileage_at_performed` | INT | Odometer reading at the time of the visit |
 | `notes` | VARCHAR(1000) | Optional free-text notes about the visit |
+| `labor_cost` | DECIMAL(10,2), nullable | Labor cost of the visit |
+| `currency` | VARCHAR(3) | Currency of `labor_cost` and of the material prices; taken from the user's currency when the entry is created |
 | `created_at` | TIMESTAMP | Row creation time |
 
 A single visit typically covers several tasks (e.g. an oil change combined with a valve clearance check) with the same date and mileage — which of the `maintenance_task`s were covered is recorded in `maintenance_log_task`, not on this table directly.
@@ -117,6 +130,63 @@ Join table between `maintenance_log` and `maintenance_task`: records which tasks
 | `task_id` | BIGINT, FK → `maintenance_task.id`, part of composite PK | The task performed during that visit |
 
 No extra columns: the visit's date/mileage/notes live on `maintenance_log` and apply identically to every task linked to it.
+
+### `maintenance_log_material`
+Parts and consumables used during a visit, in the order entered.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | BIGINT, PK | Surrogate key |
+| `log_id` | BIGINT, FK → `maintenance_log.id` (`ON DELETE CASCADE`) | The visit |
+| `name` | VARCHAR(200) | e.g. "Engine oil 10W-40" |
+| `part_number` | VARCHAR(100), nullable | Manufacturer part number |
+| `quantity` | DECIMAL(10,3) | Amount in `unit` |
+| `unit` | VARCHAR(20) | `PIECE`, `LITER`, `MILLILITER`, `KILOGRAM`, `GRAM`, `METER` |
+| `price` | DECIMAL(10,2), nullable | Total price of this line in the visit's currency |
+| `task_id` | BIGINT, FK → `maintenance_task.id`, nullable | The performed task the material belongs to (must be one of the visit's tasks) |
+| `position` | INT | Order within the visit |
+
+### `user_token`
+One-time links sent by email (`EMAIL_VERIFICATION`, `PASSWORD_RESET`). Only the SHA-256 hash of the token is stored, so
+a leaked database contains no usable links.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | BIGINT, PK | Surrogate key |
+| `user_id` | BIGINT, FK → `app_user.id` (`ON DELETE CASCADE`) | Account the link belongs to |
+| `type` | VARCHAR(30) | `EMAIL_VERIFICATION` or `PASSWORD_RESET` |
+| `token_hash` | CHAR(64), UNIQUE | SHA-256 of the token (hex) |
+| `expires_at` | TIMESTAMP | 24 hours (verification) or 1 hour (reset) after issue |
+| `used_at` | TIMESTAMP, nullable | Set when used or replaced by a newer link; such a token is invalid |
+| `created_at` | TIMESTAMP | Issue time |
+
+Used and expired tokens are deleted by the nightly cleanup.
+
+### `mail_quota`
+Emails sent per day (all kinds together) for the global daily limit (`bm.mail.daily-limit`). Stored so that a restart
+does not reset the count.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `quota_date` | DATE, PK | Day |
+| `sent_count` | INT | Emails sent on that day |
+
+### `device_login`
+Apps that stay logged in (portal mode): a device token is exchanged for a normal session whenever the session expired;
+every exchange rotates the token. Only SHA-256 hashes are stored; no IP addresses or locations.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | BIGINT, PK | Surrogate key; stored in the session attribute `bm.deviceId` of sessions started by the device |
+| `user_id` | BIGINT, FK → `app_user.id` (`ON DELETE CASCADE`) | Account |
+| `name` | VARCHAR(100) | Name chosen on the device, e.g. the phone model |
+| `token_hash` | CHAR(64), UNIQUE | SHA-256 of the current token |
+| `previous_token_hash` | CHAR(64), UNIQUE, nullable | SHA-256 of the token before the last exchange; presenting it again (later than 60 s after the exchange) removes the device |
+| `created_at` | TIMESTAMP | Registration |
+| `last_used_at` | TIMESTAMP | Last login or exchange; after 90 days without use (`bm.security.device-login-idle-timeout`) the device is removed |
+
+Devices are also removed on logout from their session, by the user in the web app, after a password change or reset,
+and when an admin deactivates the account. The table is created with `utf8mb4` explicitly (names may contain emoji).
 
 ### `SPRING_SESSION` / `SPRING_SESSION_ATTRIBUTES`
 Login sessions, managed entirely by Spring Session JDBC (schema from `schema-mysql.sql` of spring-session-jdbc, created by Flyway V5 because `spring.session.jdbc.initialize-schema=never`). Storing sessions in the database keeps users logged in across backend restarts and deployments. Not accessed by application code.
