@@ -24,6 +24,8 @@ Feature: Access control – login and roles
       | GET    | /api/v1/vehicles/1/cost-summary               |
       | GET    | /api/v1/vehicles/1/maintenance-report         |
       | GET    | /api/v1/vehicles/1/maintenance-checklist      |
+      | GET    | /api/v1/vehicles/1/worksheets                 |
+      | GET    | /api/v1/vehicles/1/worksheets/BRAKES          |
       | GET    | /api/v1/auth/me                               |
       | PATCH  | /api/v1/auth/me                               |
       | PUT    | /api/v1/auth/password                         |

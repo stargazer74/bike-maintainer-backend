@@ -10,11 +10,7 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.text.Normalizer;
-import java.text.NumberFormat;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.FormatStyle;
 import java.util.List;
 import java.util.Locale;
 
@@ -26,10 +22,8 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class MaintenanceChecklistPdfHelper {
 
-    private static final PdfFont FONT_TITLE = PdfFont.TITLE;
     private static final PdfFont FONT_HEADING = PdfFont.HEADING;
     private static final PdfFont FONT_TEXT = PdfFont.TEXT;
-    private static final int MAX_FILE_NAME_PART = 40;
     private static final int NOTE_LINES = 4;
 
     private final MessageSource messageSource;
@@ -38,9 +32,9 @@ public class MaintenanceChecklistPdfHelper {
     public byte[] generate(Vehicle vehicle, List<MaintenanceChecklistEntry> entries, LocalDate printDate,
                            Locale locale) {
         try (PDDocument document = new PDDocument()) {
-            Texts texts = new Texts(messageSource, locale);
+            PdfTexts texts = new PdfTexts(messageSource, locale);
             PdfPageWriter writer = new PdfPageWriter(document, texts.frame("checklist.title", vehicle, printDate));
-            writeHeader(writer, vehicle, printDate, texts);
+            PdfVehicleHeader.write(writer, texts.get("checklist.title"), vehicle, printDate, texts);
             for (MaintenanceChecklistEntry entry : entries) {
                 writeEntry(writer, entry, texts);
             }
@@ -57,33 +51,11 @@ public class MaintenanceChecklistPdfHelper {
 
     /** E.g. {@code checkliste-die-rote-2026-10-29.pdf}: only lower-case ASCII letters, digits and dashes. */
     public String fileName(Vehicle vehicle, LocalDate printDate, Locale locale) {
-        String prefix = messageSource.getMessage("checklist.fileName", null, locale);
-        String vehiclePart = slug(vehicle.getName());
-        return prefix + (vehiclePart.isEmpty() ? "" : "-" + vehiclePart) + "-" + printDate + ".pdf";
+        return PdfVehicleHeader.fileName(messageSource.getMessage("checklist.fileName", null, locale), vehicle,
+                printDate);
     }
 
-    private void writeHeader(PdfPageWriter writer, Vehicle vehicle, LocalDate printDate, Texts texts)
-            throws IOException {
-        writer.writeLine(texts.get("checklist.title"), FONT_TITLE, 18f);
-        writer.writeWrapped(vehicle.getName(), FONT_HEADING, 13f, 0f);
-        writer.newLine();
-        if (vehicle.getMake() != null || vehicle.getModel() != null) {
-            String makeModel = String.join(" ",
-                    vehicle.getMake() == null ? "" : vehicle.getMake(),
-                    vehicle.getModel() == null ? "" : vehicle.getModel()).trim();
-            writer.writeWrapped(texts.get("report.makeModel", makeModel), FONT_TEXT, 11f, 0f);
-        }
-        if (vehicle.getModelYear() != null) {
-            writer.writeLine(texts.get("report.modelYear", String.valueOf(vehicle.getModelYear())), FONT_TEXT, 11f);
-        }
-        writer.writeLine(texts.get("report.currentMileage", texts.number(vehicle.getCurrentMileage())), FONT_TEXT,
-                11f);
-        writer.writeLine(texts.get("checklist.printed", texts.date(printDate)), FONT_TEXT, 11f);
-        writer.newLine();
-        writer.newLine();
-    }
-
-    private void writeEntry(PdfPageWriter writer, MaintenanceChecklistEntry entry, Texts texts) throws IOException {
+    private void writeEntry(PdfPageWriter writer, MaintenanceChecklistEntry entry, PdfTexts texts) throws IOException {
         float indent = PdfPageWriter.checkboxIndent();
         // Keep the box together with at least the first lines of its task.
         writer.ensureSpace(64f);
@@ -97,7 +69,7 @@ public class MaintenanceChecklistPdfHelper {
         writer.newLine();
     }
 
-    private void writeFillInFields(PdfPageWriter writer, Texts texts) throws IOException {
+    private void writeFillInFields(PdfPageWriter writer, PdfTexts texts) throws IOException {
         writer.newLine();
         // Date, mileage and notes plus the empty note lines stay together on one page.
         writer.ensureSpace((3 + NOTE_LINES) * PdfPageWriter.fillInLineHeight());
@@ -109,7 +81,7 @@ public class MaintenanceChecklistPdfHelper {
         }
     }
 
-    private static String due(MaintenanceChecklistEntry entry, Texts texts) {
+    private static String due(MaintenanceChecklistEntry entry, PdfTexts texts) {
         MaintenanceTaskStatusResult status = entry.status();
         if (status.kmRemaining() != null) {
             return remaining(status.kmRemaining(), "Km", texts);
@@ -121,7 +93,7 @@ public class MaintenanceChecklistPdfHelper {
     }
 
     /** Signed remaining value: positive = due in, negative = overdue by, zero = due now. */
-    private static String remaining(int value, String unit, Texts texts) {
+    private static String remaining(int value, String unit, PdfTexts texts) {
         if (value == 0) {
             return texts.get("checklist.dueNow");
         }
@@ -131,7 +103,7 @@ public class MaintenanceChecklistPdfHelper {
         return texts.get(kind + suffix, texts.number(amount));
     }
 
-    private static String lastService(MaintenanceChecklistEntry entry, Texts texts) {
+    private static String lastService(MaintenanceChecklistEntry entry, PdfTexts texts) {
         MaintenanceTaskStatusResult status = entry.status();
         if (status.lastServiceDate() == null) {
             return texts.get("checklist.lastNever");
@@ -143,7 +115,7 @@ public class MaintenanceChecklistPdfHelper {
                 texts.number(status.lastServiceMileage()));
     }
 
-    private static String interval(MaintenanceChecklistEntry entry, Texts texts) {
+    private static String interval(MaintenanceChecklistEntry entry, PdfTexts texts) {
         if (entry.oneTime()) {
             return texts.get("checklist.interval.oneTime");
         }
@@ -161,51 +133,5 @@ public class MaintenanceChecklistPdfHelper {
                     texts.number(entry.intervalMonths()));
         }
         return texts.get("checklist.interval.none");
-    }
-
-    private static String slug(String name) {
-        if (name == null) {
-            return "";
-        }
-        String transliterated = name.toLowerCase(Locale.ROOT)
-                .replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss");
-        String ascii = Normalizer.normalize(transliterated, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
-        String slug = ascii.replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
-        if (slug.length() > MAX_FILE_NAME_PART) {
-            slug = slug.substring(0, MAX_FILE_NAME_PART).replaceAll("-+$", "");
-        }
-        return slug;
-    }
-
-    /** Translated texts; arguments are preformatted strings so MessageFormat applies no own number format. */
-    private static final class Texts {
-        private final MessageSource messageSource;
-        private final Locale locale;
-        private final DateTimeFormatter dateFormatter;
-        private final NumberFormat numberFormat;
-
-        private Texts(MessageSource messageSource, Locale locale) {
-            this.messageSource = messageSource;
-            this.locale = locale;
-            this.dateFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale);
-            this.numberFormat = NumberFormat.getIntegerInstance(locale);
-        }
-
-        private String get(String key, String... args) {
-            return messageSource.getMessage(key, args, locale);
-        }
-
-        private String date(LocalDate date) {
-            return date.format(dateFormatter);
-        }
-
-        private String number(Integer value) {
-            return value == null ? "" : numberFormat.format(value);
-        }
-
-        private PdfFrame frame(String titleKey, Vehicle vehicle, LocalDate createdOn) {
-            return new PdfFrame(get(titleKey), vehicle.getName(), get("pdf.footer.created", date(createdOn)),
-                    (page, total) -> get("pdf.footer.page", String.valueOf(page), String.valueOf(total)));
-        }
     }
 }

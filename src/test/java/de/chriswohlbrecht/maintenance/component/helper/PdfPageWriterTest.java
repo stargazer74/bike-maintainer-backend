@@ -240,6 +240,42 @@ class PdfPageWriterTest {
         assertThat(bodyLines(text)).isEmpty();
     }
 
+    @Test
+    void tableRow_showsCellTextsAndShortensTooLongOnes() throws IOException {
+        float[] widths = {0.2f, 0.4f, 0.2f, 0.2f};
+        String text = render(writer -> {
+            writer.writeTableRow(java.util.List.of(PdfCell.of("Prüfpunkt"), PdfCell.of("Ist"), PdfCell.blank(),
+                    PdfCell.of("ok")), widths, PdfFont.HEADING, 10f, true);
+            writer.writeTableRow(java.util.List.of(PdfCell.of("Belagstärke vorne links und rechts innen"),
+                    PdfCell.blank(), PdfCell.blank(), PdfCell.checkbox()), widths, PdfFont.TEXT, 10f, false);
+        });
+
+        assertThat(text).contains("Prüfpunkt").contains("Ist").contains("ok").contains("Belag")
+                .contains("\u2026").doesNotContain("rechts innen");
+    }
+
+    @Test
+    void tableRow_withWrongNumberOfCells_isRejected() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> render(writer -> writer.writeTableRow(
+                        java.util.List.of(PdfCell.of("a")), new float[]{0.5f, 0.5f}, PdfFont.TEXT, 10f, false)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void tableRows_continueOnANewPageWhenThePageIsFull() throws IOException {
+        float[] widths = {0.5f, 0.5f};
+        byte[] pdf = renderPdf(writer -> {
+            for (int row = 0; row < 60; row++) {
+                writer.writeTableRow(java.util.List.of(PdfCell.of("Zeile " + row), PdfCell.blank()), widths,
+                        PdfFont.TEXT, 10f, false);
+            }
+        });
+
+        try (PDDocument document = Loader.loadPDF(pdf)) {
+            assertThat(document.getNumberOfPages()).isEqualTo(2);
+        }
+    }
+
     private interface Writing {
         void write(PdfPageWriter writer) throws IOException;
     }
