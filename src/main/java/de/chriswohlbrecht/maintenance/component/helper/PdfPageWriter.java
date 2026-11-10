@@ -39,6 +39,10 @@ final class PdfPageWriter {
     private static final float CHECKBOX_SIZE = 9f;
     private static final float CHECKBOX_INDENT = 18f;
     private static final float FILL_IN_LINE_HEIGHT = LEADING * 1.5f;
+    /** A table row is high enough to write a measured value into it by hand. */
+    private static final float TABLE_ROW_HEIGHT = 22f;
+    private static final float CELL_PADDING = 4f;
+    private static final float[] HEADER_FILL = {243 / 255f, 244 / 255f, 246 / 255f};
     private static final String REPLACEMENT = "?";
     private static final String ELLIPSIS = "\u2026";
     /**
@@ -136,6 +140,52 @@ final class PdfPageWriter {
         yPosition -= LEADING;
     }
 
+    /**
+     * One row of a table over the full content width, with a border around every cell. {@code widths} are the
+     * shares of the columns and add up to 1. A header row is set on a grey background; texts that do not fit their
+     * cell are shortened. Takes {@link #tableRowHeight()}.
+     */
+    void writeTableRow(List<PdfCell> cells, float[] widths, PdfFont style, float fontSize, boolean header)
+            throws IOException {
+        if (cells.size() != widths.length) {
+            throw new IllegalArgumentException("Expected " + widths.length + " cells, got " + cells.size());
+        }
+        PDFont font = font(style);
+        ensureSpace(TABLE_ROW_HEIGHT);
+        float top = yPosition + LEADING - 4f;
+        float bottom = top - TABLE_ROW_HEIGHT;
+        float contentWidth = pageWidth - 2 * MARGIN;
+        float x = MARGIN;
+        for (int index = 0; index < cells.size(); index++) {
+            float cellWidth = contentWidth * widths[index];
+            if (header) {
+                setColor(HEADER_FILL);
+                contentStream.addRect(x, bottom, cellWidth, TABLE_ROW_HEIGHT);
+                contentStream.fill();
+                setColor(TEXT_COLOR);
+            }
+            contentStream.setStrokingColor(RULE_COLOR[0], RULE_COLOR[1], RULE_COLOR[2]);
+            contentStream.setLineWidth(0.5f);
+            contentStream.addRect(x, bottom, cellWidth, TABLE_ROW_HEIGHT);
+            contentStream.stroke();
+            contentStream.setStrokingColor(0f, 0f, 0f);
+            PdfCell cell = cells.get(index);
+            float baseline = bottom + (TABLE_ROW_HEIGHT - fontSize * 0.7f) / 2;
+            if (cell.box()) {
+                contentStream.setLineWidth(0.8f);
+                float boxX = x + (cellWidth - CHECKBOX_SIZE) / 2;
+                float boxY = bottom + (TABLE_ROW_HEIGHT - CHECKBOX_SIZE) / 2;
+                contentStream.addRect(boxX, boxY, CHECKBOX_SIZE, CHECKBOX_SIZE);
+                contentStream.stroke();
+            } else if (cell.text() != null && !cell.text().isEmpty()) {
+                String text = fit(sanitize(cell.text(), font), font, fontSize, cellWidth - 2 * CELL_PADDING);
+                showText(text, font, fontSize, x + CELL_PADDING, baseline);
+            }
+            x += cellWidth;
+        }
+        yPosition -= TABLE_ROW_HEIGHT;
+    }
+
     /** Half an empty line. */
     void newLine() {
         yPosition -= LEADING / 2;
@@ -164,6 +214,11 @@ final class PdfPageWriter {
     /** Vertical space one {@link #writeFillInLine} takes, to keep a block of them together. */
     static float fillInLineHeight() {
         return FILL_IN_LINE_HEIGHT;
+    }
+
+    /** Vertical space one {@link #writeTableRow} takes, to keep a table together. */
+    static float tableRowHeight() {
+        return TABLE_ROW_HEIGHT;
     }
 
     /** Indent of the text of a checkbox item, for lines that belong to it. */
