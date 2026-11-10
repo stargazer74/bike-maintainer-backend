@@ -201,8 +201,12 @@ final class PdfLogo {
             return originY - svgY * scale;
         }
 
-        private static float number(List<String> tokens, int index) {
-            return Float.parseFloat(tokens.get(index));
+        private static float number(List<String> tokens, int index) throws IOException {
+            try {
+                return Float.parseFloat(tokens.get(index));
+            } catch (NumberFormatException e) {
+                throw new IOException("Invalid number in logo path at token " + index, e);
+            }
         }
     }
 }

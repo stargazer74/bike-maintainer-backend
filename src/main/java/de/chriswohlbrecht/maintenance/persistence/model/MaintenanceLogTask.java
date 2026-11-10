@@ -12,6 +12,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @Table(name = "maintenance_log_task")
@@ -20,7 +21,10 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString(onlyExplicitlyIncluded = true)
 public class MaintenanceLogTask {
+
+    @ToString.Include
 
     @EmbeddedId
     private MaintenanceLogTaskId id;

@@ -14,6 +14,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @Table(name = "maintenance_task")
@@ -22,7 +23,10 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString(onlyExplicitlyIncluded = true)
 public class MaintenanceTask {
+
+    @ToString.Include
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

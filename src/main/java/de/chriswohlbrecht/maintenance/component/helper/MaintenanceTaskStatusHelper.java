@@ -31,7 +31,7 @@ public class MaintenanceTaskStatusHelper {
             return computeNeverPerformed(task, currentMileage, vehicleFirstRegistrationDate);
         }
 
-        Integer lastServiceMileage = lastLog.getMileageAtPerformed() != null ? lastLog.getMileageAtPerformed() : 0;
+        int lastServiceMileage = lastLog.getMileageAtPerformed() != null ? lastLog.getMileageAtPerformed() : 0;
         LocalDate lastServiceDate = lastLog.getPerformedAt();
 
         if (task.isOneTime()) {
