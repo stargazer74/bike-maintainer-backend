@@ -7,13 +7,19 @@ import de.chriswohlbrecht.maintenance.persistence.type.ValveKind;
 import de.chriswohlbrecht.maintenance.persistence.type.VehicleType;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Locale;
@@ -202,6 +208,102 @@ class WorksheetPdfHelperTest {
                 .isEqualTo("worksheet-tyres-die-rote-2026-11-10.pdf");
     }
 
+    /** Rendered at 4 px per point, so one point of the layout is easy to address. */
+    private static final float SCALE = 4f;
+
+    @ParameterizedTest
+    @EnumSource(WorksheetTemplate.class)
+    void everyPageCarriesTheMarkersAndItsQrCode(WorksheetTemplate template) throws IOException {
+        ValveLayout layout = new ValveLayout(8, 3);
+        WorksheetScanLayout.Sheet sheet = WorksheetScanLayout.of(template, layout);
+        byte[] pdf = helper.generate(vehicle(), template, layout, WorksheetPrefill.none(), PRINTED, Locale.GERMANY);
+
+        try (PDDocument document = Loader.loadPDF(pdf)) {
+            assertThat(document.getNumberOfPages()).isEqualTo(sheet.pages().size());
+            for (WorksheetScanLayout.Page page : sheet.pages()) {
+                BufferedImage image = render(document, page.number());
+                for (float[] marker : WorksheetScanLayout.markers()) {
+                    float centre = WorksheetScanLayout.MARKER_SIZE / 2;
+                    assertThat(dark(image, marker[0] + centre, marker[1] + centre)).isTrue();
+                    assertThat(dark(image, marker[0] - 3f, marker[1] + centre)).isFalse();
+                }
+                boolean[][] expected = WorksheetPdfHelper.qrModules(sheet.qrContent(42L, page.number()));
+                float module = WorksheetScanLayout.QR_SIZE / expected.length;
+                for (int y = 0; y < expected.length; y++) {
+                    for (int x = 0; x < expected.length; x++) {
+                        assertThat(dark(image, WorksheetScanLayout.QR_LEFT + (x + 0.5f) * module,
+                                WorksheetScanLayout.QR_TOP + (y + 0.5f) * module))
+                                .as("page %d module %d/%d", page.number(), x, y).isEqualTo(expected[y][x]);
+                    }
+                }
+                dump(image, template + "-" + page.number());
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(WorksheetTemplate.class)
+    void boxesAreDrawnWhereTheLayoutSaysAndAreEmptyInside(WorksheetTemplate template) throws IOException {
+        ValveLayout layout = new ValveLayout(4, 4);
+        WorksheetScanLayout.Sheet sheet = WorksheetScanLayout.of(template, layout);
+        byte[] pdf = helper.generate(vehicle(), template, layout, WorksheetPrefill.none(), PRINTED, Locale.UK);
+
+        try (PDDocument document = Loader.loadPDF(pdf)) {
+            for (WorksheetScanLayout.Page page : sheet.pages()) {
+                BufferedImage image = render(document, page.number());
+                for (WorksheetScanLayout.Field field : page.fields()) {
+                    float middle = field.top() + field.height() / 2;
+                    assertThat(line(image, field.left(), middle)).as(field.id() + " left edge").isTrue();
+                    assertThat(line(image, field.left() + field.width(), middle)).as(field.id() + " right edge")
+                            .isTrue();
+                    float firstBox = field.kind() == WorksheetScanLayout.FieldKind.CHECKBOX
+                            ? WorksheetScanLayout.CHECKBOX_SIZE : WorksheetScanLayout.DIGIT_WIDTH;
+                    assertThat(dark(image, field.left() + firstBox / 2, middle)).as(field.id() + " inside")
+                            .isFalse();
+                }
+            }
+        }
+    }
+
+    @Test
+    void valveClearance_lastInstalledShimIsAHintBelowTheValve() throws IOException {
+        WorksheetPrefill prefill = new WorksheetPrefill(null, Map.of(
+                new WorksheetPrefill.Valve(1, ValveKind.EXHAUST, 2), new BigDecimal("2.550")));
+
+        String text = text(helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(1, 4),
+                prefill, PRINTED, Locale.GERMANY));
+
+        assertThat(text).contains("zuletzt 2,55");
+    }
+
+    private static BufferedImage render(PDDocument document, int page) throws IOException {
+        return new PDFRenderer(document).renderImage(page - 1, SCALE, ImageType.GRAY);
+    }
+
+    private static boolean dark(BufferedImage image, float x, float y) {
+        return (image.getRGB(Math.round(x * SCALE), Math.round(y * SCALE)) & 0xff) < 160;
+    }
+
+    /** A thin grey box border near (x, y), at most 1/2 point off. */
+    private static boolean line(BufferedImage image, float x, float y) {
+        int centre = Math.round(x * SCALE);
+        int row = Math.round(y * SCALE);
+        for (int dx = -2; dx <= 2; dx++) {
+            if ((image.getRGB(centre + dx, row) & 0xff) < 200) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** With -Dbm.dumpWorksheets=<dir>: the rendered pages as PNG, to look at them. */
+    private static void dump(BufferedImage image, String name) throws IOException {
+        String dir = System.getProperty("bm.dumpWorksheets");
+        if (dir != null) {
+            ImageIO.write(image, "png", Files.createDirectories(Path.of(dir)).resolve(name + ".png").toFile());
+        }
+    }
+
     private static int count(String text, String part) {
         Matcher matcher = Pattern.compile(Pattern.quote(part)).matcher(text);
         int count = 0;
@@ -213,6 +315,7 @@ class WorksheetPdfHelperTest {
 
     private static Vehicle vehicle() {
         return Vehicle.builder()
+                .id(42L)
                 .name("Die Rote")
                 .type(VehicleType.MOTORCYCLE)
                 .make("Honda")
