@@ -87,6 +87,9 @@ class MaintenanceLogComponentImplTest {
     @Mock
     private MaintenanceReportPdfHelper maintenanceReportPdfHelper;
 
+    @Mock
+    private IMeasurementComponent measurementComponent;
+
     private MaintenanceLogComponentImpl maintenanceLogComponent;
 
     private SimpleMeterRegistry meterRegistry;
@@ -102,7 +105,7 @@ class MaintenanceLogComponentImplTest {
                 vehicleRepository, maintenanceLogRepository, maintenanceLogMaterialRepository,
                 maintenanceLogTaskRepository, maintenanceTaskRepository, new MaintenanceLogMapperImpl(),
                 maintenanceReportPdfHelper, new MaintenanceCostHelper(),
-                new UserLocaleComponentImpl(), currentUserComponent, CLOCK, meterRegistry);
+                new UserLocaleComponentImpl(), currentUserComponent, measurementComponent, CLOCK, meterRegistry);
     }
 
     @Test

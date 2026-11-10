@@ -4,6 +4,16 @@ import de.chriswohlbrecht.maintenance.api.model.WorksheetTemplate;
 import de.chriswohlbrecht.maintenance.component.helper.ValveLayout;
 import de.chriswohlbrecht.maintenance.component.helper.WorksheetPdfHelper;
 import de.chriswohlbrecht.maintenance.component.model.Worksheet;
+import de.chriswohlbrecht.maintenance.component.helper.WorksheetPrefill;
+import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLog;
+import de.chriswohlbrecht.maintenance.persistence.model.MeasurementValve;
+import de.chriswohlbrecht.maintenance.persistence.model.VehicleSpecification;
+import de.chriswohlbrecht.maintenance.persistence.repository.MeasurementValveRepository;
+import de.chriswohlbrecht.maintenance.persistence.repository.VehicleSpecificationRepository;
+import de.chriswohlbrecht.maintenance.persistence.type.ValveKind;
+import org.mockito.ArgumentCaptor;
+import java.math.BigDecimal;
+import java.util.Map;
 import de.chriswohlbrecht.maintenance.exception.InvalidWorksheetRequestException;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
 import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
@@ -53,6 +63,12 @@ class WorksheetComponentImplTest {
     @Mock
     private WorksheetPdfHelper worksheetPdfHelper;
 
+    @Mock
+    private VehicleSpecificationRepository vehicleSpecificationRepository;
+
+    @Mock
+    private MeasurementValveRepository measurementValveRepository;
+
     private SimpleMeterRegistry meterRegistry;
 
     private WorksheetComponentImpl worksheetComponent;
@@ -61,8 +77,9 @@ class WorksheetComponentImplTest {
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
-        worksheetComponent = new WorksheetComponentImpl(vehicleRepository, currentUserComponent, userLocaleComponent,
-                worksheetPdfHelper, CLOCK, meterRegistry);
+        worksheetComponent = new WorksheetComponentImpl(vehicleRepository, vehicleSpecificationRepository,
+                measurementValveRepository, currentUserComponent, userLocaleComponent, worksheetPdfHelper, CLOCK,
+                meterRegistry);
     }
 
     @Test
@@ -84,8 +101,9 @@ class WorksheetComponentImplTest {
         when(userLocaleComponent.localeOf(vehicle.getUser())).thenReturn(Locale.UK);
         when(worksheetPdfHelper.fileName(vehicle, WorksheetTemplate.VALVE_CLEARANCE, TODAY, Locale.UK))
                 .thenReturn("worksheet.pdf");
-        when(worksheetPdfHelper.generate(vehicle, WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(2, 4), TODAY,
-                Locale.UK)).thenReturn(new byte[]{1, 2});
+        when(worksheetPdfHelper.generate(ArgumentMatchers.eq(vehicle),
+                ArgumentMatchers.eq(WorksheetTemplate.VALVE_CLEARANCE), ArgumentMatchers.eq(new ValveLayout(2, 4)),
+                any(), ArgumentMatchers.eq(TODAY), ArgumentMatchers.eq(Locale.UK))).thenReturn(new byte[]{1, 2});
 
         Optional<Worksheet> result = worksheetComponent.generateWorksheet(vehicle.getId(),
                 WorksheetTemplate.VALVE_CLEARANCE, 2, 4);
@@ -101,7 +119,7 @@ class WorksheetComponentImplTest {
     void generateWorksheet_otherTemplate_rendersWithoutLayout() {
         Vehicle vehicle = ownVehicle(VehicleType.CAR);
         when(worksheetPdfHelper.generate(ArgumentMatchers.eq(vehicle), ArgumentMatchers.eq(WorksheetTemplate.TIRES),
-                ArgumentMatchers.isNull(), ArgumentMatchers.eq(TODAY), any())).thenReturn(new byte[]{3});
+                ArgumentMatchers.isNull(), any(), ArgumentMatchers.eq(TODAY), any())).thenReturn(new byte[]{3});
 
         assertThat(worksheetComponent.generateWorksheet(vehicle.getId(), WorksheetTemplate.TIRES, null, null))
                 .isPresent();
@@ -110,7 +128,7 @@ class WorksheetComponentImplTest {
     @Test
     void generateWorksheet_failingRendering_isCountedAsFailure() {
         Vehicle vehicle = ownVehicle(VehicleType.CAR);
-        when(worksheetPdfHelper.generate(any(), any(), any(), any(), any()))
+        when(worksheetPdfHelper.generate(any(), any(), any(), any(), any(), any()))
                 .thenThrow(new IllegalStateException("boom"));
 
         assertThatThrownBy(() -> worksheetComponent.generateWorksheet(vehicle.getId(), WorksheetTemplate.BRAKES,
@@ -153,6 +171,48 @@ class WorksheetComponentImplTest {
         assertThat(worksheetComponent.generateWorksheet(5L, WorksheetTemplate.BRAKES, null, null)).isEmpty();
         verify(vehicleRepository).findByIdAndUser_Id(5L, USER_ID);
         verifyNoInteractions(worksheetPdfHelper);
+    }
+
+    @Test
+    void generateWorksheet_valveClearance_prefillsTargetsAndTheShimsOfTheLatestMeasurement() {
+        Vehicle vehicle = ownVehicle(VehicleType.MOTORCYCLE);
+        VehicleSpecification spec = VehicleSpecification.builder().vehicleId(vehicle.getId()).build();
+        when(vehicleSpecificationRepository.findById(vehicle.getId())).thenReturn(Optional.of(spec));
+        MaintenanceLog older = MaintenanceLog.builder().id(1L).performedAt(LocalDate.of(2025, 5, 1)).build();
+        MaintenanceLog newer = MaintenanceLog.builder().id(2L).performedAt(LocalDate.of(2026, 5, 1)).build();
+        when(measurementValveRepository.findAllByLog_Vehicle_Id(vehicle.getId())).thenReturn(List.of(
+                valve(older, 1, ValveKind.INTAKE, "1.800", "1.750"),
+                valve(newer, 1, ValveKind.INTAKE, "1.750", null),
+                valve(newer, 1, ValveKind.EXHAUST, "2.000", "1.975"),
+                valve(newer, 2, ValveKind.INTAKE, null, null)));
+        ArgumentCaptor<WorksheetPrefill> prefill = ArgumentCaptor.forClass(WorksheetPrefill.class);
+        when(worksheetPdfHelper.generate(any(), any(), any(), prefill.capture(), any(), any()))
+                .thenReturn(new byte[]{1});
+
+        worksheetComponent.generateWorksheet(vehicle.getId(), WorksheetTemplate.VALVE_CLEARANCE, 2, 2);
+
+        assertThat(prefill.getValue().specification()).isSameAs(spec);
+        assertThat(prefill.getValue().installedShims()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                new WorksheetPrefill.Valve(1, ValveKind.INTAKE, 1), new BigDecimal("1.750"),
+                new WorksheetPrefill.Valve(1, ValveKind.EXHAUST, 1), new BigDecimal("1.975")));
+    }
+
+    @Test
+    void generateWorksheet_otherTemplate_needsNoShims() {
+        Vehicle vehicle = ownVehicle(VehicleType.MOTORCYCLE);
+        when(worksheetPdfHelper.generate(any(), any(), any(), any(), any(), any())).thenReturn(new byte[]{1});
+
+        worksheetComponent.generateWorksheet(vehicle.getId(), WorksheetTemplate.BRAKES, null, null);
+
+        verifyNoInteractions(measurementValveRepository);
+    }
+
+    private static MeasurementValve valve(MaintenanceLog log, int cylinder, ValveKind kind, String shimOld,
+                                          String shimNew) {
+        return MeasurementValve.builder().log(log).cylinder(cylinder).valve(kind).valveIndex(1)
+                .shimOld(shimOld == null ? null : new BigDecimal(shimOld))
+                .shimNew(shimNew == null ? null : new BigDecimal(shimNew))
+                .build();
     }
 
     private Vehicle ownVehicle(VehicleType type) {

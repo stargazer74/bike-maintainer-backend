@@ -16,9 +16,12 @@ Note: Flyway's Spring Boot autoconfiguration lives in its own module (`org.sprin
 ```
 app_user
   ├──1:n──> vehicle
+  │           ├──1:1──> vehicle_specification   (target values, optional)
   │           ├──1:n──> maintenance_task
   │           └──1:n──> maintenance_log ──m:n──> maintenance_task   (via maintenance_log_task)
-  │                       └──1:n──> maintenance_log_material ──n:1──> maintenance_task (optional)
+  │                       ├──1:n──> maintenance_log_material ──n:1──> maintenance_task (optional)
+  │                       ├──1:n──> measurement_valve
+  │                       └──1:1──> measurement_brakes / measurement_chain / measurement_tires
   ├──1:n──> user_token      (email links: verification, password reset)
   └──1:n──> device_login    (apps that stay logged in)
 
@@ -45,6 +48,7 @@ The diagram in `db-schema.drawio` shows the same schema.
 | V7 | `user_token` (email links), `mail_quota` (daily email limit) |
 | V8 | `maintenance_log_material`, `maintenance_log.labor_cost`/`currency`, `app_user.currency` |
 | V9 | `device_login` (apps that stay logged in) |
+| V10 | `vehicle_specification` (target values), `measurement_valve`, `measurement_brakes`, `measurement_chain`, `measurement_tires` |
 
 **Initial admin (V4).** The migration creates one `ADMIN` account whose email comes from the Flyway placeholder `initialAdminEmail` (`BM_INITIAL_ADMIN_EMAIL`, default `admin@localhost`; stored trimmed and lower-cased). All vehicles that existed before user accounts are assigned to it. The placeholder is only read when V4 runs, so `BM_INITIAL_ADMIN_EMAIL` must be set **before** the first start of that version; changing it later does not rename the account. The password cannot be hashed in SQL: the account starts without one, and on every startup `InitialAdminComponentImpl` sets `BM_INITIAL_ADMIN_PASSWORD` (BCrypt) if the account still has no password. An existing password is never overwritten.
 
@@ -145,6 +149,38 @@ Parts and consumables used during a visit, in the order entered.
 | `price` | DECIMAL(10,2), nullable | Total price of this line in the visit's currency |
 | `task_id` | BIGINT, FK → `maintenance_task.id`, nullable | The performed task the material belongs to (must be one of the visit's tasks) |
 | `position` | INT | Order within the visit |
+
+### `vehicle_specification`
+Target values from the workshop manual, at most one row per vehicle; all columns except the key are optional. Used to
+prefill worksheets, to check measured values (`OK`/`OUT_OF_RANGE`/`UNKNOWN`) and by the shim calculator. Lengths in mm
+(3 decimal places), pressures in bar (2 decimal places). Deleted together with the vehicle.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `vehicle_id` | BIGINT, PK, FK → `vehicle.id` (`ON DELETE CASCADE`) | The vehicle |
+| `cylinders` / `valves_per_cylinder` | INT, nullable | 1–8 / 2–4 |
+| `valve_adjustment` | VARCHAR(10), nullable | `SHIM` or `SCREW` (no shim calculation for `SCREW`) |
+| `intake_clearance_min/max`, `exhaust_clearance_min/max` | DECIMAL(6,3), nullable | Valve clearance range |
+| `shim_step`, `shim_min`, `shim_max` | DECIMAL(6,3), nullable | Grid and available range of shim sizes |
+| `brake_pad_min_front/rear`, `brake_disc_min_front/rear` | DECIMAL(6,3), nullable | Minimum pad and disc thickness |
+| `chain_slack_min/max` | DECIMAL(6,3), nullable | Chain slack range |
+| `chain_wear_links`, `chain_wear_max_length` | INT / DECIMAL(6,3), nullable | Wear limit: maximum length over this number of links |
+| `tire_pressure_front/rear` | DECIMAL(4,2), nullable | Target pressure (a measurement within ±0.1 bar is `OK`) |
+| `tread_depth_min` | DECIMAL(6,3), nullable | Minimum tread depth |
+
+### `measurement_valve`, `measurement_brakes`, `measurement_chain`, `measurement_tires`
+Measured values of a maintenance log, at most one set per template (one row per valve for `measurement_valve`, one row
+per log for the others: unique `log_id`). Saving a log with `measurements` replaces all sets of that log; templates not
+sent are deleted. Only vehicle data, nothing about people (the paper worksheet's "done by" is not stored). Deleted
+together with the log (`log_id` FK → `maintenance_log.id`, `ON DELETE CASCADE`). The tables with free texts are created
+with `utf8mb4`.
+
+| Table | Columns |
+|---|---|
+| `measurement_valve` | `cylinder`, `valve` (`INTAKE`/`EXHAUST`), `valve_index` (1–2), `measured`, `shim_old`, `shim_new` (DECIMAL(6,3)); unique per log/cylinder/valve/index |
+| `measurement_brakes` | `pad_front/rear`, `disc_front/rear` (DECIMAL(6,3)), `disc_condition_front/rear`, `fluid_condition` (VARCHAR(100)) |
+| `measurement_chain` | `slack`, `wear_length` (DECIMAL(6,3)), `wear_links` (INT), `sprocket_condition`, `rear_sprocket_condition` (VARCHAR(100)), `cleaned`, `lubricated` (BOOLEAN) |
+| `measurement_tires` | `pressure_front/rear` (DECIMAL(4,2)), `tread_front/rear` (DECIMAL(6,3)), `dot_front/rear` (VARCHAR(4), week+year), `condition_front/rear` (VARCHAR(100)) |
 
 ### `user_token`
 One-time links sent by email (`EMAIL_VERIFICATION`, `PASSWORD_RESET`). Only the SHA-256 hash of the token is stored, so
