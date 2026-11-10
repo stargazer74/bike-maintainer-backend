@@ -14,6 +14,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
@@ -27,8 +28,12 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+// Only the id: entities referring to a log (materials, measurements) print it in their builder's toString(), and the
+// other fields (vehicle, notes) are either lazy or not meant for logs.
+@ToString(onlyExplicitlyIncluded = true)
 public class MaintenanceLog {
 
+    @ToString.Include
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
