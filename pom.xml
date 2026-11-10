@@ -28,6 +28,8 @@
     </scm>
     <properties>
         <java.version>25</java.version>
+        <!-- Overrides Spring Boot's managed version: 3.5.10 has CVE-2026-119210, -119276, -119280, -119281 (#117). -->
+        <mariadb.version>3.5.11</mariadb.version>
         <cucumber.version>8.0.4</cucumber.version>
         <openapi-generator-maven-plugin.version>7.26.0</openapi-generator-maven-plugin.version>
         <maven-remote-resources-plugin.version>3.3.0</maven-remote-resources-plugin.version>
