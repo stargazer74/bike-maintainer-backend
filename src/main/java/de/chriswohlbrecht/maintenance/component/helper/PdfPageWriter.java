@@ -147,34 +147,48 @@ final class PdfPageWriter {
      */
     void writeTableRow(List<PdfCell> cells, float[] widths, PdfFont style, float fontSize, boolean header)
             throws IOException {
+        ensureSpace(TABLE_ROW_HEIGHT);
+        drawTableRow(yPosition + LEADING - 4f, TABLE_ROW_HEIGHT, cells, widths, style, fontSize, header);
+        yPosition -= TABLE_ROW_HEIGHT;
+    }
+
+    /**
+     * Like {@link #writeTableRow}, but at a fixed position: {@code top} is measured from the top edge of the page.
+     * Does not move the current position.
+     */
+    void writeTableRowAt(float top, float height, List<PdfCell> cells, float[] widths, PdfFont style, float fontSize,
+                         boolean header) throws IOException {
+        drawTableRow(pageHeight - top, height, cells, widths, style, fontSize, header);
+    }
+
+    private void drawTableRow(float top, float rowHeight, List<PdfCell> cells, float[] widths, PdfFont style,
+                              float fontSize, boolean header) throws IOException {
         if (cells.size() != widths.length) {
             throw new IllegalArgumentException("Expected " + widths.length + " cells, got " + cells.size());
         }
         PDFont font = font(style);
-        ensureSpace(TABLE_ROW_HEIGHT);
-        float top = yPosition + LEADING - 4f;
-        float bottom = top - TABLE_ROW_HEIGHT;
+        float bottom = top - rowHeight;
         float contentWidth = pageWidth - 2 * MARGIN;
         float x = MARGIN;
         for (int index = 0; index < cells.size(); index++) {
             float cellWidth = contentWidth * widths[index];
             if (header) {
                 setColor(HEADER_FILL);
-                contentStream.addRect(x, bottom, cellWidth, TABLE_ROW_HEIGHT);
+                contentStream.addRect(x, bottom, cellWidth, rowHeight);
                 contentStream.fill();
                 setColor(TEXT_COLOR);
             }
             contentStream.setStrokingColor(RULE_COLOR[0], RULE_COLOR[1], RULE_COLOR[2]);
             contentStream.setLineWidth(0.5f);
-            contentStream.addRect(x, bottom, cellWidth, TABLE_ROW_HEIGHT);
+            contentStream.addRect(x, bottom, cellWidth, rowHeight);
             contentStream.stroke();
             contentStream.setStrokingColor(0f, 0f, 0f);
             PdfCell cell = cells.get(index);
-            float baseline = bottom + (TABLE_ROW_HEIGHT - fontSize * 0.7f) / 2;
+            float baseline = bottom + (rowHeight - fontSize * 0.7f) / 2;
             if (cell.box()) {
                 contentStream.setLineWidth(0.8f);
                 float boxX = x + (cellWidth - CHECKBOX_SIZE) / 2;
-                float boxY = bottom + (TABLE_ROW_HEIGHT - CHECKBOX_SIZE) / 2;
+                float boxY = bottom + (rowHeight - CHECKBOX_SIZE) / 2;
                 contentStream.addRect(boxX, boxY, CHECKBOX_SIZE, CHECKBOX_SIZE);
                 contentStream.stroke();
             } else if (cell.text() != null && !cell.text().isEmpty()) {
@@ -183,7 +197,45 @@ final class PdfPageWriter {
             }
             x += cellWidth;
         }
-        yPosition -= TABLE_ROW_HEIGHT;
+    }
+
+    /** Starts a new page; the current position is the top of its content. */
+    void newPage() throws IOException {
+        startNewPage();
+    }
+
+    /** Moves the current position to the baseline {@code top} points below the top edge of the page. */
+    void moveTo(float top) {
+        yPosition = pageHeight - top;
+    }
+
+    /**
+     * Text on one line at a fixed position ({@code baseline} measured from the top edge of the page), shortened to
+     * {@code maxWidth}.
+     */
+    void writeTextAt(String text, PdfFont style, float fontSize, float x, float baseline, float maxWidth,
+                     boolean muted) throws IOException {
+        PDFont font = font(style);
+        setColor(muted ? MUTED_COLOR : TEXT_COLOR);
+        showText(fit(sanitize(text, font), font, fontSize, maxWidth), font, fontSize, x, pageHeight - baseline);
+        setColor(TEXT_COLOR);
+    }
+
+    /** A filled black rectangle, {@code top} measured from the top edge of the page. */
+    void fillRect(float left, float top, float width, float height) throws IOException {
+        contentStream.setNonStrokingColor(0f, 0f, 0f);
+        contentStream.addRect(left, pageHeight - top - height, width, height);
+        contentStream.fill();
+        setColor(TEXT_COLOR);
+    }
+
+    /** The outline of a rectangle in dark grey, {@code top} measured from the top edge of the page. */
+    void strokeRect(float left, float top, float width, float height, float lineWidth) throws IOException {
+        contentStream.setStrokingColor(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
+        contentStream.setLineWidth(lineWidth);
+        contentStream.addRect(left, pageHeight - top - height, width, height);
+        contentStream.stroke();
+        contentStream.setStrokingColor(0f, 0f, 0f);
     }
 
     /** Half an empty line. */
