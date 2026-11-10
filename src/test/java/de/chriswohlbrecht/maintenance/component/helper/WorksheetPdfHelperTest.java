@@ -2,6 +2,8 @@ package de.chriswohlbrecht.maintenance.component.helper;
 
 import de.chriswohlbrecht.maintenance.api.model.WorksheetTemplate;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
+import de.chriswohlbrecht.maintenance.persistence.model.VehicleSpecification;
+import de.chriswohlbrecht.maintenance.persistence.type.ValveKind;
 import de.chriswohlbrecht.maintenance.persistence.type.VehicleType;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -12,8 +14,10 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,8 +31,7 @@ class WorksheetPdfHelperTest {
 
     @Test
     void valveClearance_german_showsHeaderTablePerCylinderAndFillInFields() throws IOException {
-        String text = text(helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(4, 4),
-                PRINTED, Locale.GERMANY));
+        String text = text(helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(4, 4), WorksheetPrefill.none(), PRINTED, Locale.GERMANY));
 
         assertThat(text)
                 .contains("Arbeitsblatt Ventilspiel")
@@ -58,8 +61,7 @@ class WorksheetPdfHelperTest {
 
     @Test
     void valveClearance_twoValves_oneIntakeAndOneExhaustWithoutNumbers() throws IOException {
-        String text = text(helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(1, 2),
-                PRINTED, Locale.GERMANY));
+        String text = text(helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(1, 2), WorksheetPrefill.none(), PRINTED, Locale.GERMANY));
 
         assertThat(count(text, "Einlass")).isEqualTo(1);
         assertThat(count(text, "Auslass")).isEqualTo(1);
@@ -68,8 +70,7 @@ class WorksheetPdfHelperTest {
 
     @Test
     void valveClearance_threeValves_twoIntakesAndOneExhaust() throws IOException {
-        String text = text(helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(1, 3),
-                PRINTED, Locale.GERMANY));
+        String text = text(helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(1, 3), WorksheetPrefill.none(), PRINTED, Locale.GERMANY));
 
         assertThat(text).contains("Einlass 1").contains("Einlass 2").doesNotContain("Auslass 1");
         assertThat(count(text, "Auslass")).isEqualTo(1);
@@ -77,7 +78,7 @@ class WorksheetPdfHelperTest {
 
     @Test
     void valveClearance_eightCylinders_breaksPagesWithoutSplittingACylinder() throws IOException {
-        byte[] pdf = helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(8, 4), PRINTED,
+        byte[] pdf = helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(8, 4), WorksheetPrefill.none(), PRINTED,
                 Locale.GERMANY);
 
         try (PDDocument document = Loader.loadPDF(pdf)) {
@@ -97,7 +98,7 @@ class WorksheetPdfHelperTest {
 
     @Test
     void brakes_german_frontRearAndBrakeFluid() throws IOException {
-        String text = text(helper.generate(vehicle(), WorksheetTemplate.BRAKES, null, PRINTED, Locale.GERMANY));
+        String text = text(helper.generate(vehicle(), WorksheetTemplate.BRAKES, null, WorksheetPrefill.none(), PRINTED, Locale.GERMANY));
 
         assertThat(text)
                 .contains("Arbeitsblatt Bremsen")
@@ -114,7 +115,7 @@ class WorksheetPdfHelperTest {
 
     @Test
     void chain_german_measurementConditionAndBoxes() throws IOException {
-        String text = text(helper.generate(vehicle(), WorksheetTemplate.CHAIN, null, PRINTED, Locale.GERMANY));
+        String text = text(helper.generate(vehicle(), WorksheetTemplate.CHAIN, null, WorksheetPrefill.none(), PRINTED, Locale.GERMANY));
 
         assertThat(text)
                 .contains("Arbeitsblatt Kette")
@@ -128,7 +129,7 @@ class WorksheetPdfHelperTest {
 
     @Test
     void tires_english_usesEnglishTexts() throws IOException {
-        String text = text(helper.generate(vehicle(), WorksheetTemplate.TIRES, null, PRINTED, Locale.UK));
+        String text = text(helper.generate(vehicle(), WorksheetTemplate.TIRES, null, WorksheetPrefill.none(), PRINTED, Locale.UK));
 
         assertThat(text)
                 .contains("Worksheet tyres")
@@ -144,12 +145,53 @@ class WorksheetPdfHelperTest {
     @ParameterizedTest
     @EnumSource(WorksheetTemplate.class)
     void everyTemplateFitsOnePageAndShowsTheFillInFields(WorksheetTemplate template) throws IOException {
-        byte[] pdf = helper.generate(vehicle(), template, new ValveLayout(2, 4), PRINTED, Locale.GERMANY);
+        byte[] pdf = helper.generate(vehicle(), template, new ValveLayout(2, 4), WorksheetPrefill.none(), PRINTED, Locale.GERMANY);
 
         try (PDDocument document = Loader.loadPDF(pdf)) {
             assertThat(document.getNumberOfPages()).isEqualTo(1);
         }
         assertThat(text(pdf)).contains("Erledigt von:");
+    }
+
+    @Test
+    void valveClearance_prefilledWithTargetsAndInstalledShims() throws IOException {
+        VehicleSpecification spec = VehicleSpecification.builder()
+                .intakeClearanceMin(new BigDecimal("0.10")).intakeClearanceMax(new BigDecimal("0.15"))
+                .exhaustClearanceMin(new BigDecimal("0.20")).exhaustClearanceMax(new BigDecimal("0.25"))
+                .build();
+        WorksheetPrefill prefill = new WorksheetPrefill(spec, Map.of(
+                new WorksheetPrefill.Valve(1, ValveKind.INTAKE, 1), new BigDecimal("1.725"),
+                new WorksheetPrefill.Valve(2, ValveKind.EXHAUST, 1), new BigDecimal("2.000")));
+
+        String text = text(helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(2, 2),
+                prefill, PRINTED, Locale.GERMANY));
+
+        assertThat(count(text, "0,10\u20130,15")).isEqualTo(2);
+        assertThat(count(text, "0,20\u20130,25")).isEqualTo(2);
+        assertThat(text).contains("1,725").contains("2,00");
+    }
+
+    @Test
+    void brakesChainAndTires_showTheStoredLimits() throws IOException {
+        VehicleSpecification spec = VehicleSpecification.builder()
+                .brakePadMinFront(new BigDecimal("1.5")).brakeDiscMinRear(new BigDecimal("4.5"))
+                .chainSlackMin(new BigDecimal("25")).chainSlackMax(new BigDecimal("35"))
+                .chainWearLinks(20).chainWearMaxLength(new BigDecimal("319"))
+                .tirePressureFront(new BigDecimal("2.5")).treadDepthMin(new BigDecimal("1.6"))
+                .build();
+        WorksheetPrefill prefill = new WorksheetPrefill(spec, Map.of());
+
+        String brakes = text(helper.generate(vehicle(), WorksheetTemplate.BRAKES, null, prefill, PRINTED,
+                Locale.GERMANY));
+        String chain = text(helper.generate(vehicle(), WorksheetTemplate.CHAIN, null, prefill, PRINTED,
+                Locale.GERMANY));
+        String tires = text(helper.generate(vehicle(), WorksheetTemplate.TIRES, null, prefill, PRINTED, Locale.UK));
+
+        assertThat(brakes).contains("min. 1,50").contains("min. 4,50");
+        assertThat(chain).contains("25,00\u201335,00").contains("max. 319,00").contains("Länge über 20 Glieder (mm)")
+                .doesNotContain("___");
+        assertThat(tires).contains("2.50").contains("min. 1.60");
+        assertThat(count(tires, "min. 1.60")).isEqualTo(2);
     }
 
     @Test

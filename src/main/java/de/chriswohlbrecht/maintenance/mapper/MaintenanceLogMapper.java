@@ -28,6 +28,7 @@ public interface MaintenanceLogMapper {
     @Mapping(target = "performedTaskIds", ignore = true)
     @Mapping(target = "materials", ignore = true)
     @Mapping(target = "totalCost", ignore = true)
+    @Mapping(target = "measurements", ignore = true)
     MaintenanceLogResponse toResponse(MaintenanceLog log);
 
     @Mapping(target = "id", ignore = true)

@@ -41,6 +41,27 @@ public class ResponseAssertionSteps {
         assertThat(node.get(field).asText()).isEqualTo(scenarioContext.resolvePath(expectedValue));
     }
 
+    /** JSON pointer into the body, e.g. {@code /measurements/brakes/padFront}; numbers are compared by value. */
+    @Then("the JSON response value at {string} equals {string}")
+    public void theJsonResponseValueAtEquals(String pointer, String expectedValue) {
+        JsonNode body = parseLastResponseBody();
+        JsonNode node = body.at(pointer);
+        assertThat(node.isMissingNode() || node.isNull()).as("value at \"%s\" in %s", pointer, body).isFalse();
+        String expected = scenarioContext.resolvePath(expectedValue);
+        if (node.isNumber()) {
+            assertThat(node.decimalValue()).as("value at \"%s\"", pointer).isEqualByComparingTo(expected);
+        } else {
+            assertThat(node.asText()).as("value at \"%s\"", pointer).isEqualTo(expected);
+        }
+    }
+
+    @Then("the JSON response has no value at {string}")
+    public void theJsonResponseHasNoValueAt(String pointer) {
+        JsonNode body = parseLastResponseBody();
+        JsonNode node = body.at(pointer);
+        assertThat(node.isMissingNode() || node.isNull()).as("value at \"%s\" in %s", pointer, body).isTrue();
+    }
+
     /** Missing or {@code null} – optional fields of the generated models are serialized as {@code null}. */
     @Then("the JSON response field {string} is empty")
     public void theJsonResponseFieldIsEmpty(String field) {

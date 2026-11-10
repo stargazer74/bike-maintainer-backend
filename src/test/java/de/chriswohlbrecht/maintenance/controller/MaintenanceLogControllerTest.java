@@ -127,7 +127,7 @@ class MaintenanceLogControllerTest {
     void testCreateMaintenanceLogWithKnownVehicleIdShouldReturnCreatedResponse() throws Exception {
         // mileageAtPerformed is overridden because of the @Min(0) constraint; Instancio's default
         // Integer range may otherwise produce a negative value and fail bean validation.
-        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
+        MaintenanceLogRequest request = logRequest().mileageAtPerformed(12000);
         MaintenanceLogResponse response = Instancio.create(MaintenanceLogResponse.class).id(20L).vehicleId(1L);
         when(maintenanceLogComponent.createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class)))
                 .thenReturn(Optional.of(response));
@@ -149,7 +149,7 @@ class MaintenanceLogControllerTest {
      */
     @Test
     void testCreateMaintenanceLogWithUnknownVehicleIdShouldReturnNotFound() throws Exception {
-        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
+        MaintenanceLogRequest request = logRequest().mileageAtPerformed(12000);
         when(maintenanceLogComponent.createMaintenanceLog(eq(99L), any(MaintenanceLogRequest.class)))
                 .thenReturn(Optional.empty());
 
@@ -169,7 +169,7 @@ class MaintenanceLogControllerTest {
      */
     @Test
     void testCreateMaintenanceLogWithInvalidTaskIdShouldReturnBadRequest() throws Exception {
-        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+        MaintenanceLogRequest request = logRequest()
                 .mileageAtPerformed(12000)
                 .performedTaskIds(Set.of(999L));
         when(maintenanceLogComponent.createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class)))
@@ -191,7 +191,7 @@ class MaintenanceLogControllerTest {
      */
     @Test
     void testCreateMaintenanceLogWithNegativeMileageShouldReturnBadRequest() throws Exception {
-        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+        MaintenanceLogRequest request = logRequest()
                 .mileageAtPerformed(-100);
 
         mockMvc.perform(post(MaintenanceLogsApi.PATH_CREATE_MAINTENANCE_LOG, 1L)
@@ -210,7 +210,7 @@ class MaintenanceLogControllerTest {
      */
     @Test
     void testCreateMaintenanceLogWithTooLongNotesShouldReturnBadRequest() throws Exception {
-        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class)
+        MaintenanceLogRequest request = logRequest()
                 .mileageAtPerformed(12000)
                 .notes("a".repeat(1001)); // maxLength is 1000
 
@@ -230,7 +230,7 @@ class MaintenanceLogControllerTest {
      */
     @Test
     void testUpdateMaintenanceLogWithKnownIdShouldReturnOkResponse() throws Exception {
-        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
+        MaintenanceLogRequest request = logRequest().mileageAtPerformed(12000);
         MaintenanceLogResponse response = Instancio.create(MaintenanceLogResponse.class).id(20L).vehicleId(1L);
         when(maintenanceLogComponent.updateMaintenanceLog(eq(1L), eq(20L), any(MaintenanceLogRequest.class)))
                 .thenReturn(Optional.of(response));
@@ -252,7 +252,7 @@ class MaintenanceLogControllerTest {
      */
     @Test
     void testUpdateMaintenanceLogWithUnknownIdShouldReturnNotFound() throws Exception {
-        MaintenanceLogRequest request = Instancio.create(MaintenanceLogRequest.class).mileageAtPerformed(12000);
+        MaintenanceLogRequest request = logRequest().mileageAtPerformed(12000);
         when(maintenanceLogComponent.updateMaintenanceLog(eq(1L), eq(99L), any(MaintenanceLogRequest.class)))
                 .thenReturn(Optional.empty());
 
@@ -359,5 +359,10 @@ class MaintenanceLogControllerTest {
                 .andDo(MockMvcResultHandlers.print());
 
         verify(maintenanceLogComponent, times(1)).generateMaintenanceReport(99L, null);
+    }
+
+    /** Random filler request; measurements are left out because random values break their bean validation. */
+    private static MaintenanceLogRequest logRequest() {
+        return Instancio.create(MaintenanceLogRequest.class).measurements(null);
     }
 }

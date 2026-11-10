@@ -5,6 +5,7 @@ import de.chriswohlbrecht.maintenance.api.model.Currency;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceMaterialRequest;
+import de.chriswohlbrecht.maintenance.api.model.MaintenanceMeasurementsResponse;
 import de.chriswohlbrecht.maintenance.api.model.NewMaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceCostHelper;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportEntry;
@@ -61,6 +62,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     private final MaintenanceCostHelper maintenanceCostHelper;
     private final IUserLocaleComponent userLocaleComponent;
     private final ICurrentUserComponent currentUserComponent;
+    private final IMeasurementComponent measurementComponent;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
 
@@ -75,9 +77,13 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     @Override
     public Optional<List<MaintenanceLogResponse>> listMaintenanceLogs(Long vehicleId) {
         return findOwnVehicle(vehicleId)
-                .map(vehicle -> maintenanceLogRepository.findAllByVehicle_Id(vehicleId).stream()
-                        .map(this::toResponse)
-                        .toList());
+                .map(vehicle -> {
+                    Map<Long, MaintenanceMeasurementsResponse> measurements =
+                            measurementComponent.measurementsByLog(vehicleId);
+                    return maintenanceLogRepository.findAllByVehicle_Id(vehicleId).stream()
+                            .map(log -> toResponse(log, measurements.get(log.getId())))
+                            .toList();
+                });
     }
 
     @Override
@@ -99,6 +105,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
             log.setCurrency(currentUserComponent.getCurrentUser().getCurrency());
             MaintenanceLog savedLog = maintenanceLogRepository.save(log);
             saveMaterials(savedLog, materials);
+            measurementComponent.replaceMeasurements(savedLog, request.getMeasurements());
             performedTasks.addAll(createNewTasks(vehicle, request));
             linkTasks(savedLog, performedTasks);
             return toResponse(savedLog);
@@ -118,6 +125,8 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
                     MaintenanceLog savedLog = maintenanceLogRepository.save(log);
                     maintenanceLogMaterialRepository.deleteAllByLog_Id(savedLog.getId());
                     saveMaterials(savedLog, materials);
+                    // Left out: the measurements stay as they are (older clients do not know them).
+                    measurementComponent.replaceMeasurements(savedLog, request.getMeasurements());
                     maintenanceLogTaskRepository.deleteAllByLog_Id(savedLog.getId());
                     performedTasks.addAll(createNewTasks(log.getVehicle(), request));
                     linkTasks(savedLog, performedTasks);
@@ -340,6 +349,10 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     }
 
     private MaintenanceLogResponse toResponse(MaintenanceLog log) {
+        return toResponse(log, measurementComponent.measurementsOf(log));
+    }
+
+    private MaintenanceLogResponse toResponse(MaintenanceLog log, MaintenanceMeasurementsResponse measurements) {
         List<Long> performedTaskIds = maintenanceLogTaskRepository.findAllByLog_Id(log.getId()).stream()
                 .map(link -> link.getTask().getId())
                 .toList();
@@ -348,7 +361,8 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
         return maintenanceLogMapper.toResponse(log)
                 .performedTaskIds(performedTaskIds)
                 .materials(materials.stream().map(maintenanceLogMapper::toMaterialResponse).toList())
-                .totalCost(maintenanceCostHelper.totalCost(materials, log.getLaborCost()));
+                .totalCost(maintenanceCostHelper.totalCost(materials, log.getLaborCost()))
+                .measurements(measurements);
     }
 
     /** Vehicles of other users are treated like non-existent ones (404), so foreign ids cannot be probed. */
