@@ -1,0 +1,7 @@
+# Accepted exceptions of the Trivy gate in .github/workflows/ci.yml – each with a reason and an expiry date, so it is
+# looked at again.
+
+# apt/libapt-pkg (CVE-2026-109518, HIGH): Trivy lists the fix 2.8.4ubuntu0.1, but Ubuntu Noble does not ship it yet –
+# apt-get upgrade in the Dockerfile finds nothing to upgrade (CI 2026-11-11). apt is only used while building the image;
+# the running application never calls it. Remove once the base image or the upgrade step brings the fix.
+CVE-2026-109518 exp:2026-11-25
