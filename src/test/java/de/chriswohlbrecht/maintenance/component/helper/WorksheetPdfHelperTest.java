@@ -65,6 +65,17 @@ class WorksheetPdfHelperTest {
         assertThat(count(text, "Auslass 2")).isEqualTo(4);
     }
 
+    @ParameterizedTest
+    @EnumSource(WorksheetTemplate.class)
+    void everyTemplate_footerShowsTheWebsiteInBothLanguages(WorksheetTemplate template) throws IOException {
+        ValveLayout valves = new ValveLayout(4, 4);
+
+        assertThat(text(helper.generate(vehicle(), template, valves, WorksheetPrefill.none(), PRINTED, Locale.GERMANY)))
+                .contains("Erstellt mit Bike Maintainer · www.bike-maintainer.de · am 10.11.2026");
+        assertThat(text(helper.generate(vehicle(), template, valves, WorksheetPrefill.none(), PRINTED, Locale.UK)))
+                .contains("Created with Bike Maintainer · www.bike-maintainer.de · on 10 Nov 2026");
+    }
+
     @Test
     void valveClearance_twoValves_oneIntakeAndOneExhaustWithoutNumbers() throws IOException {
         String text = text(helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(1, 2), WorksheetPrefill.none(), PRINTED, Locale.GERMANY));

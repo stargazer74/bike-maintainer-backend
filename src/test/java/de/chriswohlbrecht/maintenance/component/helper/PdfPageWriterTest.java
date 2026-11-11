@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PdfPageWriterTest {
 
     private static final PdfFrame FRAME = new PdfFrame("Wartungshistorie", "Die Rote",
-            "Erstellt mit Bike Maintainer am 30.10.2026", (page, total) -> "Seite " + page + " von " + total);
+            "Erstellt mit Bike Maintainer · www.bike-maintainer.de · am 30.10.2026", (page, total) -> "Seite " + page + " von " + total);
 
     @Test
     void keepsCharactersOfTheEmbeddedFontAndReplacesOnlyMissingOnes() throws IOException {
@@ -111,7 +111,7 @@ class PdfPageWriterTest {
                         .contains("Bike Maintainer")
                         .contains("Wartungshistorie")
                         .contains("Die Rote")
-                        .contains("Erstellt mit Bike Maintainer am 30.10.2026")
+                        .contains("Erstellt mit Bike Maintainer · www.bike-maintainer.de · am 30.10.2026")
                         .contains("Seite " + page + " von " + total);
             }
         }
@@ -186,6 +186,21 @@ class PdfPageWriterTest {
                 "A‎B‏C‮D⁦E⁩F G H I", PdfFont.TEXT, 11f));
 
         assertThat(text).contains("ABCDEF G H I").doesNotContain("?");
+    }
+
+    @Test
+    void showsTheWholeCreationNoteWithWebsiteNextToATwoDigitPageLabel() throws IOException {
+        // Long English date and a two-digit page count: the note with the address still fits in full.
+        PdfFrame frame = new PdfFrame("Maintenance history", "Die Rote",
+                "Created with Bike Maintainer · www.bike-maintainer.de · on 30 September 2026",
+                (page, total) -> "Page " + page + " of 12");
+
+        String text = render(frame, writer -> writer.writeLine("Inhalt", PdfFont.TEXT, 11f));
+
+        assertThat(text)
+                .contains("Created with Bike Maintainer · www.bike-maintainer.de · on 30 September 2026")
+                .contains("Page 1 of 12")
+                .doesNotContain("\u2026");
     }
 
     @Test
