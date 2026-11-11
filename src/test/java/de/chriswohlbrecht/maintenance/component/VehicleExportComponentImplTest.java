@@ -136,6 +136,25 @@ class VehicleExportComponentImplTest {
     }
 
     @Test
+    void exportVehicle_furtherWorkIsReferencedByTheLogThatCreatedIt() {
+        when(vehicleComponent.getVehicle(VEHICLE_ID)).thenReturn(Optional.of(vehicle()));
+        when(maintenanceTaskComponent.listMaintenanceTasks(VEHICLE_ID)).thenReturn(Optional.of(List.of(
+                new MaintenanceTaskResponse().id(7L).name("Spiegel ersetzt").oneTime(true).createdByLogId(3L),
+                new MaintenanceTaskResponse().id(8L).name("Geplant").oneTime(true))));
+        when(maintenanceLogComponent.listMaintenanceLogs(VEHICLE_ID)).thenReturn(Optional.of(List.of(
+                new MaintenanceLogResponse().id(3L).performedAt(LocalDate.of(2026, 3, 1)).mileageAtPerformed(8000)
+                        .currency(Currency.EUR).performedTaskIds(List.of(7L, 8L)),
+                new MaintenanceLogResponse().id(4L).performedAt(LocalDate.of(2026, 4, 1)).mileageAtPerformed(9000)
+                        .currency(Currency.EUR))));
+        when(measurementComponent.getVehicleSpecifications(VEHICLE_ID)).thenReturn(Optional.empty());
+
+        ExportedVehicle exported = component.exportVehicle(VEHICLE_ID).orElseThrow().content().getVehicle();
+
+        assertThat(exported.getMaintenanceLogs()).extracting(ExportedMaintenanceLog::getCreatedTaskRefs)
+                .containsExactly(Set.of("t1"), null);
+    }
+
+    @Test
     void exportVehicle_withoutTargetValues_leavesThemOut() {
         when(vehicleComponent.getVehicle(VEHICLE_ID)).thenReturn(Optional.of(vehicle()));
         when(maintenanceTaskComponent.listMaintenanceTasks(VEHICLE_ID)).thenReturn(Optional.of(List.of()));
@@ -192,10 +211,56 @@ class VehicleExportComponentImplTest {
         assertThat(taskRequests.getAllValues()).extracting(MaintenanceTaskRequest::getName)
                 .containsExactly("Oel", "Kette");
         ArgumentCaptor<MaintenanceLogRequest> logRequest = ArgumentCaptor.forClass(MaintenanceLogRequest.class);
-        verify(maintenanceLogComponent).createMaintenanceLog(eq(VEHICLE_ID), logRequest.capture(), eq(Currency.CHF));
+        verify(maintenanceLogComponent).createMaintenanceLog(eq(VEHICLE_ID), logRequest.capture(), eq(Currency.CHF),
+                eq(Set.of()));
         assertThat(logRequest.getValue().getPerformedTaskIds()).containsExactly(102L, 101L);
         assertThat(logRequest.getValue().getMaterials()).extracting(material -> material.getTaskId())
                 .containsExactly(101L, null);
+    }
+
+    @Test
+    void importVehicle_furtherWorkIsPassedAsCreatedByItsLog() {
+        ExportedVehicle vehicle = exportedVehicle()
+                .maintenanceTasks(List.of(
+                        new ExportedMaintenanceTask().ref("mirror").name("Spiegel ersetzt").oneTime(true),
+                        new ExportedMaintenanceTask().ref("planned").name("Geplant").oneTime(true)))
+                .maintenanceLogs(List.of(new ExportedMaintenanceLog()
+                        .performedAt(LocalDate.of(2026, 4, 1)).mileageAtPerformed(18000).currency(Currency.EUR)
+                        .performedTaskRefs(new LinkedHashSet<>(List.of("mirror", "planned")))
+                        .createdTaskRefs(Set.of("mirror"))));
+        when(vehicleComponent.createVehicle(any())).thenReturn(new VehicleResponse().id(VEHICLE_ID));
+        when(maintenanceTaskComponent.createMaintenanceTask(eq(VEHICLE_ID), any()))
+                .thenReturn(Optional.of(new MaintenanceTaskResponse().id(101L)))
+                .thenReturn(Optional.of(new MaintenanceTaskResponse().id(102L)));
+
+        component.importVehicle(file(vehicle));
+
+        verify(maintenanceLogComponent).createMaintenanceLog(eq(VEHICLE_ID), any(), eq(Currency.EUR),
+                eq(Set.of(101L)));
+    }
+
+    @Test
+    void importVehicle_withBrokenFurtherWork_reportsAllOfThemAndCreatesNothing() {
+        ExportedVehicle vehicle = exportedVehicle()
+                .maintenanceTasks(List.of(
+                        new ExportedMaintenanceTask().ref("mirror").name("Spiegel ersetzt").oneTime(true),
+                        new ExportedMaintenanceTask().ref("chain").name("Kette").intervalKm(1000)))
+                .maintenanceLogs(List.of(
+                        new ExportedMaintenanceLog().performedAt(LocalDate.of(2026, 1, 1)).mileageAtPerformed(50)
+                                .currency(Currency.EUR)
+                                .performedTaskRefs(new LinkedHashSet<>(List.of("mirror", "chain")))
+                                .createdTaskRefs(new LinkedHashSet<>(List.of("mirror", "chain"))),
+                        new ExportedMaintenanceLog().performedAt(LocalDate.of(2026, 2, 1)).mileageAtPerformed(60)
+                                .currency(Currency.EUR)
+                                .performedTaskRefs(Set.of("mirror"))
+                                .createdTaskRefs(new LinkedHashSet<>(List.of("mirror", "other")))));
+
+        assertThatThrownBy(() -> component.importVehicle(file(vehicle)))
+                .isInstanceOfSatisfying(ImportInvalidException.class, e -> assertThat(e.getDetails()).containsExactly(
+                        "vehicle.maintenanceLogs[0].createdTaskRefs: task \"chain\" is not a one-time task",
+                        "vehicle.maintenanceLogs[1].createdTaskRefs: task \"mirror\" is already created by another log",
+                        "vehicle.maintenanceLogs[1].createdTaskRefs: task \"other\" is not performed by this log"));
+        verifyNoInteractions(vehicleComponent);
     }
 
     @Test
@@ -238,7 +303,7 @@ class VehicleExportComponentImplTest {
         assertThatThrownBy(() -> component.importVehicle(file(vehicle)))
                 .isInstanceOfSatisfying(ImportInvalidException.class, e -> assertThat(e.getDetails())
                         .containsExactly("vehicle.maintenanceTasks[0]: no interval"));
-        verify(maintenanceLogComponent, never()).createMaintenanceLog(any(), any(), any());
+        verify(maintenanceLogComponent, never()).createMaintenanceLog(any(), any(), any(), any());
     }
 
     @Test
@@ -247,7 +312,7 @@ class VehicleExportComponentImplTest {
                 new ExportedMaintenanceLog().performedAt(LocalDate.of(2026, 1, 1)).mileageAtPerformed(5)
                         .currency(Currency.EUR)));
         when(vehicleComponent.createVehicle(any())).thenReturn(new VehicleResponse().id(VEHICLE_ID));
-        when(maintenanceLogComponent.createMaintenanceLog(eq(VEHICLE_ID), any(), eq(Currency.EUR)))
+        when(maintenanceLogComponent.createMaintenanceLog(eq(VEHICLE_ID), any(), eq(Currency.EUR), any()))
                 .thenThrow(new InvalidMaterialException("price must not have more than 2 decimal places"));
 
         assertThatThrownBy(() -> component.importVehicle(file(vehicle)))

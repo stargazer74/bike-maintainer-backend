@@ -66,17 +66,21 @@ public class VehicleExportComponentImpl implements IVehicleExportComponent {
                     .sorted(Comparator.comparing(MaintenanceTaskResponse::getId))
                     .toList();
             Map<Long, String> refs = new HashMap<>();
+            Map<Long, Set<String>> createdRefsByLog = new HashMap<>();
             List<ExportedMaintenanceTask> exportedTasks = new ArrayList<>();
             for (MaintenanceTaskResponse task : tasks) {
                 String ref = TASK_REF_PREFIX + (exportedTasks.size() + 1);
                 refs.put(task.getId(), ref);
+                if (task.getCreatedByLogId() != null) {
+                    createdRefsByLog.computeIfAbsent(task.getCreatedByLogId(), logId -> new LinkedHashSet<>()).add(ref);
+                }
                 exportedTasks.add(vehicleExportMapper.toExportedTask(task).ref(ref));
             }
             List<ExportedMaintenanceLog> exportedLogs = maintenanceLogComponent.listMaintenanceLogs(vehicleId)
                     .orElseThrow().stream()
                     .sorted(Comparator.comparing(MaintenanceLogResponse::getPerformedAt)
                             .thenComparing(MaintenanceLogResponse::getId))
-                    .map(log -> toExportedLog(log, refs))
+                    .map(log -> toExportedLog(log, refs, createdRefsByLog.get(log.getId())))
                     .toList();
 
             ExportedVehicle exportedVehicle = vehicleExportMapper.toExportedVehicle(vehicle)
@@ -122,8 +126,10 @@ public class VehicleExportComponentImpl implements IVehicleExportComponent {
         for (int i = 0; i < logs.size(); i++) {
             ExportedMaintenanceLog log = logs.get(i);
             MaintenanceLogRequest request = toLogRequest(log, taskIds);
-            at("vehicle.maintenanceLogs[" + i + "]",
-                    () -> maintenanceLogComponent.createMaintenanceLog(vehicleId, request, log.getCurrency()));
+            Set<Long> createdTaskIds = new LinkedHashSet<>();
+            orEmpty(log.getCreatedTaskRefs()).forEach(ref -> createdTaskIds.add(taskIds.get(ref)));
+            at("vehicle.maintenanceLogs[" + i + "]", () -> maintenanceLogComponent
+                    .createMaintenanceLog(vehicleId, request, log.getCurrency(), createdTaskIds));
         }
         return created;
     }
@@ -135,7 +141,9 @@ public class VehicleExportComponentImpl implements IVehicleExportComponent {
                 .orElse(null);
     }
 
-    private ExportedMaintenanceLog toExportedLog(MaintenanceLogResponse log, Map<Long, String> refs) {
+    /** {@code createdTaskRefs} is {@code null} for a log without further work, so the file does not carry an empty list. */
+    private ExportedMaintenanceLog toExportedLog(MaintenanceLogResponse log, Map<Long, String> refs,
+                                                 Set<String> createdTaskRefs) {
         Set<String> performedTaskRefs = new LinkedHashSet<>();
         orEmpty(log.getPerformedTaskIds()).stream().sorted().map(refs::get).forEach(performedTaskRefs::add);
         List<ExportedMaintenanceMaterial> materials = orEmpty(log.getMaterials()).stream()
@@ -144,6 +152,7 @@ public class VehicleExportComponentImpl implements IVehicleExportComponent {
                 .toList();
         return vehicleExportMapper.toExportedLog(log)
                 .performedTaskRefs(performedTaskRefs)
+                .createdTaskRefs(createdTaskRefs)
                 .materials(materials);
     }
 
@@ -161,22 +170,38 @@ public class VehicleExportComponentImpl implements IVehicleExportComponent {
 
     /**
      * The references inside the file, all problems at once: every {@code ref} only once, logs refer to known tasks,
-     * a material only to a task its log performed.
+     * a material only to a task its log performed, further work only to a one-time task its log performed and no
+     * other log created.
      */
     private static void checkReferences(List<ExportedMaintenanceTask> tasks, List<ExportedMaintenanceLog> logs) {
         List<String> problems = new ArrayList<>();
         Set<String> refs = new HashSet<>();
+        Set<String> oneTimeRefs = new HashSet<>();
         for (int i = 0; i < tasks.size(); i++) {
             if (!refs.add(tasks.get(i).getRef())) {
                 problems.add("vehicle.maintenanceTasks[" + i + "].ref: duplicate ref \"" + tasks.get(i).getRef() + "\"");
             }
+            if (Boolean.TRUE.equals(tasks.get(i).getOneTime())) {
+                oneTimeRefs.add(tasks.get(i).getRef());
+            }
         }
+        Set<String> createdRefs = new HashSet<>();
         for (int i = 0; i < logs.size(); i++) {
             ExportedMaintenanceLog log = logs.get(i);
             Set<String> performed = orEmpty(log.getPerformedTaskRefs());
             for (String ref : performed) {
                 if (!refs.contains(ref)) {
                     problems.add("vehicle.maintenanceLogs[" + i + "].performedTaskRefs: unknown task ref \"" + ref + "\"");
+                }
+            }
+            for (String ref : orEmpty(log.getCreatedTaskRefs())) {
+                String location = "vehicle.maintenanceLogs[" + i + "].createdTaskRefs: task \"" + ref + "\" ";
+                if (!performed.contains(ref)) {
+                    problems.add(location + "is not performed by this log");
+                } else if (!oneTimeRefs.contains(ref)) {
+                    problems.add(location + "is not a one-time task");
+                } else if (!createdRefs.add(ref)) {
+                    problems.add(location + "is already created by another log");
                 }
             }
             List<ExportedMaintenanceMaterial> materials = orEmpty(log.getMaterials());

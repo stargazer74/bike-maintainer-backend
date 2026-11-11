@@ -97,13 +97,13 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     @Transactional
     public Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request) {
         return createMaintenanceLog(vehicleId, request,
-                Currency.fromValue(currentUserComponent.getCurrentUser().getCurrency()));
+                Currency.fromValue(currentUserComponent.getCurrentUser().getCurrency()), Set.of());
     }
 
     @Override
     @Transactional
     public Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request,
-                                                                 Currency currency) {
+                                                                 Currency currency, Set<Long> createdTaskIds) {
         return findOwnVehicle(vehicleId).map(vehicle -> {
             List<MaintenanceTask> performedTasks = existingTasks(vehicleId, request);
             List<MaintenanceLogMaterial> materials = materialsOf(request, performedTasks);
@@ -114,7 +114,10 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
             MaintenanceLog savedLog = maintenanceLogRepository.save(log);
             saveMaterials(savedLog, materials);
             measurementComponent.replaceMeasurements(savedLog, request.getMeasurements());
-            performedTasks.addAll(createNewTasks(vehicle, request));
+            performedTasks.stream()
+                    .filter(task -> createdTaskIds.contains(task.getId()))
+                    .forEach(task -> task.setCreatedByLogId(savedLog.getId()));
+            performedTasks.addAll(createNewTasks(vehicle, savedLog, request));
             linkTasks(savedLog, performedTasks);
             return toResponse(savedLog);
         });
@@ -135,9 +138,15 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
                     saveMaterials(savedLog, materials);
                     // Left out: the measurements stay as they are (older clients do not know them).
                     measurementComponent.replaceMeasurements(savedLog, request.getMeasurements());
+                    List<MaintenanceTask> previousTasks = linkedTasks(savedLog.getId());
                     maintenanceLogTaskRepository.deleteAllByLog_Id(savedLog.getId());
-                    performedTasks.addAll(createNewTasks(log.getVehicle(), request));
+                    performedTasks.addAll(createNewTasks(log.getVehicle(), savedLog, request));
                     linkTasks(savedLog, performedTasks);
+                    Set<Long> performedIds = performedTasks.stream()
+                            .map(MaintenanceTask::getId)
+                            .collect(Collectors.toSet());
+                    previousTasks.removeIf(task -> performedIds.contains(task.getId()));
+                    deleteUnusedFurtherWork(savedLog.getId(), previousTasks);
                     return toResponse(savedLog);
                 });
     }
@@ -148,8 +157,10 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
         return findOwnVehicle(vehicleId)
                 .flatMap(vehicle -> maintenanceLogRepository.findByIdAndVehicle_Id(logId, vehicleId))
                 .map(log -> {
+                    List<MaintenanceTask> tasks = linkedTasks(log.getId());
                     maintenanceLogMaterialRepository.deleteAllByLog_Id(log.getId());
                     maintenanceLogTaskRepository.deleteAllByLog_Id(log.getId());
+                    deleteUnusedFurtherWork(log.getId(), tasks);
                     maintenanceLogRepository.deleteById(log.getId());
                     return true;
                 })
@@ -307,7 +318,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
      * Work that was no task before becomes a task of the vehicle, performed by this log: one-time without an interval,
      * recurring with one (the log then counts as its first performance). Runs in the log's transaction.
      */
-    private List<MaintenanceTask> createNewTasks(Vehicle vehicle, MaintenanceLogRequest request) {
+    private List<MaintenanceTask> createNewTasks(Vehicle vehicle, MaintenanceLog log, MaintenanceLogRequest request) {
         if (request.getNewTasks() == null) {
             return List.of();
         }
@@ -322,9 +333,35 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
                     .intervalMonths(newTask.getIntervalMonths())
                     .oneTime(!recurring)
                     .active(true)
+                    .createdByLogId(recurring ? null : log.getId())
                     .build()));
         }
         return created;
+    }
+
+    /** The tasks the log contains, as a mutable list. */
+    private List<MaintenanceTask> linkedTasks(Long logId) {
+        return maintenanceLogTaskRepository.findAllByLog_Id(logId).stream()
+                .map(MaintenanceLogTask::getTask)
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    /**
+     * Further work the log created and no longer contains (backend#127): deleted unless another log contains it, so it
+     * does not stay behind as pending. If another log contains it, it stays as a normal one-time task. Planned tasks
+     * are never deleted. The log's links must be gone already.
+     */
+    private void deleteUnusedFurtherWork(Long logId, List<MaintenanceTask> removedTasks) {
+        for (MaintenanceTask task : removedTasks) {
+            if (!task.isOneTime() || !logId.equals(task.getCreatedByLogId())) {
+                continue;
+            }
+            if (maintenanceLogTaskRepository.existsByTask_Id(task.getId())) {
+                task.setCreatedByLogId(null);
+            } else {
+                maintenanceTaskRepository.delete(task);
+            }
+        }
     }
 
     private void linkTasks(MaintenanceLog log, List<MaintenanceTask> tasks) {

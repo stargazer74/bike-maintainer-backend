@@ -37,7 +37,7 @@ class FlywayMigrationTest {
     void appliesAllMigrationsSuccessfully() {
         MigrationInfo[] appliedMigrations = flyway.info().applied();
 
-        assertThat(appliedMigrations).hasSize(10);
+        assertThat(appliedMigrations).hasSize(11);
         assertThat(appliedMigrations[0].getDescription()).isEqualTo("init schema");
         assertThat(appliedMigrations[0].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[1].getDescription()).isEqualTo("vehicle model year required");
@@ -58,6 +58,45 @@ class FlywayMigrationTest {
         assertThat(appliedMigrations[8].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[9].getDescription()).isEqualTo("measurements");
         assertThat(appliedMigrations[9].getState()).isEqualTo(MigrationState.SUCCESS);
+        assertThat(appliedMigrations[10].getDescription()).isEqualTo("further work origin");
+        assertThat(appliedMigrations[10].getState()).isEqualTo(MigrationState.SUCCESS);
+    }
+
+    /** V11 (backend#127): existing one-time tasks in exactly one log count as further work of that log. */
+    @Test
+    void assignsExistingOneTimeTasksInExactlyOneLogToThatLog() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(
+                "jdbc:h2:mem:migration-" + UUID.randomUUID() + ";MODE=MariaDB;DB_CLOSE_DELAY=-1", "sa", "");
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .placeholders(Map.of("initialAdminEmail", "admin@localhost"))
+                .target("10")
+                .load()
+                .migrate();
+        JdbcTemplate before = new JdbcTemplate(dataSource);
+        Long userId = before.queryForObject("SELECT id FROM app_user WHERE role = 'ADMIN'", Long.class);
+        before.update("INSERT INTO vehicle (id, name, type, model_year, first_registration_date, user_id)"
+                + " VALUES (1, 'Bike', 'MOTORCYCLE', 2020, DATE '2020-01-01', ?)", userId);
+        before.update("INSERT INTO maintenance_log (id, vehicle_id, performed_at, mileage_at_performed)"
+                + " VALUES (10, 1, DATE '2026-01-01', 100), (11, 1, DATE '2026-02-01', 200)");
+        // 1: further work of log 10; 2: one-time, in two logs; 3: one-time, in no log; 4: recurring, in one log.
+        before.update("INSERT INTO maintenance_task (id, vehicle_id, name, one_time, interval_km) VALUES"
+                + " (1, 1, 'Spiegel', TRUE, NULL), (2, 1, 'Zweimal', TRUE, NULL), (3, 1, 'Geplant', TRUE, NULL),"
+                + " (4, 1, 'Kette', FALSE, 1000)");
+        before.update("INSERT INTO maintenance_log_task (log_id, task_id) VALUES (10, 1), (10, 2), (11, 2), (11, 4)");
+
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .placeholders(Map.of("initialAdminEmail", "admin@localhost"))
+                .load()
+                .migrate();
+
+        List<Map<String, Object>> tasks = new JdbcTemplate(dataSource)
+                .queryForList("SELECT id, created_by_log_id FROM maintenance_task ORDER BY id");
+        assertThat(tasks).extracting(row -> row.get("CREATED_BY_LOG_ID"))
+                .containsExactly(10L, null, null, null);
     }
 
     @Test
