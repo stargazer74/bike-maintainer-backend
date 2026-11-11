@@ -65,6 +65,20 @@ Feature: Export a vehicle to a file and import it again (Epic #82)
     When a GET request is sent to "/api/v1/vehicles/{copy}/export"
     Then the JSON response value at "/vehicle" equals the one of the remembered file "original"
 
+  Scenario: Further work keeps the log that created it, also in a copy (backend#127)
+    Given a maintenance log "repair" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-08-01", "mileageAtPerformed": 20500, "newTasks": [ { "name": "Spiegel ersetzt" } ] }
+      """
+    And a GET request is sent to "/api/v1/vehicles/{bike}/export"
+    And the JSON response value at "/vehicle/maintenanceTasks/2/name" equals "Spiegel ersetzt"
+    And the JSON response value at "/vehicle/maintenanceLogs/2/createdTaskRefs/0" equals "t3"
+    And the JSON response has no value at "/vehicle/maintenanceLogs/0/createdTaskRefs"
+    And the response body is remembered as "original"
+    When the remembered file "original" is imported as vehicle "copy"
+    And a GET request is sent to "/api/v1/vehicles/{copy}/export"
+    Then the JSON response value at "/vehicle" equals the one of the remembered file "original"
+
   Scenario: The currency of each log is taken from the file, not from the importing user
     When a POST request is sent to "/api/v1/vehicles/import" with body:
       """

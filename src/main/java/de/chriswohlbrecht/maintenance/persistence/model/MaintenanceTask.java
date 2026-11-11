@@ -61,4 +61,11 @@ public class MaintenanceTask {
     @Builder.Default
     @Column(nullable = false)
     private boolean active = true;
+
+    /**
+     * Further work (backend#127): the log whose new work created this one-time task. It is deleted together with that
+     * log, or when removed from it, unless another log contains it. {@code null} for planned tasks.
+     */
+    @Column(name = "created_by_log_id")
+    private Long createdByLogId;
 }

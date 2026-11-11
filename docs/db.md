@@ -106,6 +106,7 @@ A maintenance plan item: a recurring (or one-time) job defined for one specific 
 | `first_due_months` | INT, nullable | First due time, analogous to `first_due_km` |
 | `one_time` | BOOLEAN | If true, the task is due exactly once (at `first_due_km`/`first_due_months`) and never recurs |
 | `active` | BOOLEAN | Soft on/off switch, so a task can be retired without deleting its history |
+| `created_by_log_id` | BIGINT, nullable, FK → `maintenance_log.id` (ON DELETE SET NULL) | Further work: the log whose new work created this one-time task. Deleting that log, or leaving the task out when the log is edited, deletes the task too unless another log contains it. Null for planned tasks |
 
 A task is due as soon as **either** its km or time threshold is reached — `current_mileage >= next_due_km` **or** today `>= next_due_date` — mirroring "whichever comes first" from a paper service schedule. `next_due_km`/`next_due_date` are not stored; they are derived from the task's most recent linked `maintenance_log` (via `maintenance_log_task`), or from `first_due_km`/`first_due_months` if no log exists yet.
 

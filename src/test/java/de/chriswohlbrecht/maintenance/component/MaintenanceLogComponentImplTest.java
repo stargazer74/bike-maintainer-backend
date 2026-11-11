@@ -1,5 +1,7 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import java.util.Arrays;
+import org.mockito.InOrder;
 import de.chriswohlbrecht.maintenance.api.model.CostSummaryEntry;
 import de.chriswohlbrecht.maintenance.api.model.Currency;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
@@ -59,6 +61,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.inOrder;
 
 @ExtendWith({MockitoExtension.class, InstancioExtension.class})
 class MaintenanceLogComponentImplTest {
@@ -279,6 +282,7 @@ class MaintenanceLogComponentImplTest {
                         tuple("Kette reinigen", false, 1000, null, true),
                         tuple("Luftfilter", false, null, 12, true));
         assertThat(savedTasks).allMatch(task -> task.getVehicle() == vehicle);
+        assertThat(savedTasks).extracting(MaintenanceTask::getCreatedByLogId).containsExactly(20L, null, null);
         assertThat(savedTasks.getFirst().getDescription()).isEqualTo("Stahlflex vorne");
         verify(maintenanceLogTaskRepository, times(3)).save(argThat(link -> link.getLog().getId() == 20L
                 && savedTasks.contains(link.getTask())));
@@ -448,6 +452,93 @@ class MaintenanceLogComponentImplTest {
         assertThat(result).isTrue();
         verify(maintenanceLogTaskRepository).deleteAllByLog_Id(log.getId());
         verify(maintenanceLogRepository).deleteById(log.getId());
+    }
+
+    @Test
+    void deleteMaintenanceLog_deletesOnlyItsUnusedFurtherWork() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLog log = eurLog();
+        log.setId(20L);
+        log.setVehicle(vehicle);
+        MaintenanceTask furtherWork = task(1L, true, 20L);
+        MaintenanceTask sharedFurtherWork = task(2L, true, 20L);
+        MaintenanceTask planned = task(3L, true, null);
+        MaintenanceTask recurring = task(4L, false, null);
+        MaintenanceTask otherLogsWork = task(5L, true, 21L);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findByIdAndVehicle_Id(20L, vehicle.getId())).thenReturn(Optional.of(log));
+        when(maintenanceLogTaskRepository.findAllByLog_Id(20L)).thenReturn(
+                links(log, furtherWork, sharedFurtherWork, planned, recurring, otherLogsWork));
+        when(maintenanceLogTaskRepository.existsByTask_Id(1L)).thenReturn(false);
+        when(maintenanceLogTaskRepository.existsByTask_Id(2L)).thenReturn(true);
+
+        assertThat(maintenanceLogComponent.deleteMaintenanceLog(vehicle.getId(), 20L)).isTrue();
+
+        InOrder order = inOrder(maintenanceLogTaskRepository, maintenanceTaskRepository, maintenanceLogRepository);
+        order.verify(maintenanceLogTaskRepository).deleteAllByLog_Id(20L);
+        order.verify(maintenanceTaskRepository).delete(furtherWork);
+        order.verify(maintenanceLogRepository).deleteById(20L);
+        verify(maintenanceTaskRepository, never()).delete(sharedFurtherWork);
+        verify(maintenanceTaskRepository, never()).delete(planned);
+        verify(maintenanceTaskRepository, never()).delete(recurring);
+        verify(maintenanceTaskRepository, never()).delete(otherLogsWork);
+        assertThat(sharedFurtherWork.getCreatedByLogId()).isNull();
+        assertThat(otherLogsWork.getCreatedByLogId()).isEqualTo(21L);
+    }
+
+    @Test
+    void updateMaintenanceLog_furtherWorkLeftOut_isDeleted() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceLog existing = eurLog();
+        existing.setId(20L);
+        existing.setVehicle(vehicle);
+        MaintenanceTask removed = task(1L, true, 20L);
+        MaintenanceTask kept = task(2L, true, 20L);
+        MaintenanceLogRequest request = requestWithoutExtras().newTasks(List.of()).performedTaskIds(Set.of(2L));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findByIdAndVehicle_Id(20L, vehicle.getId())).thenReturn(Optional.of(existing));
+        when(maintenanceLogRepository.save(existing)).thenReturn(existing);
+        when(maintenanceTaskRepository.findByIdAndVehicle_Id(2L, vehicle.getId())).thenReturn(Optional.of(kept));
+        when(maintenanceLogTaskRepository.findAllByLog_Id(20L)).thenReturn(links(existing, removed, kept));
+
+        maintenanceLogComponent.updateMaintenanceLog(vehicle.getId(), 20L, request);
+
+        verify(maintenanceTaskRepository).delete(removed);
+        verify(maintenanceTaskRepository, never()).delete(kept);
+        assertThat(kept.getCreatedByLogId()).isEqualTo(20L);
+    }
+
+    @Test
+    void createMaintenanceLog_withCreatedTaskIds_marksThemAsItsFurtherWork() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceTask imported = task(1L, true, null);
+        MaintenanceTask planned = task(2L, true, null);
+        MaintenanceLogRequest request = requestWithoutExtras().newTasks(List.of()).performedTaskIds(Set.of(1L, 2L));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceTaskRepository.findByIdAndVehicle_Id(1L, vehicle.getId())).thenReturn(Optional.of(imported));
+        when(maintenanceTaskRepository.findByIdAndVehicle_Id(2L, vehicle.getId())).thenReturn(Optional.of(planned));
+        when(maintenanceLogRepository.save(any(MaintenanceLog.class))).thenAnswer(invocation -> {
+            MaintenanceLog toSave = invocation.getArgument(0);
+            toSave.setId(20L);
+            return toSave;
+        });
+
+        maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request, Currency.EUR, Set.of(1L));
+
+        assertThat(imported.getCreatedByLogId()).isEqualTo(20L);
+        assertThat(planned.getCreatedByLogId()).isNull();
+    }
+
+    private static MaintenanceTask task(Long id, boolean oneTime, Long createdByLogId) {
+        return MaintenanceTask.builder().id(id).name("Task " + id).oneTime(oneTime).createdByLogId(createdByLogId)
+                .build();
+    }
+
+    private static List<MaintenanceLogTask> links(MaintenanceLog log, MaintenanceTask... tasks) {
+        return Arrays.stream(tasks)
+                .map(task -> MaintenanceLogTask.builder()
+                        .id(new MaintenanceLogTaskId(log.getId(), task.getId())).log(log).task(task).build())
+                .toList();
     }
 
     @Test

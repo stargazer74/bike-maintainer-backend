@@ -8,6 +8,7 @@ import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface IMaintenanceLogComponent {
 
@@ -19,9 +20,11 @@ public interface IMaintenanceLogComponent {
 
     /**
      * Like {@link #createMaintenanceLog(Long, MaintenanceLogRequest)}, but the costs are in {@code currency} instead of
-     * the current user's currency (import of a log written elsewhere).
+     * the current user's currency, and the performed one-time tasks {@code createdTaskIds} count as further work of
+     * this log (import of a log written elsewhere).
      */
-    Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request, Currency currency);
+    Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request, Currency currency,
+                                                         Set<Long> createdTaskIds);
 
     Optional<MaintenanceLogResponse> updateMaintenanceLog(Long vehicleId, Long logId, MaintenanceLogRequest request);
 

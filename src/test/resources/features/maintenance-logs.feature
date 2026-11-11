@@ -181,16 +181,53 @@ Feature: Maintenance log management
       | "newTasks": [ { "name": "Spiegel ersetzt" }, { "name": "Kette", "intervalKm": 0 } ]     |
       | "newTasks": [ { "name": "Spiegel ersetzt", "description": "" } ]                        |
 
-  Scenario: Deleting the log leaves the new task, open again
+  Scenario: New work without an interval remembers the log that created it
     Given a maintenance log "repair" exists for vehicle "bike" with body:
       """
-      { "performedAt": "2026-03-01", "mileageAtPerformed": 8600, "newTasks": [ { "name": "Spiegel ersetzt" } ] }
+      { "performedAt": "2026-03-01", "mileageAtPerformed": 8600, "performedTaskIds": [{oilChange}],
+        "newTasks": [ { "name": "Spiegel ersetzt" }, { "name": "Kette reinigen", "intervalKm": 1000 } ] }
+      """
+    Then the vehicle "bike" has the maintenance tasks:
+      | name            | createdByLogId |
+      | Spiegel ersetzt | {repair}       |
+      | Kette reinigen  |                |
+      | Oil change      |                |
+
+  Scenario: Deleting the log deletes its further work, but no planned or recurring task (backend#127)
+    Given a maintenance task "planned" exists for vehicle "bike" with body:
+      """
+      { "name": "Lenkkopflager tauschen", "oneTime": true }
+      """
+    And a maintenance log "repair" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-03-01", "mileageAtPerformed": 8600, "performedTaskIds": [{oilChange}, {planned}],
+        "newTasks": [ { "name": "Spiegel ersetzt" }, { "name": "Kette reinigen", "intervalKm": 1000 } ],
+        "materials": [ { "name": "Spiegel", "quantity": 1, "unit": "PIECE", "price": 25 } ] }
       """
     When a DELETE request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{repair}"
     Then the response status code is 204
+    And the vehicle "bike" has 3 maintenance tasks
     And the vehicle "bike" has the maintenance tasks:
-      | name            | oneTime | lastServiceMileage |
-      | Spiegel ersetzt | true    |                    |
+      | name                   | oneTime | lastServiceMileage |
+      | Oil change             | false   |                    |
+      | Lenkkopflager tauschen | true    |                    |
+      | Kette reinigen         | false   |                    |
+
+  Scenario: Removing further work from a log deletes it (backend#127)
+    Given a maintenance log "repair" exists for vehicle "bike" with body:
+      """
+      { "performedAt": "2026-03-01", "mileageAtPerformed": 8600, "performedTaskIds": [{oilChange}],
+        "newTasks": [ { "name": "Spiegel ersetzt" } ] }
+      """
+    And the vehicle "bike" has 2 maintenance tasks
+    When a PUT request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{repair}" with body:
+      """
+      { "performedAt": "2026-03-01", "mileageAtPerformed": 8600, "performedTaskIds": [{oilChange}] }
+      """
+    Then the response status code is 200
+    And the JSON response value at "/performedTaskIds/0" equals "{oilChange}"
+    And the JSON response has no value at "/performedTaskIds/1"
+    And the vehicle "bike" has 1 maintenance task
 
   Scenario: New work for another user's vehicle answers 404
     Given I am logged in as "bob@example.org"

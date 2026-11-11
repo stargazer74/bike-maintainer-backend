@@ -45,6 +45,7 @@ public interface VehicleExportMapper {
     ExportedMaintenanceTask toExportedTask(MaintenanceTaskResponse task);
 
     @Mapping(target = "performedTaskRefs", ignore = true)
+    @Mapping(target = "createdTaskRefs", ignore = true)
     @Mapping(target = "materials", ignore = true)
     ExportedMaintenanceLog toExportedLog(MaintenanceLogResponse log);
 
