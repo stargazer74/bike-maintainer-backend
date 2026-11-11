@@ -141,6 +141,10 @@ Feature: Household mode – profile selection instead of login
       """
       { "name": "Annas Enduro", "type": "MOTORCYCLE", "modelYear": 2021, "firstRegistrationDate": "2021-03-01", "currentMileage": 12000 }
       """
+    When a GET request is sent to "/api/v1/profiles"
+    Then the JSON response array contains the elements:
+      | displayName | vehicleCount |
+      | Anna        | 1            |
     When a DELETE request is sent to "/api/v1/profiles/{Anna}"
     Then the response status code is 409
 
