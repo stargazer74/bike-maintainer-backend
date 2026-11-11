@@ -98,9 +98,9 @@ class MaintenanceReportPdfHelperTest {
                 .toList();
 
         assertEveryPage(helper.generate(vehicle(), entries, CREATED, Locale.GERMANY),
-                "Wartungshistorie", "Erstellt mit Bike Maintainer am 30.10.2026", "Seite %d von %d");
+                "Wartungshistorie", "Erstellt mit Bike Maintainer · www.bike-maintainer.de · am 30.10.2026", "Seite %d von %d");
         assertEveryPage(helper.generate(vehicle(), entries, CREATED, Locale.UK),
-                "Maintenance history", "Created with Bike Maintainer on 30 Oct 2026", "Page %d of %d");
+                "Maintenance history", "Created with Bike Maintainer · www.bike-maintainer.de · on 30 Oct 2026", "Page %d of %d");
     }
 
     private static final MaintenanceReportEntry COSTLY = new MaintenanceReportEntry(

@@ -6,7 +6,7 @@ package de.chriswohlbrecht.maintenance.component.helper;
  *
  * @param documentType e.g. "Wartungshistorie"
  * @param subject      e.g. the vehicle name; shortened if it does not fit
- * @param footerText   e.g. "Erstellt mit Bike Maintainer am 30.10.2026"
+ * @param footerText   e.g. "Erstellt mit Bike Maintainer · www.bike-maintainer.de · am 30.10.2026"
  * @param pageLabel    e.g. "Seite 1 von 3"
  */
 record PdfFrame(String documentType, String subject, String footerText, PageLabel pageLabel) {
