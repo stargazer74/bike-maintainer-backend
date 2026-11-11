@@ -33,7 +33,7 @@ public class ProfileComponentImpl implements IProfileComponent {
     @Override
     public List<ProfileResponse> listProfiles() {
         return appUserRepository.findAll(Sort.by("displayName", "email")).stream()
-                .map(userMapper::toProfileResponse)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -48,7 +48,7 @@ public class ProfileComponentImpl implements IProfileComponent {
                 .displayName(displayName)
                 .role(UserRole.USER)
                 .build();
-        return userMapper.toProfileResponse(appUserRepository.save(profile));
+        return toResponse(appUserRepository.save(profile));
     }
 
     @Override
@@ -60,7 +60,7 @@ public class ProfileComponentImpl implements IProfileComponent {
                 throw new ConflictException("Profile name is already taken");
             }
             profile.setDisplayName(displayName);
-            return userMapper.toProfileResponse(appUserRepository.save(profile));
+            return toResponse(appUserRepository.save(profile));
         });
     }
 
@@ -87,6 +87,12 @@ public class ProfileComponentImpl implements IProfileComponent {
             sessionComponent.startSession(SessionUser.authenticationFor(profile), httpRequest, httpResponse);
             return userMapper.toResponse(profile);
         });
+    }
+
+    /** With the number of vehicles: a profile that has some cannot be deleted, the client explains that up front. */
+    private ProfileResponse toResponse(AppUser profile) {
+        return userMapper.toProfileResponse(profile)
+                .vehicleCount(Math.toIntExact(vehicleRepository.countByUser_Id(profile.getId())));
     }
 
     private static String normalize(String displayName) {

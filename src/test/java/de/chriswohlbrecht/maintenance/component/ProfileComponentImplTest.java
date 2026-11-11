@@ -66,6 +66,19 @@ class ProfileComponentImplTest {
     }
 
     @Test
+    void listProfiles_reportsTheNumberOfVehicles() {
+        when(appUserRepository.findAll(any(Sort.class))).thenReturn(List.of(
+                AppUser.builder().id(1L).displayName("Anna").role(UserRole.USER).build(),
+                AppUser.builder().id(2L).displayName("Ben").role(UserRole.USER).build()));
+        when(vehicleRepository.countByUser_Id(1L)).thenReturn(2L);
+        when(vehicleRepository.countByUser_Id(2L)).thenReturn(0L);
+
+        List<ProfileResponse> result = profileComponent.listProfiles();
+
+        assertThat(result).extracting(ProfileResponse::getVehicleCount).containsExactly(2, 0);
+    }
+
+    @Test
     void createProfile_storesTrimmedNameAsUserWithoutEmailAndPassword() {
         when(appUserRepository.save(any(AppUser.class))).thenAnswer(invocation -> {
             AppUser toSave = invocation.getArgument(0);
