@@ -44,6 +44,7 @@ public class SessionSecurityConfiguration {
                         .accessDeniedHandler((request, response, e) ->
                                 errorWriter.write(request, response, HttpStatus.FORBIDDEN, "Access denied")))
                 .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
+                .addFilterBefore(new RequestSizeLimitFilter(errorWriter), CsrfFilter.class)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)

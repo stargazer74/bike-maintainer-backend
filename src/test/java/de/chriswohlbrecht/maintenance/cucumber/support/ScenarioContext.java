@@ -20,6 +20,7 @@ public class ScenarioContext {
     private static final Pattern DATE_PATTERN = Pattern.compile("\\{today(?:([+-]\\d+)([dm]))?}");
 
     private final Map<String, Long> ids = new HashMap<>();
+    private final Map<String, String> texts = new HashMap<>();
 
     private EntityExchangeResult<byte[]> lastResponse;
 
@@ -33,6 +34,19 @@ public class ScenarioContext {
             throw new IllegalStateException("No id stored for alias \"" + alias + "\"");
         }
         return id;
+    }
+
+    /** A response body kept for a later step, e.g. an export file that is imported again. */
+    public void storeText(String alias, String text) {
+        texts.put(alias, text);
+    }
+
+    public String resolveText(String alias) {
+        String text = texts.get(alias);
+        if (text == null) {
+            throw new IllegalStateException("No text stored for alias \"" + alias + "\"");
+        }
+        return text;
     }
 
     public String resolvePath(String template) {

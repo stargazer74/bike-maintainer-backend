@@ -1,6 +1,7 @@
 package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.CostSummaryEntry;
+import de.chriswohlbrecht.maintenance.api.model.Currency;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
@@ -15,6 +16,12 @@ public interface IMaintenanceLogComponent {
     Optional<MaintenanceLogResponse> getMaintenanceLog(Long vehicleId, Long logId);
 
     Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request);
+
+    /**
+     * Like {@link #createMaintenanceLog(Long, MaintenanceLogRequest)}, but the costs are in {@code currency} instead of
+     * the current user's currency (import of a log written elsewhere).
+     */
+    Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request, Currency currency);
 
     Optional<MaintenanceLogResponse> updateMaintenanceLog(Long vehicleId, Long logId, MaintenanceLogRequest request);
 

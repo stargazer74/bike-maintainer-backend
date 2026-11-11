@@ -10,6 +10,8 @@ Feature: Access control – login and roles
       | POST   | /api/v1/vehicles                              |
       | GET    | /api/v1/vehicles/1                            |
       | PUT    | /api/v1/vehicles/1                            |
+      | GET    | /api/v1/vehicles/1/export                     |
+      | POST   | /api/v1/vehicles/import                       |
       | DELETE | /api/v1/vehicles/1                            |
       | GET    | /api/v1/vehicles/1/maintenance-tasks          |
       | POST   | /api/v1/vehicles/1/maintenance-tasks          |

@@ -96,13 +96,21 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     @Override
     @Transactional
     public Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request) {
+        return createMaintenanceLog(vehicleId, request,
+                Currency.fromValue(currentUserComponent.getCurrentUser().getCurrency()));
+    }
+
+    @Override
+    @Transactional
+    public Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request,
+                                                                 Currency currency) {
         return findOwnVehicle(vehicleId).map(vehicle -> {
             List<MaintenanceTask> performedTasks = existingTasks(vehicleId, request);
             List<MaintenanceLogMaterial> materials = materialsOf(request, performedTasks);
 
             MaintenanceLog log = maintenanceLogMapper.toEntity(request);
             log.setVehicle(vehicle);
-            log.setCurrency(currentUserComponent.getCurrentUser().getCurrency());
+            log.setCurrency(currency.getValue());
             MaintenanceLog savedLog = maintenanceLogRepository.save(log);
             saveMaterials(savedLog, materials);
             measurementComponent.replaceMeasurements(savedLog, request.getMeasurements());
