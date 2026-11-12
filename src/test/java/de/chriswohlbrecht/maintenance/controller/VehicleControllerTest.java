@@ -3,7 +3,9 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.VehiclesApi;
 import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
+import de.chriswohlbrecht.maintenance.component.IAccessComponent;
 import de.chriswohlbrecht.maintenance.component.IVehicleComponent;
+import de.chriswohlbrecht.maintenance.exception.SubscriptionRequiredException;
 import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,8 @@ import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,6 +47,9 @@ class VehicleControllerTest {
 
     @MockitoBean
     private IVehicleComponent vehicleComponent;
+
+    @MockitoBean
+    private IAccessComponent accessComponent;
 
     /**
      * Test case for listVehicles.
@@ -251,5 +258,31 @@ class VehicleControllerTest {
                 .andDo(MockMvcResultHandlers.print());
 
         verify(vehicleComponent, times(1)).deleteVehicle(99L);
+    }
+
+    /** A read-only account (trial and subscription over) cannot create vehicles: 403 with its own code. */
+    @Test
+    void testCreateVehicleWithReadOnlyAccountShouldReturnForbidden() throws Exception {
+        VehicleRequest request = Instancio.create(VehicleRequest.class).currentMileage(500).modelYear(2020);
+        doThrow(new SubscriptionRequiredException()).when(accessComponent).requireWriteAccess();
+
+        mockMvc.perform(post(VehiclesApi.PATH_CREATE_VEHICLE)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(SubscriptionRequiredException.CODE));
+
+        verify(vehicleComponent, never()).createVehicle(any());
+    }
+
+    /** Deleting stays possible for a read-only account; the guard is not even asked. */
+    @Test
+    void testDeleteVehicleDoesNotRequireWriteAccess() throws Exception {
+        when(vehicleComponent.deleteVehicle(1L)).thenReturn(true);
+
+        mockMvc.perform(delete(VehiclesApi.PATH_DELETE_VEHICLE, 1L))
+                .andExpect(status().isNoContent());
+
+        verify(accessComponent, never()).requireWriteAccess();
     }
 }

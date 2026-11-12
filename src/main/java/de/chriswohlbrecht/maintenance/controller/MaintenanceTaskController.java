@@ -3,6 +3,7 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.MaintenanceTasksApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
+import de.chriswohlbrecht.maintenance.component.IAccessComponent;
 import de.chriswohlbrecht.maintenance.component.IMaintenanceTaskComponent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
@@ -21,6 +22,7 @@ import java.util.List;
 public class MaintenanceTaskController implements MaintenanceTasksApi {
 
     private final IMaintenanceTaskComponent maintenanceTaskComponent;
+    private final IAccessComponent accessComponent;
 
     @Override
     public ResponseEntity<List<MaintenanceTaskResponse>> listMaintenanceTasks(Long vehicleId) {
@@ -39,6 +41,7 @@ public class MaintenanceTaskController implements MaintenanceTasksApi {
     @Override
     public ResponseEntity<MaintenanceTaskResponse> createMaintenanceTask(Long vehicleId,
                                                                            MaintenanceTaskRequest maintenanceTaskRequest) {
+        accessComponent.requireWriteAccess();
         return maintenanceTaskComponent.createMaintenanceTask(vehicleId, maintenanceTaskRequest)
                 .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -47,6 +50,7 @@ public class MaintenanceTaskController implements MaintenanceTasksApi {
     @Override
     public ResponseEntity<MaintenanceTaskResponse> updateMaintenanceTask(Long vehicleId, Long taskId,
                                                                            MaintenanceTaskRequest maintenanceTaskRequest) {
+        accessComponent.requireWriteAccess();
         return maintenanceTaskComponent.updateMaintenanceTask(vehicleId, taskId, maintenanceTaskRequest)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());

@@ -4,6 +4,7 @@ import de.chriswohlbrecht.maintenance.api.handler.MaintenanceLogsApi;
 import de.chriswohlbrecht.maintenance.api.model.CostSummaryEntry;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
+import de.chriswohlbrecht.maintenance.component.IAccessComponent;
 import de.chriswohlbrecht.maintenance.component.IMaintenanceLogComponent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
@@ -22,6 +23,7 @@ import java.util.List;
 public class MaintenanceLogController implements MaintenanceLogsApi {
 
     private final IMaintenanceLogComponent maintenanceLogComponent;
+    private final IAccessComponent accessComponent;
 
     @Override
     public ResponseEntity<List<MaintenanceLogResponse>> listMaintenanceLogs(Long vehicleId) {
@@ -40,6 +42,7 @@ public class MaintenanceLogController implements MaintenanceLogsApi {
     @Override
     public ResponseEntity<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId,
                                                                          MaintenanceLogRequest maintenanceLogRequest) {
+        accessComponent.requireWriteAccess();
         return maintenanceLogComponent.createMaintenanceLog(vehicleId, maintenanceLogRequest)
                 .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -48,6 +51,7 @@ public class MaintenanceLogController implements MaintenanceLogsApi {
     @Override
     public ResponseEntity<MaintenanceLogResponse> updateMaintenanceLog(Long vehicleId, Long logId,
                                                                          MaintenanceLogRequest maintenanceLogRequest) {
+        accessComponent.requireWriteAccess();
         return maintenanceLogComponent.updateMaintenanceLog(vehicleId, logId, maintenanceLogRequest)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());

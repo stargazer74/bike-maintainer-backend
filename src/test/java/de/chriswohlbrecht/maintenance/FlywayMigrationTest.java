@@ -37,7 +37,7 @@ class FlywayMigrationTest {
     void appliesAllMigrationsSuccessfully() {
         MigrationInfo[] appliedMigrations = flyway.info().applied();
 
-        assertThat(appliedMigrations).hasSize(11);
+        assertThat(appliedMigrations).hasSize(12);
         assertThat(appliedMigrations[0].getDescription()).isEqualTo("init schema");
         assertThat(appliedMigrations[0].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[1].getDescription()).isEqualTo("vehicle model year required");
@@ -60,6 +60,40 @@ class FlywayMigrationTest {
         assertThat(appliedMigrations[9].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[10].getDescription()).isEqualTo("further work origin");
         assertThat(appliedMigrations[10].getState()).isEqualTo(MigrationState.SUCCESS);
+        assertThat(appliedMigrations[11].getDescription()).isEqualTo("access status");
+        assertThat(appliedMigrations[11].getState()).isEqualTo(MigrationState.SUCCESS);
+    }
+
+    /** V12 (backend#137): verified accounts that exist already start their trial; others and profiles do not. */
+    @Test
+    void startsTheTrialOfExistingVerifiedAccounts() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(
+                "jdbc:h2:mem:migration-" + UUID.randomUUID() + ";MODE=MariaDB;DB_CLOSE_DELAY=-1", "sa", "");
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .placeholders(Map.of("initialAdminEmail", "admin@localhost"))
+                .target("11")
+                .load()
+                .migrate();
+        JdbcTemplate before = new JdbcTemplate(dataSource);
+        before.update("INSERT INTO app_user (email, display_name, role, email_verified) VALUES"
+                + " ('verified@example.org', NULL, 'USER', TRUE), ('unverified@example.org', NULL, 'USER', FALSE),"
+                + " (NULL, 'Anna', 'USER', FALSE)");
+
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .placeholders(Map.of("initialAdminEmail", "admin@localhost"))
+                .load()
+                .migrate();
+
+        JdbcTemplate after = new JdbcTemplate(dataSource);
+        assertThat(after.queryForObject("SELECT COUNT(*) FROM app_user WHERE email = 'verified@example.org'"
+                + " AND trial_started_on = CURRENT_DATE", Integer.class)).isEqualTo(1);
+        assertThat(after.queryForList("SELECT trial_started_on FROM app_user"
+                + " WHERE email = 'unverified@example.org' OR display_name = 'Anna'", Object.class))
+                .containsExactly(null, null);
     }
 
     /** V11 (backend#127): existing one-time tasks in exactly one log count as further work of that log. */
@@ -111,7 +145,7 @@ class FlywayMigrationTest {
         assertThat(tableNames).contains("vehicle", "maintenance_task", "maintenance_log", "maintenance_log_task",
                 "app_user", "spring_session", "spring_session_attributes", "user_token", "mail_quota",
                 "maintenance_log_material", "vehicle_specification", "measurement_valve", "measurement_brakes",
-                "measurement_chain", "measurement_tires");
+                "measurement_chain", "measurement_tires", "subscription");
     }
 
     @Test

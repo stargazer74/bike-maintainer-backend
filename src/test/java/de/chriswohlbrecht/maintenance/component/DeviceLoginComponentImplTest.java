@@ -73,7 +73,7 @@ class DeviceLoginComponentImplTest {
     @BeforeEach
     void setUp() {
         component = new DeviceLoginComponentImpl(authenticationManager, sessionComponent, currentUserComponent,
-                new UserMapperImpl(), deviceLoginRepository, appUserRepository,
+                new UserMapperImpl(), new HouseholdAccessComponentImpl(), deviceLoginRepository, appUserRepository,
                 new SecurityProperties(10, Duration.ofMinutes(15), 10, Duration.ofMinutes(15), Duration.ofDays(90)),
                 Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC), meterRegistry);
         user = AppUser.builder().id(7L).email("rider@example.org").role(UserRole.USER).active(true)

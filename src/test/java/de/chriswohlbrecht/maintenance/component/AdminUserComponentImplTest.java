@@ -46,7 +46,7 @@ class AdminUserComponentImplTest {
     @BeforeEach
     void setUp() {
         component = new AdminUserComponentImpl(appUserRepository, currentUserComponent, sessionComponent,
-                deviceLoginComponent, new UserMapperImpl());
+                deviceLoginComponent, new UserMapperImpl(), new HouseholdAccessComponentImpl());
     }
 
     @Test

@@ -21,7 +21,8 @@ class PortalStartupCheckTest {
 
     @Test
     void failsWithoutMailHostOutsideLocalProfile() {
-        runner.withPropertyValues("bm.mode=portal", "spring.mail.host=", "bm.altcha.hmac-key=secret")
+        runner.withPropertyValues("bm.mode=portal", "spring.mail.host=", "bm.altcha.hmac-key=secret",
+                        "bm.subscription.trial-days=10")
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("SPRING_MAIL_HOST");
@@ -30,14 +31,26 @@ class PortalStartupCheckTest {
 
     @Test
     void startsWithoutMailHostInLocalProfile() {
-        runner.withPropertyValues("bm.mode=portal", "spring.profiles.active=local", "bm.altcha.hmac-key=secret")
+        runner.withPropertyValues("bm.mode=portal", "spring.profiles.active=local", "bm.altcha.hmac-key=secret",
+                        "bm.subscription.trial-days=10")
                 .run(context -> assertThat(context).hasNotFailed());
     }
 
     @Test
     void startsWithMailHostAndAltchaKey() {
-        runner.withPropertyValues("bm.mode=portal", "spring.mail.host=smtp.example.org", "bm.altcha.hmac-key=secret")
+        runner.withPropertyValues("bm.mode=portal", "spring.mail.host=smtp.example.org", "bm.altcha.hmac-key=secret",
+                        "bm.subscription.trial-days=10")
                 .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void failsWithoutTrialDays() {
+        runner.withPropertyValues("bm.mode=portal", "spring.mail.host=smtp.example.org", "bm.altcha.hmac-key=secret")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).rootCause()
+                            .hasMessageContaining("BM_SUBSCRIPTION_TRIAL_DAYS");
+                });
     }
 
     @Test

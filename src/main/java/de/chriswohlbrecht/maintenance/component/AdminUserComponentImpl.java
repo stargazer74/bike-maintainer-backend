@@ -33,12 +33,13 @@ public class AdminUserComponentImpl implements IAdminUserComponent {
     private final ISessionComponent sessionComponent;
     private final IDeviceLoginComponent deviceLoginComponent;
     private final UserMapper userMapper;
+    private final IAccessComponent accessComponent;
 
     @Override
     @Transactional(readOnly = true)
     public List<UserResponse> listUsers() {
         return appUserRepository.findAll(Sort.by("createdAt", "id")).stream()
-                .map(userMapper::toResponse)
+                .map(user -> userMapper.toResponse(user, accessComponent.accessOf(user)))
                 .toList();
     }
 
@@ -80,6 +81,6 @@ public class AdminUserComponentImpl implements IAdminUserComponent {
         }
         log.info("Admin {} changed user {}: role {}, active {}", currentUserComponent.getCurrentUserId(), userId,
                 newRole, newActive);
-        return Optional.of(userMapper.toResponse(saved));
+        return Optional.of(userMapper.toResponse(saved, accessComponent.accessOf(saved)));
     }
 }

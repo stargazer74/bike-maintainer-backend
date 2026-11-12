@@ -13,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.client.EntityExchangeResult;
 
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -120,6 +121,8 @@ public class AuthSteps {
                 .role(UserRole.USER)
                 .emailVerified(emailVerified)
                 .active(active)
+                // Like a verification by link: verified accounts are in their trial and may write.
+                .trialStartedOn(emailVerified ? LocalDate.now(clock) : null)
                 .build());
     }
 }

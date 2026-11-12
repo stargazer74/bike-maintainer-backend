@@ -57,6 +57,7 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
     private final ISessionComponent sessionComponent;
     private final ICurrentUserComponent currentUserComponent;
     private final UserMapper userMapper;
+    private final IAccessComponent accessComponent;
     private final DeviceLoginRepository deviceLoginRepository;
     private final AppUserRepository appUserRepository;
     private final SecurityProperties securityProperties;
@@ -67,12 +68,14 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
     public DeviceLoginComponentImpl(AuthenticationManager authenticationManager, ISessionComponent sessionComponent,
                                     ICurrentUserComponent currentUserComponent, UserMapper userMapper,
-                                    DeviceLoginRepository deviceLoginRepository, AppUserRepository appUserRepository,
-                                    SecurityProperties securityProperties, Clock clock, MeterRegistry meterRegistry) {
+                                    IAccessComponent accessComponent, DeviceLoginRepository deviceLoginRepository,
+                                    AppUserRepository appUserRepository, SecurityProperties securityProperties,
+                                    Clock clock, MeterRegistry meterRegistry) {
         this.authenticationManager = authenticationManager;
         this.sessionComponent = sessionComponent;
         this.currentUserComponent = currentUserComponent;
         this.userMapper = userMapper;
+        this.accessComponent = accessComponent;
         this.deviceLoginRepository = deviceLoginRepository;
         this.appUserRepository = appUserRepository;
         this.securityProperties = securityProperties;
@@ -116,7 +119,8 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
         httpRequest.getSession().setAttribute(SESSION_ATTRIBUTE, saved.getId());
         countLogin("success");
         log.info("User {} registered device {}", user.getId(), saved.getId());
-        return new DeviceLoginResponse().user(userMapper.toResponse(user)).deviceToken(token);
+        return new DeviceLoginResponse().user(userMapper.toResponse(user, accessComponent.accessOf(user)))
+                .deviceToken(token);
     }
 
     /** A detected reuse deletes the device although the request fails. */
@@ -153,7 +157,8 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
         sessionComponent.startSession(SessionUser.authenticationFor(user), httpRequest, httpResponse);
         httpRequest.getSession().setAttribute(SESSION_ATTRIBUTE, device.getId());
         meterRegistry.counter(SESSION_METRIC, "result", "success").increment();
-        return new DeviceLoginResponse().user(userMapper.toResponse(user)).deviceToken(token);
+        return new DeviceLoginResponse().user(userMapper.toResponse(user, accessComponent.accessOf(user)))
+                .deviceToken(token);
     }
 
     @Override

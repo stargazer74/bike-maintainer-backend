@@ -3,6 +3,7 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.MaintenanceTasksApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceTaskResponse;
+import de.chriswohlbrecht.maintenance.component.IAccessComponent;
 import de.chriswohlbrecht.maintenance.component.IMaintenanceTaskComponent;
 import org.instancio.Instancio;
 import org.instancio.junit.InstancioExtension;
@@ -43,6 +44,9 @@ class MaintenanceTaskControllerTest {
 
     @MockitoBean
     private IMaintenanceTaskComponent maintenanceTaskComponent;
+
+    @MockitoBean
+    private IAccessComponent accessComponent;
 
     /**
      * Test case for listMaintenanceTasks.

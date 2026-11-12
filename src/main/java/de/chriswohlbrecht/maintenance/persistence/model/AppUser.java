@@ -18,6 +18,7 @@ import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -76,6 +77,10 @@ public class AppUser {
     @Builder.Default
     @Column(nullable = false, length = 3)
     private String currency = "EUR";
+
+    /** First day of the free trial (portal mode): the day the email address was verified. Null before that. */
+    @Column(name = "trial_started_on")
+    private LocalDate trialStartedOn;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

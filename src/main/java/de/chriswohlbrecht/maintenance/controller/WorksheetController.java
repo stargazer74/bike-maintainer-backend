@@ -3,6 +3,7 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.WorksheetsApi;
 import de.chriswohlbrecht.maintenance.api.model.WorksheetTemplate;
 import de.chriswohlbrecht.maintenance.api.model.WorksheetTemplateResponse;
+import de.chriswohlbrecht.maintenance.component.IAccessComponent;
 import de.chriswohlbrecht.maintenance.component.IWorksheetComponent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
@@ -20,6 +21,7 @@ import java.util.List;
 public class WorksheetController implements WorksheetsApi {
 
     private final IWorksheetComponent worksheetComponent;
+    private final IAccessComponent accessComponent;
 
     @Override
     public ResponseEntity<List<WorksheetTemplateResponse>> listWorksheetTemplates(Long vehicleId) {
@@ -32,6 +34,7 @@ public class WorksheetController implements WorksheetsApi {
     @Override
     public ResponseEntity<Resource> downloadWorksheet(Long vehicleId, WorksheetTemplate template, Integer cylinders,
                                                       Integer valvesPerCylinder) {
+        accessComponent.requireWriteAccess();
         return worksheetComponent.generateWorksheet(vehicleId, template, cylinders, valvesPerCylinder)
                 .map(worksheet -> ResponseEntity.ok()
                         .contentType(MediaType.APPLICATION_PDF)

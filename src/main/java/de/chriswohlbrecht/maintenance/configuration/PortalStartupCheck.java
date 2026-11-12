@@ -6,9 +6,9 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 
 /**
- * Portal mode refuses to start without the settings registration needs, so a forgotten variable is noticed at
- * deployment and not when the first user registers. Without the profile {@code local} emails are really sent,
- * so an SMTP host is required; {@code local} only logs them.
+ * Portal mode refuses to start without the settings registration and the trial need, so a forgotten variable is
+ * noticed at deployment and not when the first user registers. Without the profile {@code local} emails are really
+ * sent, so an SMTP host is required; {@code local} only logs them.
  */
 @Configuration(proxyBeanMethods = false)
 @Conditional(OperatingModeCondition.Portal.class)
@@ -18,6 +18,10 @@ public final class PortalStartupCheck {
         if (isBlank(environment.getProperty("bm.altcha.hmac-key"))) {
             throw new IllegalStateException("BM_ALTCHA_HMAC_KEY must be set in portal mode "
                     + "(secret for the registration captcha, e.g. openssl rand -hex 32)");
+        }
+        if (isBlank(environment.getProperty("bm.subscription.trial-days"))) {
+            throw new IllegalStateException("BM_SUBSCRIPTION_TRIAL_DAYS must be set in portal mode "
+                    + "(length of the free trial in days)");
         }
         if (!environment.acceptsProfiles(Profiles.of("local"))
                 && isBlank(environment.getProperty("spring.mail.host"))) {

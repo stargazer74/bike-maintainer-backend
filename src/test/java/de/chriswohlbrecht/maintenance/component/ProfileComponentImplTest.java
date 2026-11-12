@@ -51,7 +51,7 @@ class ProfileComponentImplTest {
     @BeforeEach
     void setUp() {
         profileComponent = new ProfileComponentImpl(appUserRepository, vehicleRepository, sessionComponent,
-                new UserMapperImpl());
+                new UserMapperImpl(), new HouseholdAccessComponentImpl());
     }
 
     @Test
