@@ -62,8 +62,7 @@ public class GlobalExceptionHandler {
 
     /** No details of the provider's answer go to the client; they are logged by the service. */
     @ExceptionHandler(PaymentProviderUnavailableException.class)
-    public ResponseEntity<ErrorResponse> handlePaymentProviderUnavailable(PaymentProviderUnavailableException ex,
-                                                                            HttpServletRequest request) {
+    public ResponseEntity<ErrorResponse> handlePaymentProviderUnavailable(HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ErrorResponses.of(HttpStatus.SERVICE_UNAVAILABLE, null, "Payment provider unavailable",
                         request.getRequestURI()));
