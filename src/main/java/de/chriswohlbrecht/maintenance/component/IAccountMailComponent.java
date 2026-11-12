@@ -1,12 +1,13 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.component.model.CancellationNotice;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 
 import java.time.LocalDate;
 
 /**
- * Emails about the account, in the language of the user. Each email except the deletion notice counts towards the
- * daily limit; when it is exhausted, the email is dropped (logged) – callers check
+ * Emails about the account, in the language of the user. Each email except the deletion notice and the cancellation
+ * notice counts towards the daily limit; when it is exhausted, the email is dropped (logged) – callers check
  * {@link IMailQuotaComponent#ensureAvailable()} first.
  */
 public interface IAccountMailComponent {
@@ -26,4 +27,10 @@ public interface IAccountMailComponent {
      * ({@code bm.retention.notice-daily-limit}).
      */
     void sendDeletionNotice(AppUser user, LocalDate deletionDay);
+
+    /**
+     * Tells an administrator about a subscription cancelled after its first year, to end it and refund the rest by
+     * hand. Not counted towards the daily limit: it is rare and must not get lost.
+     */
+    void sendCancellationNotice(AppUser admin, CancellationNotice notice);
 }

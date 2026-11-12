@@ -50,6 +50,7 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
     private final ICurrentUserComponent currentUserComponent;
     private final IAccessComponent accessComponent;
     private final IPaymentProviderService paymentProviderService;
+    private final ICancellationNoticeComponent cancellationNoticeComponent;
     private final AppUserRepository appUserRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final PolarProperties polarProperties;
@@ -62,6 +63,7 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
     public SubscriptionComponentImpl(ICurrentUserComponent currentUserComponent, IAccessComponent accessComponent,
                                      IPaymentProviderService paymentProviderService,
+                                     ICancellationNoticeComponent cancellationNoticeComponent,
                                      AppUserRepository appUserRepository,
                                      SubscriptionRepository subscriptionRepository, PolarProperties polarProperties,
                                      AccountMailProperties accountMailProperties, JsonMapper jsonMapper, Clock clock,
@@ -69,6 +71,7 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
         this.currentUserComponent = currentUserComponent;
         this.accessComponent = accessComponent;
         this.paymentProviderService = paymentProviderService;
+        this.cancellationNoticeComponent = cancellationNoticeComponent;
         this.appUserRepository = appUserRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.polarProperties = polarProperties;
@@ -186,10 +189,15 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
                         .provider(SubscriptionProvider.POLAR)
                         .externalId(current.id())
                         .build());
+        SubscriptionStatus previous = subscription.getStatus();
         SubscriptionStatus status = statusOf(current);
         subscription.setStatus(status);
         subscription.setPaidUntil(paidUntil(current, status));
         subscriptionRepository.save(subscription);
+        // Only the change counts: the provider sends several events per change and repeats them.
+        if (status == SubscriptionStatus.CANCELED && previous != SubscriptionStatus.CANCELED) {
+            cancellationNoticeComponent.cancellationReceived(owner.get(), current);
+        }
         meterRegistry.counter(WEBHOOK_METRIC, "result", "synced").increment();
         log.info("Subscription {} of user {} is now {}", subscription.getId(), owner.get().getId(), status);
     }

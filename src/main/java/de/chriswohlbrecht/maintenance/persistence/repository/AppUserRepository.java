@@ -22,6 +22,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByRoleAndActiveTrue(UserRole role);
 
+    List<AppUser> findAllByRoleAndActiveTrue(UserRole role);
+
     boolean existsByDisplayNameIgnoreCaseAndIdNot(String displayName, Long id);
 
     /** Registered accounts (with email) of the given role whose email was never verified before {@code cutoff}. */

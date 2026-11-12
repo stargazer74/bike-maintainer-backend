@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.component.model.CancellationNotice;
 import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.service.IMailService;
@@ -9,9 +10,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
+import java.util.Currency;
 import java.util.Locale;
 import java.util.Map;
 
@@ -26,7 +30,8 @@ public class AccountMailComponentImpl implements IAccountMailComponent {
             "mail.verification", "verification",
             "mail.passwordReset", "password_reset",
             "mail.registrationExists", "registration_exists",
-            "mail.deletionNotice", "deletion_notice");
+            "mail.deletionNotice", "deletion_notice",
+            "mail.cancellationNotice", "cancellation_notice");
 
 
     private final IMailService mailService;
@@ -57,6 +62,26 @@ public class AccountMailComponentImpl implements IAccountMailComponent {
         Locale locale = userLocaleComponent.localeOf(user);
         String date = deletionDay.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale));
         deliver(user, "mail.deletionNotice", locale, date, mailProperties.linkBaseUrl() + "/anmelden");
+    }
+
+    @Override
+    public void sendCancellationNotice(AppUser admin, CancellationNotice notice) {
+        Locale locale = userLocaleComponent.localeOf(admin);
+        DateTimeFormatter dates = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale);
+        String refund = notice.refund() == null || notice.currency() == null
+                ? messageSource.getMessage("mail.cancellationNotice.refundUnknown", null, locale)
+                : money(notice.refund(), notice.currency(), locale);
+        deliver(admin, "mail.cancellationNotice", locale, String.valueOf(notice.userId()), notice.subscriptionId(),
+                notice.receivedOn().format(dates), notice.endsOn().format(dates), notice.paidUntil().format(dates),
+                refund);
+    }
+
+    /** E.g. 2005 + "eur" → "20,05 €" (de) or "€20.05" (en). */
+    private static String money(long minorUnits, String currencyCode, Locale locale) {
+        Currency currency = Currency.getInstance(currencyCode.toUpperCase(Locale.ROOT));
+        NumberFormat format = NumberFormat.getCurrencyInstance(locale);
+        format.setCurrency(currency);
+        return format.format(BigDecimal.valueOf(minorUnits, currency.getDefaultFractionDigits()));
     }
 
     private void send(AppUser user, String key, Object... bodyArguments) {

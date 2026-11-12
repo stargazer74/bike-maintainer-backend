@@ -45,6 +45,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -64,6 +65,8 @@ class SubscriptionComponentImplTest {
     @Mock
     private IPaymentProviderService paymentProviderService;
     @Mock
+    private ICancellationNoticeComponent cancellationNoticeComponent;
+    @Mock
     private AppUserRepository appUserRepository;
     @Mock
     private SubscriptionRepository subscriptionRepository;
@@ -75,7 +78,7 @@ class SubscriptionComponentImplTest {
     @BeforeEach
     void setUp() {
         component = new SubscriptionComponentImpl(currentUserComponent, accessComponent, paymentProviderService,
-                appUserRepository, subscriptionRepository,
+                cancellationNoticeComponent, appUserRepository, subscriptionRepository,
                 new PolarProperties("https://api", "token", SECRET, "product-1"),
                 new AccountMailProperties("noreply@example.org", 100, "https://app.example.org/"), new JsonMapper(),
                 Clock.fixed(NOW, ZoneOffset.UTC), meterRegistry);
@@ -193,6 +196,40 @@ class SubscriptionComponentImplTest {
         assertThat(existing.getStatus()).isEqualTo(SubscriptionStatus.ENDED);
         assertThat(existing.getPaidUntil()).isEqualTo(LocalDate.of(2026, 11, 12));
         verify(subscriptionRepository).save(existing);
+    }
+
+    /** Only the change to "cancelled" counts, not every repeated event of it. */
+    @Test
+    void aNewCancellationIsPassedOnOnce() {
+        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.POLAR)
+                .externalId("sub_1").status(SubscriptionStatus.ACTIVE).build();
+        ProviderSubscription cancelled = new ProviderSubscription("sub_1", "active", PERIOD_END, null, true, "ref-1");
+        when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(cancelled));
+        when(appUserRepository.findByBillingCustomerRef("ref-1")).thenReturn(Optional.of(user));
+        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.POLAR, "sub_1"))
+                .thenReturn(Optional.of(existing));
+
+        receive(event("sub_1"));
+        receive(event("sub_1"));
+
+        assertThat(existing.getStatus()).isEqualTo(SubscriptionStatus.CANCELED);
+        verify(cancellationNoticeComponent, times(1)).cancellationReceived(user, cancelled);
+    }
+
+    @Test
+    void otherChangesAreNoCancellation() {
+        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.POLAR)
+                .externalId("sub_1").status(SubscriptionStatus.CANCELED).build();
+        when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(
+                new ProviderSubscription("sub_1", "active", PERIOD_END, null, false, "ref-1")));
+        when(appUserRepository.findByBillingCustomerRef("ref-1")).thenReturn(Optional.of(user));
+        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.POLAR, "sub_1"))
+                .thenReturn(Optional.of(existing));
+
+        receive(event("sub_1"));
+
+        assertThat(existing.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
+        verifyNoInteractions(cancellationNoticeComponent);
     }
 
     @Test
