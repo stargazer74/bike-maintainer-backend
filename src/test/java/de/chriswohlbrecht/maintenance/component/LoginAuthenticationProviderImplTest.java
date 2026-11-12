@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -24,6 +25,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,6 +49,8 @@ class LoginAuthenticationProviderImplTest {
 
     @Mock
     private AppUserRepository appUserRepository;
+    @Mock
+    private IAccountRetentionComponent accountRetentionComponent;
 
     private LoginAuthenticationProviderImpl provider;
     private SimpleMeterRegistry meterRegistry;
@@ -54,7 +59,9 @@ class LoginAuthenticationProviderImplTest {
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         provider = new LoginAuthenticationProviderImpl(appUserRepository, PASSWORD_ENCODER, CLOCK,
-                new SecurityProperties(10, Duration.ofMinutes(15), 3, Duration.ofMinutes(15), Duration.ofDays(90)), meterRegistry);
+                new SecurityProperties(10, Duration.ofMinutes(15), 3, Duration.ofMinutes(15), Duration.ofDays(90)), meterRegistry,
+                new StaticListableBeanFactory(Map.of("retention", accountRetentionComponent))
+                        .getBeanProvider(IAccountRetentionComponent.class));
     }
 
     @Test
@@ -69,6 +76,29 @@ class LoginAuthenticationProviderImplTest {
         assertThat(result.getName()).isEqualTo("42");
         assertThat(result.getAuthorities()).extracting(Object::toString).containsExactly("ROLE_USER");
         verify(appUserRepository, never()).save(any());
+        verify(accountRetentionComponent).keepAfterLogin(user);
+    }
+
+    /** Household mode has no retention component; the login provider works without it. */
+    @Test
+    void authenticate_withoutRetention_succeeds() {
+        LoginAuthenticationProviderImpl withoutRetention = new LoginAuthenticationProviderImpl(appUserRepository,
+                PASSWORD_ENCODER, CLOCK,
+                new SecurityProperties(10, Duration.ofMinutes(15), 3, Duration.ofMinutes(15), Duration.ofDays(90)),
+                meterRegistry, new StaticListableBeanFactory().getBeanProvider(IAccountRetentionComponent.class));
+        when(appUserRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(user().build()));
+
+        assertThat(withoutRetention.authenticate(token(EMAIL, PASSWORD)).isAuthenticated()).isTrue();
+    }
+
+    @Test
+    void authenticate_wrongPassword_doesNotCountAsLoginForRetention() {
+        when(appUserRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(user().build()));
+
+        assertThatThrownBy(() -> provider.authenticate(token(EMAIL, "wrong")))
+                .isInstanceOf(BadCredentialsException.class);
+
+        verifyNoInteractions(accountRetentionComponent);
     }
 
     @Test

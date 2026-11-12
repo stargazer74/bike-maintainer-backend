@@ -7,13 +7,7 @@ import de.chriswohlbrecht.maintenance.exception.LastAdminException;
 import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
 import de.chriswohlbrecht.maintenance.exception.WrongPasswordException;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
-import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
-import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogMaterialRepository;
-import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogRepository;
-import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
-import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
-import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
 import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -42,37 +36,22 @@ public class AccountDeletionComponentImpl implements IAccountDeletionComponent {
     private final ICurrentUserComponent currentUserComponent;
     private final ISessionComponent sessionComponent;
     private final AppUserRepository appUserRepository;
-    private final VehicleRepository vehicleRepository;
-    private final MaintenanceTaskRepository maintenanceTaskRepository;
-    private final MaintenanceLogRepository maintenanceLogRepository;
-    private final MaintenanceLogTaskRepository maintenanceLogTaskRepository;
-    private final MaintenanceLogMaterialRepository maintenanceLogMaterialRepository;
-    private final ISubscriptionComponent subscriptionComponent;
+    private final IAccountDataDeletionComponent accountDataDeletionComponent;
     private final PasswordEncoder passwordEncoder;
     private final SecurityProperties securityProperties;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
 
-    @SuppressWarnings("java:S107") // one repository per table that holds data of the user
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
     public AccountDeletionComponentImpl(ICurrentUserComponent currentUserComponent, ISessionComponent sessionComponent,
-                                        AppUserRepository appUserRepository, VehicleRepository vehicleRepository,
-                                        MaintenanceTaskRepository maintenanceTaskRepository,
-                                        MaintenanceLogRepository maintenanceLogRepository,
-                                        MaintenanceLogTaskRepository maintenanceLogTaskRepository,
-                                        MaintenanceLogMaterialRepository maintenanceLogMaterialRepository,
-                                        ISubscriptionComponent subscriptionComponent, PasswordEncoder passwordEncoder,
-                                        SecurityProperties securityProperties, Clock clock,
-                                        MeterRegistry meterRegistry) {
+                                        AppUserRepository appUserRepository,
+                                        IAccountDataDeletionComponent accountDataDeletionComponent,
+                                        PasswordEncoder passwordEncoder, SecurityProperties securityProperties,
+                                        Clock clock, MeterRegistry meterRegistry) {
         this.currentUserComponent = currentUserComponent;
         this.sessionComponent = sessionComponent;
         this.appUserRepository = appUserRepository;
-        this.vehicleRepository = vehicleRepository;
-        this.maintenanceTaskRepository = maintenanceTaskRepository;
-        this.maintenanceLogRepository = maintenanceLogRepository;
-        this.maintenanceLogTaskRepository = maintenanceLogTaskRepository;
-        this.maintenanceLogMaterialRepository = maintenanceLogMaterialRepository;
-        this.subscriptionComponent = subscriptionComponent;
+        this.accountDataDeletionComponent = accountDataDeletionComponent;
         this.passwordEncoder = passwordEncoder;
         this.securityProperties = securityProperties;
         this.clock = clock;
@@ -98,20 +77,7 @@ public class AccountDeletionComponentImpl implements IAccountDeletionComponent {
             throw new LastAdminException("The last active admin cannot delete their account");
         }
 
-        // Before anything is deleted: if the provider cannot be reached, the account stays and nothing is billed
-        // for an account that no longer exists. The subscription rows go with the user (ON DELETE CASCADE).
-        subscriptionComponent.endSubscriptionsOf(user);
-
-        // No ON DELETE CASCADE from the vehicle down: remove dependents first, children before parents.
-        for (Vehicle vehicle : vehicleRepository.findAllByUser_Id(user.getId())) {
-            maintenanceLogMaterialRepository.deleteAllByLog_Vehicle_Id(vehicle.getId());
-            maintenanceLogTaskRepository.deleteAllByLog_Vehicle_Id(vehicle.getId());
-            maintenanceLogRepository.deleteAllByVehicle_Id(vehicle.getId());
-            maintenanceTaskRepository.deleteAllByVehicle_Id(vehicle.getId());
-            vehicleRepository.delete(vehicle);
-        }
-        // Tokens of the user go with it (ON DELETE CASCADE).
-        appUserRepository.delete(user);
+        accountDataDeletionComponent.deleteWithAllData(user);
         sessionComponent.invalidateOtherSessionsOf(user.getId(), currentSessionId);
         meterRegistry.counter(DELETED_METRIC).increment();
         log.info("User {} deleted their account", user.getId());

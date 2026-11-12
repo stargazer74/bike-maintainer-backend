@@ -58,6 +58,7 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
     private final ICurrentUserComponent currentUserComponent;
     private final UserMapper userMapper;
     private final IAccessComponent accessComponent;
+    private final IAccountRetentionComponent accountRetentionComponent;
     private final DeviceLoginRepository deviceLoginRepository;
     private final AppUserRepository appUserRepository;
     private final SecurityProperties securityProperties;
@@ -68,7 +69,9 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
     public DeviceLoginComponentImpl(AuthenticationManager authenticationManager, ISessionComponent sessionComponent,
                                     ICurrentUserComponent currentUserComponent, UserMapper userMapper,
-                                    IAccessComponent accessComponent, DeviceLoginRepository deviceLoginRepository,
+                                    IAccessComponent accessComponent,
+                                    IAccountRetentionComponent accountRetentionComponent,
+                                    DeviceLoginRepository deviceLoginRepository,
                                     AppUserRepository appUserRepository, SecurityProperties securityProperties,
                                     Clock clock, MeterRegistry meterRegistry) {
         this.authenticationManager = authenticationManager;
@@ -76,6 +79,7 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
         this.currentUserComponent = currentUserComponent;
         this.userMapper = userMapper;
         this.accessComponent = accessComponent;
+        this.accountRetentionComponent = accountRetentionComponent;
         this.deviceLoginRepository = deviceLoginRepository;
         this.appUserRepository = appUserRepository;
         this.securityProperties = securityProperties;
@@ -154,6 +158,8 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
             // Another request exchanged the same token a moment earlier; that one keeps the device.
             throw rejected("invalid");
         }
+        // The app renews its session this way instead of logging in again, so this counts as a login.
+        accountRetentionComponent.keepAfterLogin(user);
         sessionComponent.startSession(SessionUser.authenticationFor(user), httpRequest, httpResponse);
         httpRequest.getSession().setAttribute(SESSION_ATTRIBUTE, device.getId());
         meterRegistry.counter(SESSION_METRIC, "result", "success").increment();

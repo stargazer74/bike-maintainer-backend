@@ -7,7 +7,9 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
@@ -27,4 +29,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("DELETE FROM AppUser u WHERE u.emailVerified = false AND u.email IS NOT NULL AND u.role = :role "
             + "AND u.createdAt < :cutoff")
     int deleteUnverifiedCreatedBefore(@Param("role") UserRole role, @Param("cutoff") LocalDateTime cutoff);
+
+    /**
+     * Verified accounts of the given role that may be due for deletion: trial started before {@code trialStartedBefore}
+     * (access can only have ended after the trial) or with a pending deletion notice.
+     */
+    @Query("SELECT u FROM AppUser u WHERE u.role = :role AND u.email IS NOT NULL AND u.emailVerified = true "
+            + "AND (u.trialStartedOn < :trialStartedBefore OR u.deletionNoticeSentAt IS NOT NULL) ORDER BY u.id")
+    List<AppUser> findRetentionCandidates(@Param("role") UserRole role,
+                                          @Param("trialStartedBefore") LocalDate trialStartedBefore);
 }

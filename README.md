@@ -90,7 +90,10 @@ Requirements: Java 25.
 In portal mode the backend refuses to start without `BM_ALTCHA_HMAC_KEY` and `BM_SUBSCRIPTION_TRIAL_DAYS`, and
 without `SPRING_MAIL_HOST` and the three `BM_POLAR_*` settings unless the Spring profile `local` is active (there the
 checkout answers 503 without Polar). At most `bm.mail.daily-limit` (100) emails are sent per day; unverified accounts are
-deleted after 7 days.
+deleted after 7 days. Expired accounts (trial or paid period over) are deleted 12 months after their access ended
+(`bm.retention.period`), never without a notice by email 30 days before (`bm.retention.notice-period`, at most
+`bm.retention.notice-daily-limit` (50) notices per day, not counted towards the mail limit); logging in after the
+notice keeps the account for another 12 months. Login times are not recorded.
 
 ### Login & first start (portal mode)
 

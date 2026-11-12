@@ -89,6 +89,17 @@ public class AppUser {
     @Column(name = "billing_customer_ref", length = 36, unique = true)
     private String billingCustomerRef;
 
+    /** When the notice about the coming deletion of the expired account was sent; null without a pending notice. */
+    @Column(name = "deletion_notice_sent_at")
+    private LocalDateTime deletionNoticeSentAt;
+
+    /**
+     * The account is not deleted before this day: set when the person logs in after a deletion notice. Null
+     * otherwise – login times are not recorded.
+     */
+    @Column(name = "keep_until")
+    private LocalDate keepUntil;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

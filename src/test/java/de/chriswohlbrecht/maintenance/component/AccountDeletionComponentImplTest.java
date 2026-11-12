@@ -7,13 +7,7 @@ import de.chriswohlbrecht.maintenance.exception.PaymentProviderUnavailableExcept
 import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
 import de.chriswohlbrecht.maintenance.exception.WrongPasswordException;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
-import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
-import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogMaterialRepository;
-import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogRepository;
-import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogTaskRepository;
-import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceTaskRepository;
-import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
 import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,15 +22,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -54,17 +44,7 @@ class AccountDeletionComponentImplTest {
     @Mock
     private AppUserRepository appUserRepository;
     @Mock
-    private VehicleRepository vehicleRepository;
-    @Mock
-    private MaintenanceTaskRepository maintenanceTaskRepository;
-    @Mock
-    private MaintenanceLogRepository maintenanceLogRepository;
-    @Mock
-    private MaintenanceLogTaskRepository maintenanceLogTaskRepository;
-    @Mock
-    private MaintenanceLogMaterialRepository maintenanceLogMaterialRepository;
-    @Mock
-    private ISubscriptionComponent subscriptionComponent;
+    private IAccountDataDeletionComponent accountDataDeletionComponent;
     @Mock
     private PasswordEncoder passwordEncoder;
 
@@ -74,52 +54,39 @@ class AccountDeletionComponentImplTest {
     @BeforeEach
     void setUp() {
         component = new AccountDeletionComponentImpl(currentUserComponent, sessionComponent, appUserRepository,
-                vehicleRepository, maintenanceTaskRepository, maintenanceLogRepository, maintenanceLogTaskRepository,
-                maintenanceLogMaterialRepository, subscriptionComponent, passwordEncoder,
+                accountDataDeletionComponent, passwordEncoder,
                 new SecurityProperties(10, Duration.ofMinutes(15), 3, Duration.ofMinutes(15), Duration.ofDays(90)),
                 Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC), meterRegistry);
     }
 
     @Test
-    void deletesVehiclesWithDependentsThenUserAndOtherSessions() {
+    void deletesAllDataThenOtherSessions() {
         AppUser user = user(UserRole.USER);
-        Vehicle first = Vehicle.builder().id(11L).build();
-        Vehicle second = Vehicle.builder().id(12L).build();
         when(currentUserComponent.getCurrentUser()).thenReturn(user);
         when(passwordEncoder.matches("secret-password", "{bcrypt}hash")).thenReturn(true);
-        when(vehicleRepository.findAllByUser_Id(7L)).thenReturn(List.of(first, second));
 
         component.deleteCurrentUser(request("secret-password"), SESSION);
 
-        InOrder order = inOrder(subscriptionComponent, maintenanceLogMaterialRepository, maintenanceLogTaskRepository,
-                maintenanceLogRepository, maintenanceTaskRepository, vehicleRepository, appUserRepository,
-                sessionComponent);
-        order.verify(subscriptionComponent).endSubscriptionsOf(user);
-        for (Vehicle vehicle : List.of(first, second)) {
-            order.verify(maintenanceLogMaterialRepository).deleteAllByLog_Vehicle_Id(vehicle.getId());
-            order.verify(maintenanceLogTaskRepository).deleteAllByLog_Vehicle_Id(vehicle.getId());
-            order.verify(maintenanceLogRepository).deleteAllByVehicle_Id(vehicle.getId());
-            order.verify(maintenanceTaskRepository).deleteAllByVehicle_Id(vehicle.getId());
-            order.verify(vehicleRepository).delete(vehicle);
-        }
-        order.verify(appUserRepository).delete(user);
+        InOrder order = inOrder(accountDataDeletionComponent, sessionComponent);
+        order.verify(accountDataDeletionComponent).deleteWithAllData(user);
         order.verify(sessionComponent).invalidateOtherSessionsOf(7L, SESSION);
         assertThat(meterRegistry.counter("bm.accounts.deleted").count()).isEqualTo(1.0);
     }
 
-    /** If the provider cannot end the subscription, the account stays, so nothing is billed for a deleted one. */
+    /** If the provider cannot end the subscription, the account stays and the sessions too. */
     @Test
     void unreachablePaymentProviderKeepsTheAccount() {
         AppUser user = user(UserRole.USER);
         when(currentUserComponent.getCurrentUser()).thenReturn(user);
         when(passwordEncoder.matches("secret-password", "{bcrypt}hash")).thenReturn(true);
-        doThrow(new PaymentProviderUnavailableException("down")).when(subscriptionComponent).endSubscriptionsOf(user);
+        doThrow(new PaymentProviderUnavailableException("down")).when(accountDataDeletionComponent)
+                .deleteWithAllData(user);
 
         assertThatThrownBy(() -> component.deleteCurrentUser(request("secret-password"), SESSION))
                 .isInstanceOf(PaymentProviderUnavailableException.class);
 
-        verify(appUserRepository, never()).delete(any());
-        verify(vehicleRepository, never()).findAllByUser_Id(any());
+        verifyNoInteractions(sessionComponent);
+        assertThat(meterRegistry.counter("bm.accounts.deleted").count()).isZero();
     }
 
     @Test
@@ -140,8 +107,8 @@ class AccountDeletionComponentImplTest {
         assertThat(user.getFailedLoginAttempts()).isEqualTo(1);
         assertThat(user.getLockedUntil()).isNull();
         verify(appUserRepository).save(user);
-        verify(appUserRepository, never()).delete(any());
-        verifyNoInteractions(vehicleRepository, sessionComponent);
+        verifyNoInteractions(accountDataDeletionComponent);
+        verifyNoInteractions(sessionComponent);
     }
 
     @Test
@@ -167,7 +134,7 @@ class AccountDeletionComponentImplTest {
         assertThatThrownBy(() -> component.deleteCurrentUser(request("secret-password"), SESSION))
                 .isInstanceOf(TooManyRequestsException.class);
 
-        verifyNoInteractions(passwordEncoder, vehicleRepository, sessionComponent);
+        verifyNoInteractions(passwordEncoder, accountDataDeletionComponent, sessionComponent);
     }
 
     @Test
@@ -179,7 +146,7 @@ class AccountDeletionComponentImplTest {
 
         component.deleteCurrentUser(request("secret-password"), SESSION);
 
-        verify(appUserRepository).delete(user);
+        verify(accountDataDeletionComponent).deleteWithAllData(user);
     }
 
     @Test
@@ -192,8 +159,8 @@ class AccountDeletionComponentImplTest {
         assertThatThrownBy(() -> component.deleteCurrentUser(request("secret-password"), SESSION))
                 .isInstanceOf(LastAdminException.class);
 
-        verify(appUserRepository, never()).delete(any());
-        verifyNoInteractions(vehicleRepository, sessionComponent);
+        verifyNoInteractions(accountDataDeletionComponent);
+        verifyNoInteractions(sessionComponent);
     }
 
     @Test
@@ -205,20 +172,7 @@ class AccountDeletionComponentImplTest {
 
         component.deleteCurrentUser(request("secret-password"), SESSION);
 
-        verify(appUserRepository).delete(admin);
-    }
-
-    @Test
-    void userWithoutVehiclesIsDeleted() {
-        AppUser user = user(UserRole.USER);
-        when(currentUserComponent.getCurrentUser()).thenReturn(user);
-        when(passwordEncoder.matches("secret-password", "{bcrypt}hash")).thenReturn(true);
-        when(vehicleRepository.findAllByUser_Id(anyLong())).thenReturn(List.of());
-
-        component.deleteCurrentUser(request("secret-password"), SESSION);
-
-        verify(appUserRepository).delete(user);
-        verifyNoInteractions(maintenanceTaskRepository, maintenanceLogRepository);
+        verify(accountDataDeletionComponent).deleteWithAllData(admin);
     }
 
     private static DeleteAccountRequest request(String password) {

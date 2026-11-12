@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
+import java.time.LocalDate;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -65,6 +67,40 @@ class AccountMailComponentImplTest {
         assertThat(body.getValue())
                 .contains("https://app.example.org/anmelden")
                 .contains("https://app.example.org/passwort-vergessen");
+    }
+
+    @Test
+    void deletionNoticeNamesTheDayAndLinksToLogin() {
+        component.sendDeletionNotice(user("de"), LocalDate.of(2027, 12, 1));
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(mailService).send(eq("rider@example.org"),
+                eq("Dein Konto bei Bike Maintainer wird am 1. Dezember 2027 gelöscht"), body.capture());
+        assertThat(body.getValue())
+                .contains("am 1. Dezember 2027 gelöscht")
+                .contains("https://app.example.org/anmelden")
+                .contains("exportieren");
+    }
+
+    @Test
+    void deletionNoticeInEnglish() {
+        component.sendDeletionNotice(user("en"), LocalDate.of(2027, 12, 1));
+
+        verify(mailService).send(eq("rider@example.org"),
+                eq("Your Bike Maintainer account will be deleted on 1 December 2027"), anyString());
+    }
+
+    /** The retention limits its notices itself, so they never use up the emails for registrations. */
+    @Test
+    void deletionNoticeDoesNotCountTowardsTheDailyLimit() {
+        when(mailQuotaComponent.tryReserve()).thenReturn(false);
+
+        component.sendDeletionNotice(user("de"), LocalDate.of(2027, 12, 1));
+
+        verify(mailService).send(eq("rider@example.org"), anyString(), anyString());
+        verify(mailQuotaComponent, never()).tryReserve();
+        assertThat(meterRegistry.counter("bm.mail.sent", "type", "deletion_notice", "result", "queued").count())
+                .isEqualTo(1.0);
     }
 
     @Test

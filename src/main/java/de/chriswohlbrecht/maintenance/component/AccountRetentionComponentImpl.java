@@ -1,0 +1,170 @@
+package de.chriswohlbrecht.maintenance.component;
+
+import de.chriswohlbrecht.maintenance.api.model.AccessStatus;
+import de.chriswohlbrecht.maintenance.component.model.Access;
+import de.chriswohlbrecht.maintenance.configuration.OperatingModeCondition;
+import de.chriswohlbrecht.maintenance.configuration.RetentionProperties;
+import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
+import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
+import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import io.micrometer.core.instrument.MeterRegistry;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+
+/**
+ * Only portal mode has expiring accounts; household profiles and administrators are never touched. Each account is
+ * handled on its own, so one that fails (e.g. the payment provider is down) does not stop the others; it is tried
+ * again on the next run.
+ */
+@Slf4j
+@Component
+@Conditional(OperatingModeCondition.Portal.class)
+public class AccountRetentionComponentImpl implements IAccountRetentionComponent {
+
+    private static final String METRIC = "bm.accounts.retention";
+    private static final List<String> ACTIONS = List.of("notice_sent", "notice_deferred", "deleted", "kept", "failed");
+    /** Slack for the pre-selection: adding and subtracting months is not exactly reversible at month ends. */
+    private static final int PRESELECTION_SLACK_DAYS = 7;
+
+    private final AppUserRepository appUserRepository;
+    private final IAccessComponent accessComponent;
+    private final IAccountMailComponent accountMailComponent;
+    private final IAccountDataDeletionComponent accountDataDeletionComponent;
+    private final ISessionComponent sessionComponent;
+    private final RetentionProperties properties;
+    private final Clock clock;
+    private final MeterRegistry meterRegistry;
+
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
+    public AccountRetentionComponentImpl(AppUserRepository appUserRepository, IAccessComponent accessComponent,
+                                         IAccountMailComponent accountMailComponent,
+                                         IAccountDataDeletionComponent accountDataDeletionComponent,
+                                         ISessionComponent sessionComponent, RetentionProperties properties,
+                                         Clock clock, MeterRegistry meterRegistry) {
+        this.appUserRepository = appUserRepository;
+        this.accessComponent = accessComponent;
+        this.accountMailComponent = accountMailComponent;
+        this.accountDataDeletionComponent = accountDataDeletionComponent;
+        this.sessionComponent = sessionComponent;
+        this.properties = properties;
+        this.clock = clock;
+        this.meterRegistry = meterRegistry;
+        // Registered with 0 up front: a counter that only appears with its first event hides it from increase().
+        ACTIONS.forEach(action -> meterRegistry.counter(METRIC, "action", action));
+    }
+
+    /** No surrounding transaction: every saved notice and every deletion stands on its own. */
+    @Override
+    @Scheduled(cron = "${bm.cleanup.cron}")
+    public void applyRetention() {
+        LocalDate today = LocalDate.now(clock);
+        // Access ends with the trial at the earliest, so an account can only be due if its trial started long enough
+        // ago; accounts with a pending notice are checked anyway (to withdraw it, e.g. after a new subscription).
+        LocalDate trialStartedBefore = today.minus(properties.period()).plus(properties.noticePeriod())
+                .plusDays(PRESELECTION_SLACK_DAYS);
+        int noticesSent = 0;
+        int deleted = 0;
+        for (AppUser user : appUserRepository.findRetentionCandidates(UserRole.USER, trialStartedBefore)) {
+            try {
+                Outcome outcome = handle(user, today, noticesSent < properties.noticeDailyLimit());
+                noticesSent += outcome == Outcome.NOTICE_SENT ? 1 : 0;
+                deleted += outcome == Outcome.DELETED ? 1 : 0;
+            } catch (RuntimeException e) {
+                // Most likely the payment provider; logged without personal data, retried on the next run.
+                count("failed");
+                log.warn("Retention of user {} failed: {}", user.getId(), e.getClass().getSimpleName());
+            }
+        }
+        log.info("Retention: sent {} deletion notices, deleted {} expired accounts", noticesSent, deleted);
+    }
+
+    @Override
+    public void keepAfterLogin(AppUser user) {
+        if (user.getDeletionNoticeSentAt() == null) {
+            return;
+        }
+        user.setDeletionNoticeSentAt(null);
+        user.setKeepUntil(LocalDate.now(clock).plus(properties.period()));
+        appUserRepository.save(user);
+        count("kept");
+        log.info("User {} logged in after the deletion notice, account kept", user.getId());
+    }
+
+    private enum Outcome { NONE, NOTICE_SENT, DELETED }
+
+    private Outcome handle(AppUser user, LocalDate today, boolean mayNotify) {
+        LocalDate deletionDay = deletionDayOf(user);
+        if (deletionDay == null) {
+            withdrawNotice(user);
+            return Outcome.NONE;
+        }
+        LocalDateTime noticeSentAt = user.getDeletionNoticeSentAt();
+        if (noticeSentAt == null) {
+            if (today.isBefore(deletionDay.minus(properties.noticePeriod()))) {
+                return Outcome.NONE;
+            }
+            if (!mayNotify) {
+                count("notice_deferred");
+                return Outcome.NONE;
+            }
+            sendNotice(user, today, deletionDay);
+            return Outcome.NOTICE_SENT;
+        }
+        // Never earlier than a full notice period after the notice, even if the notice went out late.
+        if (today.isBefore(deletionDay)
+                || today.isBefore(noticeSentAt.toLocalDate().plus(properties.noticePeriod()))) {
+            return Outcome.NONE;
+        }
+        delete(user);
+        return Outcome.DELETED;
+    }
+
+    /**
+     * The day the account is due for deletion, or null if it is not expired (trial, subscription, administrator) or
+     * the end of its access is unknown.
+     */
+    private LocalDate deletionDayOf(AppUser user) {
+        Access access = accessComponent.accessOf(user);
+        if (access.status() != AccessStatus.EXPIRED || access.until() == null) {
+            return null;
+        }
+        LocalDate due = access.until().plus(properties.period());
+        LocalDate keepUntil = user.getKeepUntil();
+        return keepUntil != null && keepUntil.isAfter(due) ? keepUntil : due;
+    }
+
+    /** The mail names the real day: never earlier than a full notice period from now. */
+    private void sendNotice(AppUser user, LocalDate today, LocalDate deletionDay) {
+        LocalDate earliest = today.plus(properties.noticePeriod());
+        accountMailComponent.sendDeletionNotice(user, deletionDay.isBefore(earliest) ? earliest : deletionDay);
+        user.setDeletionNoticeSentAt(LocalDateTime.now(clock));
+        appUserRepository.save(user);
+        count("notice_sent");
+    }
+
+    private void withdrawNotice(AppUser user) {
+        if (user.getDeletionNoticeSentAt() != null) {
+            user.setDeletionNoticeSentAt(null);
+            appUserRepository.save(user);
+        }
+    }
+
+    private void delete(AppUser user) {
+        accountDataDeletionComponent.deleteWithAllData(user);
+        sessionComponent.invalidateSessionsOf(user.getId());
+        count("deleted");
+        log.info("User {} deleted: access expired and no login after the deletion notice", user.getId());
+    }
+
+    private void count(String action) {
+        meterRegistry.counter(METRIC, "action", action).increment();
+    }
+}
