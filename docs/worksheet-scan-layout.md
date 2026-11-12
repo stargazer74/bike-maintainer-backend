@@ -23,6 +23,13 @@ PDF points (1/72 inch) on A4 (595.28 × 841.89), origin **top left**, y downward
 Examples: `BMWS;v=1;t=TIRES;id=7;p=1/1`, `BMWS;v=1;t=VALVE_CLEARANCE;id=42;c=8;vpc=4;p=2/3`.
 Only the vehicle id – no names, plates or other personal data. `c`/`vpc` only for `VALVE_CLEARANCE`.
 
+**Demo sheets (trial, backend#138):** while the account is in its trial (`accessStatus` `TRIAL`), every page carries
+`BMWD;v=<layout version>;t=<template>[;c=…;vpc=…];p=<page>/<pages>` instead – same layout, but **no vehicle id**,
+and the word "DEMO" below the code (baseline 22 pt below the code, outside its quiet zone). The app recognises the
+prefix `BMWD` and explains that sheets printed during the trial cannot be scanned and have to be printed again after
+the upgrade; it also refuses to scan while the account is in its trial or read-only, since the format is public.
+Example: `BMWD;v=1;t=TIRES;p=1/1`. Households and paid accounts always get `BMWS`.
+
 ## Fields
 
 - **Digits:** one box of 18 × 24 per digit, boxes directly next to each other; after the integer digits (if there are

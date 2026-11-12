@@ -64,6 +64,10 @@ public class WorksheetPdfHelper {
     /** The vehicle block ends before the QR code. */
     private static final float HEADER_WIDTH = WorksheetScanLayout.QR_LEFT - CONTENT_LEFT - 12f;
 
+    static final String DEMO_LABEL = "DEMO";
+    /** Baseline of {@link #DEMO_LABEL}: about four QR modules below the code, above the content of the sheet. */
+    private static final float DEMO_LABEL_BASELINE = WorksheetScanLayout.QR_TOP + WorksheetScanLayout.QR_SIZE + 22f;
+
     private final MessageSource messageSource;
 
     /**
@@ -73,6 +77,15 @@ public class WorksheetPdfHelper {
      */
     public byte[] generate(Vehicle vehicle, WorksheetTemplate template, ValveLayout layout, WorksheetPrefill prefill,
                            LocalDate printDate, Locale locale) {
+        return generate(vehicle, template, layout, prefill, printDate, locale, false);
+    }
+
+    /**
+     * @param demo printed during the trial: the QR code carries no vehicle ID ({@link Sheet#demoQrContent}), so the
+     *             app does not take over the values, and "DEMO" is printed below it; the sheet is otherwise the same
+     */
+    public byte[] generate(Vehicle vehicle, WorksheetTemplate template, ValveLayout layout, WorksheetPrefill prefill,
+                           LocalDate printDate, Locale locale, boolean demo) {
         try (PDDocument document = new PDDocument()) {
             PdfTexts texts = new PdfTexts(messageSource, locale);
             Values values = new Values(prefill.specification(), locale, texts);
@@ -85,7 +98,11 @@ public class WorksheetPdfHelper {
                 if (page.number() > 1) {
                     writer.newPage();
                 }
-                renderer.scanMarks(sheet.qrContent(vehicle.getId(), page.number()));
+                renderer.scanMarks(demo ? sheet.demoQrContent(page.number())
+                        : sheet.qrContent(vehicle.getId(), page.number()));
+                if (demo) {
+                    renderer.demoLabel();
+                }
                 if (page.number() == 1) {
                     renderer.vehicleBlock(texts.get(titleKey), vehicle, printDate);
                 }
@@ -151,6 +168,12 @@ public class WorksheetPdfHelper {
                             WorksheetScanLayout.QR_TOP + row * module, (column - start) * module, module);
                 }
             }
+        }
+
+        /** Below the QR code, outside its quiet zone; the same word in every language. */
+        void demoLabel() throws IOException {
+            writer.writeTextAt(DEMO_LABEL, FONT_HEADING, 11f, WorksheetScanLayout.QR_LEFT, DEMO_LABEL_BASELINE,
+                    WorksheetScanLayout.QR_SIZE, false);
         }
 
         /** Title, vehicle name, make/model and model year, current mileage, print date – one line each. */
