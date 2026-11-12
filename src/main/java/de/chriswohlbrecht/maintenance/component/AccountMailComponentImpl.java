@@ -9,6 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
 import java.util.Locale;
 import java.util.Map;
 
@@ -22,7 +25,8 @@ public class AccountMailComponentImpl implements IAccountMailComponent {
     private static final Map<String, String> MAIL_TYPES = Map.of(
             "mail.verification", "verification",
             "mail.passwordReset", "password_reset",
-            "mail.registrationExists", "registration_exists");
+            "mail.registrationExists", "registration_exists",
+            "mail.deletionNotice", "deletion_notice");
 
 
     private final IMailService mailService;
@@ -48,17 +52,26 @@ public class AccountMailComponentImpl implements IAccountMailComponent {
                 mailProperties.linkBaseUrl() + "/passwort-vergessen");
     }
 
+    @Override
+    public void sendDeletionNotice(AppUser user, LocalDate deletionDay) {
+        Locale locale = userLocaleComponent.localeOf(user);
+        String date = deletionDay.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale));
+        deliver(user, "mail.deletionNotice", locale, date, mailProperties.linkBaseUrl() + "/anmelden");
+    }
+
     private void send(AppUser user, String key, Object... bodyArguments) {
-        String type = MAIL_TYPES.get(key);
         if (!mailQuotaComponent.tryReserve()) {
             log.warn("Daily email limit reached, {} email not sent", key);
-            meterRegistry.counter(SENT_METRIC, "type", type, "result", "quota_exceeded").increment();
+            meterRegistry.counter(SENT_METRIC, "type", MAIL_TYPES.get(key), "result", "quota_exceeded").increment();
             return;
         }
-        meterRegistry.counter(SENT_METRIC, "type", type, "result", "queued").increment();
-        Locale locale = userLocaleComponent.localeOf(user);
+        deliver(user, key, userLocaleComponent.localeOf(user), bodyArguments);
+    }
+
+    private void deliver(AppUser user, String key, Locale locale, Object... bodyArguments) {
+        meterRegistry.counter(SENT_METRIC, "type", MAIL_TYPES.get(key), "result", "queued").increment();
         mailService.send(user.getEmail(),
-                messageSource.getMessage(key + ".subject", null, locale),
+                messageSource.getMessage(key + ".subject", bodyArguments, locale),
                 messageSource.getMessage(key + ".body", bodyArguments, locale));
     }
 }

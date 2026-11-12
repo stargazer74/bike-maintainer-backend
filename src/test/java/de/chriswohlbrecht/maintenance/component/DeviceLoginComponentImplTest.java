@@ -63,6 +63,8 @@ class DeviceLoginComponentImplTest {
     private DeviceLoginRepository deviceLoginRepository;
     @Mock
     private AppUserRepository appUserRepository;
+    @Mock
+    private IAccountRetentionComponent accountRetentionComponent;
 
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private final MockHttpServletRequest httpRequest = new MockHttpServletRequest();
@@ -73,7 +75,8 @@ class DeviceLoginComponentImplTest {
     @BeforeEach
     void setUp() {
         component = new DeviceLoginComponentImpl(authenticationManager, sessionComponent, currentUserComponent,
-                new UserMapperImpl(), new HouseholdAccessComponentImpl(), deviceLoginRepository, appUserRepository,
+                new UserMapperImpl(), new HouseholdAccessComponentImpl(), accountRetentionComponent, deviceLoginRepository,
+                appUserRepository,
                 new SecurityProperties(10, Duration.ofMinutes(15), 10, Duration.ofMinutes(15), Duration.ofDays(90)),
                 Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC), meterRegistry);
         user = AppUser.builder().id(7L).email("rider@example.org").role(UserRole.USER).active(true)
@@ -184,6 +187,8 @@ class DeviceLoginComponentImplTest {
         verify(sessionComponent).startSession(any(), eq(httpRequest), eq(httpResponse));
         assertThat(httpRequest.getSession().getAttribute(DeviceLoginComponentImpl.SESSION_ATTRIBUTE)).isEqualTo(3L);
         assertThat(meterRegistry.counter("bm.auth.device_session", "result", "success").count()).isEqualTo(1.0);
+        // The app renews its session instead of logging in again: that counts as a login for the retention.
+        verify(accountRetentionComponent).keepAfterLogin(user);
     }
 
     @Test

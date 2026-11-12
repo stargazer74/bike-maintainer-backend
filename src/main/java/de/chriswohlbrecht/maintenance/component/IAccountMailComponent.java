@@ -2,9 +2,12 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 
+import java.time.LocalDate;
+
 /**
- * Emails about the account, in the language of the user. Each email counts towards the daily limit; when it is
- * exhausted, the email is dropped (logged) – callers check {@link IMailQuotaComponent#ensureAvailable()} first.
+ * Emails about the account, in the language of the user. Each email except the deletion notice counts towards the
+ * daily limit; when it is exhausted, the email is dropped (logged) – callers check
+ * {@link IMailQuotaComponent#ensureAvailable()} first.
  */
 public interface IAccountMailComponent {
 
@@ -16,4 +19,11 @@ public interface IAccountMailComponent {
 
     /** Someone tried to register with the address of this existing account; links to login and password reset. */
     void sendRegistrationExists(AppUser user);
+
+    /**
+     * The expired account will be deleted on {@code deletionDay} unless the person logs in before; links to the login.
+     * Not counted towards the daily limit – the caller limits these notices itself
+     * ({@code bm.retention.notice-daily-limit}).
+     */
+    void sendDeletionNotice(AppUser user, LocalDate deletionDay);
 }

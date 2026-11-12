@@ -8,6 +8,7 @@ import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.repository.AppUserRepository;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -43,18 +44,22 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
     private final Clock clock;
     private final SecurityProperties securityProperties;
     private final MeterRegistry meterRegistry;
+    /** Portal mode only; household mode has no login and no expiring accounts. */
+    private final ObjectProvider<IAccountRetentionComponent> accountRetentionComponent;
     /** Hash of a random value, compared against for unknown emails so they take as long as known ones. */
     private final String dummyHash;
 
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Injected Spring beans are meant to be shared")
     public LoginAuthenticationProviderImpl(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder,
                                            Clock clock, SecurityProperties securityProperties,
-                                           MeterRegistry meterRegistry) {
+                                           MeterRegistry meterRegistry,
+                                           ObjectProvider<IAccountRetentionComponent> accountRetentionComponent) {
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.clock = clock;
         this.securityProperties = securityProperties;
         this.meterRegistry = meterRegistry;
+        this.accountRetentionComponent = accountRetentionComponent;
         // Registered with 0 up front: a counter that only appears with its first events hides them from increase().
         for (String result : LOGIN_RESULTS) {
             meterRegistry.counter(LOGIN_METRIC, "result", result);
@@ -110,6 +115,7 @@ public class LoginAuthenticationProviderImpl implements AuthenticationProvider {
             appUserRepository.save(user);
         }
 
+        accountRetentionComponent.ifAvailable(retention -> retention.keepAfterLogin(user));
         countLogin("success");
         return SessionUser.authenticationFor(user);
     }

@@ -49,6 +49,7 @@ The diagram in `db-schema.drawio` shows the same schema.
 | V8 | `maintenance_log_material`, `maintenance_log.labor_cost`/`currency`, `app_user.currency` |
 | V9 | `device_login` (apps that stay logged in) |
 | V10 | `vehicle_specification` (target values), `measurement_valve`, `measurement_brakes`, `measurement_chain`, `measurement_tires` |
+| V14 | `app_user.deletion_notice_sent_at`, `app_user.keep_until` (deletion of expired accounts) |
 
 **Initial admin (V4).** The migration creates one `ADMIN` account whose email comes from the Flyway placeholder `initialAdminEmail` (`BM_INITIAL_ADMIN_EMAIL`, default `admin@localhost`; stored trimmed and lower-cased). All vehicles that existed before user accounts are assigned to it. The placeholder is only read when V4 runs, so `BM_INITIAL_ADMIN_EMAIL` must be set **before** the first start of that version; changing it later does not rename the account. The password cannot be hashed in SQL: the account starts without one, and on every startup `InitialAdminComponentImpl` sets `BM_INITIAL_ADMIN_PASSWORD` (BCrypt) if the account still has no password. An existing password is never overwritten.
 
@@ -71,6 +72,8 @@ is chosen by its display name. The session is stored in `SPRING_SESSION` in both
 | `locked_until` | TIMESTAMP, nullable | Set after too many failed logins (`bm.security.lockout-*`, default 10 attempts / 15 minutes); logins are rejected with 429 until then |
 | `language` | VARCHAR(5) | Preferred language, `de` or `en` (UI, emails, PDF report) |
 | `currency` | VARCHAR(3) | Currency for new maintenance entries (ISO 4217, e.g. `EUR`) |
+| `deletion_notice_sent_at` | TIMESTAMP, nullable | Portal: when the notice about the coming deletion of the expired account was sent (V14); null without a pending notice. The account is deleted at the earliest `bm.retention.notice-period` after it |
+| `keep_until` | DATE, nullable | Portal: the account is not deleted before this day; set when the person logs in after a deletion notice (V14). Login times are not recorded otherwise |
 | `created_at` | TIMESTAMP | Row creation time |
 | `updated_at` | TIMESTAMP | Last update time |
 

@@ -10,7 +10,8 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
-@EnableConfigurationProperties({InitialAdminProperties.class, AccountMailProperties.class, AltchaProperties.class})
+@EnableConfigurationProperties({InitialAdminProperties.class, AccountMailProperties.class, AltchaProperties.class,
+        RetentionProperties.class})
 public class UserAccountConfiguration {
 
     /** Delegating encoder (BCrypt by default); hashes carry an {id} prefix so the algorithm can change later. */
