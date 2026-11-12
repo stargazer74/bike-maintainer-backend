@@ -3,7 +3,6 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.MaintenanceLogsApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
-import de.chriswohlbrecht.maintenance.component.IAccessComponent;
 import de.chriswohlbrecht.maintenance.component.IMaintenanceLogComponent;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
 import de.chriswohlbrecht.maintenance.exception.InvalidLogReferenceException;
@@ -50,9 +49,6 @@ class MaintenanceLogControllerTest {
 
     @MockitoBean
     private IMaintenanceLogComponent maintenanceLogComponent;
-
-    @MockitoBean
-    private IAccessComponent accessComponent;
 
     /**
      * Test case for listMaintenanceLogs.

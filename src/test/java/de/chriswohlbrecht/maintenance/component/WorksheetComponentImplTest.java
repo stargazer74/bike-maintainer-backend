@@ -69,6 +69,9 @@ class WorksheetComponentImplTest {
     @Mock
     private MeasurementValveRepository measurementValveRepository;
 
+    @Mock
+    private IAccessComponent accessComponent;
+
     private SimpleMeterRegistry meterRegistry;
 
     private WorksheetComponentImpl worksheetComponent;
@@ -79,7 +82,7 @@ class WorksheetComponentImplTest {
         lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
         worksheetComponent = new WorksheetComponentImpl(vehicleRepository, vehicleSpecificationRepository,
                 measurementValveRepository, currentUserComponent, userLocaleComponent, worksheetPdfHelper, CLOCK,
-                meterRegistry);
+                meterRegistry, accessComponent);
     }
 
     @Test

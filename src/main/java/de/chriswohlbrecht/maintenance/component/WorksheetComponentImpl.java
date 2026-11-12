@@ -49,6 +49,7 @@ public class WorksheetComponentImpl implements IWorksheetComponent {
     private final WorksheetPdfHelper worksheetPdfHelper;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
+    private final IAccessComponent accessComponent;
 
     @Override
     public Optional<List<WorksheetTemplate>> listWorksheetTemplates(Long vehicleId) {
@@ -58,6 +59,7 @@ public class WorksheetComponentImpl implements IWorksheetComponent {
     @Override
     public Optional<Worksheet> generateWorksheet(Long vehicleId, WorksheetTemplate template, Integer cylinders,
                                                  Integer valvesPerCylinder) {
+        accessComponent.requireWriteAccess();
         return findOwnVehicle(vehicleId).map(vehicle -> {
             if (!WorksheetTemplates.isAvailable(template, vehicle.getType())) {
                 throw new InvalidWorksheetRequestException("Worksheet " + template + " is not available for "

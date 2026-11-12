@@ -65,6 +65,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     private final IMeasurementComponent measurementComponent;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
+    private final IAccessComponent accessComponent;
 
     private static final int MAX_AMOUNT_SCALE = 2;
     private static final int MAX_QUANTITY_SCALE = 3;
@@ -104,6 +105,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     @Transactional
     public Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request,
                                                                  Currency currency, Set<Long> createdTaskIds) {
+        accessComponent.requireWriteAccess();
         return findOwnVehicle(vehicleId).map(vehicle -> {
             List<MaintenanceTask> performedTasks = existingTasks(vehicleId, request);
             List<MaintenanceLogMaterial> materials = materialsOf(request, performedTasks);
@@ -126,6 +128,7 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
     @Override
     @Transactional
     public Optional<MaintenanceLogResponse> updateMaintenanceLog(Long vehicleId, Long logId, MaintenanceLogRequest request) {
+        accessComponent.requireWriteAccess();
         return findOwnVehicle(vehicleId)
                 .flatMap(vehicle -> maintenanceLogRepository.findByIdAndVehicle_Id(logId, vehicleId))
                 .map(log -> {

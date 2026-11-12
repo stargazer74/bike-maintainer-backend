@@ -3,7 +3,6 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.VehicleExportApi;
 import de.chriswohlbrecht.maintenance.api.model.VehicleExport;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
-import de.chriswohlbrecht.maintenance.component.IAccessComponent;
 import de.chriswohlbrecht.maintenance.component.IVehicleExportComponent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ContentDisposition;
@@ -18,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class VehicleExportController implements VehicleExportApi {
 
     private final IVehicleExportComponent vehicleExportComponent;
-    private final IAccessComponent accessComponent;
 
     @Override
     public ResponseEntity<VehicleExport> exportVehicle(Long vehicleId) {
@@ -35,7 +33,6 @@ public class VehicleExportController implements VehicleExportApi {
 
     @Override
     public ResponseEntity<VehicleResponse> importVehicle(VehicleExport vehicleExport) {
-        accessComponent.requireWriteAccess();
         return ResponseEntity.status(HttpStatus.CREATED).body(vehicleExportComponent.importVehicle(vehicleExport));
     }
 }

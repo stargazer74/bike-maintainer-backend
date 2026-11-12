@@ -76,6 +76,9 @@ class MaintenanceTaskComponentImplTest {
     @Mock
     private IUserLocaleComponent userLocaleComponent;
 
+    @Mock
+    private IAccessComponent accessComponent;
+
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-29T10:00:00Z"), ZoneId.of("Europe/Berlin"));
 
     private MaintenanceTaskComponentImpl maintenanceTaskComponent;
@@ -89,7 +92,7 @@ class MaintenanceTaskComponentImplTest {
         maintenanceTaskComponent = new MaintenanceTaskComponentImpl(
                 vehicleRepository, maintenanceTaskRepository, maintenanceLogTaskRepository,
                 new MaintenanceTaskMapperImpl(), maintenanceTaskStatusHelper, currentUserComponent,
-                maintenanceChecklistPdfHelper, userLocaleComponent, CLOCK, meterRegistry);
+                maintenanceChecklistPdfHelper, userLocaleComponent, CLOCK, meterRegistry, accessComponent);
         lenient().when(maintenanceLogTaskRepository.findAllByLog_Vehicle_Id(any())).thenReturn(List.<MaintenanceLogTask>of());
         lenient().when(maintenanceTaskStatusHelper.compute(any(), anyInt(), any(), any())).thenReturn(DUMMY_STATUS);
     }

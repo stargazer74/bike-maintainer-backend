@@ -12,8 +12,9 @@ public interface IAccessComponent {
     Access accessOf(AppUser user);
 
     /**
-     * Guards every operation that writes vehicle data (and the worksheet download). Called by the controllers once per
-     * request, before ownership is checked, so a read-only account learns nothing about foreign IDs.
+     * Guards every operation that writes vehicle data (and the worksheet download). Called first by the components,
+     * before ownership is checked, so a read-only account learns nothing about foreign IDs. Checked once per request:
+     * an import that creates many entries asks the database only once.
      *
      * @throws de.chriswohlbrecht.maintenance.exception.SubscriptionRequiredException if the account of the logged-in
      *                                                                                user is read-only

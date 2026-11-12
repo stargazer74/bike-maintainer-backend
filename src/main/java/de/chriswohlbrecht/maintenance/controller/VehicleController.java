@@ -3,7 +3,6 @@ package de.chriswohlbrecht.maintenance.controller;
 import de.chriswohlbrecht.maintenance.api.handler.VehiclesApi;
 import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
-import de.chriswohlbrecht.maintenance.component.IAccessComponent;
 import de.chriswohlbrecht.maintenance.component.IVehicleComponent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +16,6 @@ import java.util.List;
 public class VehicleController implements VehiclesApi {
 
     private final IVehicleComponent vehicleComponent;
-    private final IAccessComponent accessComponent;
 
     @Override
     public ResponseEntity<List<VehicleResponse>> listVehicles() {
@@ -33,13 +31,11 @@ public class VehicleController implements VehiclesApi {
 
     @Override
     public ResponseEntity<VehicleResponse> createVehicle(VehicleRequest vehicleRequest) {
-        accessComponent.requireWriteAccess();
         return ResponseEntity.status(HttpStatus.CREATED).body(vehicleComponent.createVehicle(vehicleRequest));
     }
 
     @Override
     public ResponseEntity<VehicleResponse> updateVehicle(Long vehicleId, VehicleRequest vehicleRequest) {
-        accessComponent.requireWriteAccess();
         return vehicleComponent.updateVehicle(vehicleId, vehicleRequest)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());

@@ -5,7 +5,6 @@ import de.chriswohlbrecht.maintenance.api.model.LatestMeasurementsResponse;
 import de.chriswohlbrecht.maintenance.api.model.ShimCalculationRequest;
 import de.chriswohlbrecht.maintenance.api.model.ShimCalculationResponse;
 import de.chriswohlbrecht.maintenance.api.model.VehicleSpecifications;
-import de.chriswohlbrecht.maintenance.component.IAccessComponent;
 import de.chriswohlbrecht.maintenance.component.IMeasurementComponent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeasurementController implements MeasurementsApi {
 
     private final IMeasurementComponent measurementComponent;
-    private final IAccessComponent accessComponent;
 
     @Override
     public ResponseEntity<VehicleSpecifications> getVehicleSpecifications(Long vehicleId) {
@@ -26,7 +24,6 @@ public class MeasurementController implements MeasurementsApi {
     @Override
     public ResponseEntity<VehicleSpecifications> updateVehicleSpecifications(Long vehicleId,
                                                                              VehicleSpecifications request) {
-        accessComponent.requireWriteAccess();
         return ResponseEntity.of(measurementComponent.updateVehicleSpecifications(vehicleId, request));
     }
 

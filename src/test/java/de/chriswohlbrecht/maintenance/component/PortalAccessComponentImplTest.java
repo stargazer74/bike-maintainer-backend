@@ -10,11 +10,15 @@ import de.chriswohlbrecht.maintenance.persistence.repository.SubscriptionReposit
 import de.chriswohlbrecht.maintenance.persistence.type.SubscriptionProvider;
 import de.chriswohlbrecht.maintenance.persistence.type.SubscriptionStatus;
 import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -24,6 +28,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +51,11 @@ class PortalAccessComponentImplTest {
         component = new PortalAccessComponentImpl(subscriptionRepository, currentUserComponent,
                 new SubscriptionProperties(TRIAL_DAYS),
                 Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+    }
+
+    @AfterEach
+    void tearDown() {
+        RequestContextHolder.resetRequestAttributes();
     }
 
     @Test
@@ -138,6 +149,29 @@ class PortalAccessComponentImplTest {
         when(currentUserComponent.getCurrentUser()).thenReturn(user(TODAY.minusDays(TRIAL_DAYS)));
 
         assertThatThrownBy(component::requireWriteAccess).isInstanceOf(SubscriptionRequiredException.class);
+    }
+
+    /** An import creates many entries in one request; the account is only checked once. */
+    @Test
+    void requireWriteAccessChecksOncePerRequest() {
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+        when(currentUserComponent.getCurrentUser()).thenReturn(user(TODAY));
+
+        component.requireWriteAccess();
+        component.requireWriteAccess();
+
+        verify(currentUserComponent, times(1)).getCurrentUser();
+    }
+
+    @Test
+    void aRefusedWriteAccessIsCheckedAgain() {
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+        when(currentUserComponent.getCurrentUser()).thenReturn(user(null));
+
+        assertThatThrownBy(component::requireWriteAccess).isInstanceOf(SubscriptionRequiredException.class);
+        assertThatThrownBy(component::requireWriteAccess).isInstanceOf(SubscriptionRequiredException.class);
+
+        verify(currentUserComponent, times(2)).getCurrentUser();
     }
 
     private static AppUser user(LocalDate trialStartedOn) {

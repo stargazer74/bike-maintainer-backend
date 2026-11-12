@@ -79,6 +79,7 @@ public class MeasurementComponentImpl implements IMeasurementComponent {
     private final MeasurementChainRepository measurementChainRepository;
     private final MeasurementTiresRepository measurementTiresRepository;
     private final MeasurementMapper measurementMapper;
+    private final IAccessComponent accessComponent;
     private final ICurrentUserComponent currentUserComponent;
 
     @Override
@@ -93,6 +94,7 @@ public class MeasurementComponentImpl implements IMeasurementComponent {
     @Transactional
     public Optional<VehicleSpecifications> updateVehicleSpecifications(Long vehicleId,
                                                                       VehicleSpecifications request) {
+        accessComponent.requireWriteAccess();
         return findOwnVehicle(vehicleId).map(vehicle -> {
             validate(request);
             VehicleSpecification specification = measurementMapper.toEntity(request);

@@ -71,13 +71,17 @@ class VehicleExportComponentImplTest {
     @Mock
     private IMeasurementComponent measurementComponent;
 
+    @Mock
+    private IAccessComponent accessComponent;
+
     private VehicleExportComponentImpl component;
 
     @BeforeEach
     void setUp() {
         MockEnvironment environment = new MockEnvironment().withProperty("info.app.version", "0.15.0");
         component = new VehicleExportComponentImpl(vehicleComponent, maintenanceTaskComponent, maintenanceLogComponent,
-                measurementComponent, Mappers.getMapper(VehicleExportMapper.class), environment, CLOCK);
+                measurementComponent, Mappers.getMapper(VehicleExportMapper.class), environment, CLOCK,
+                accessComponent);
     }
 
     @Test

@@ -5,7 +5,6 @@ import de.chriswohlbrecht.maintenance.api.model.ExportedVehicle;
 import de.chriswohlbrecht.maintenance.api.model.VehicleExport;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
 import de.chriswohlbrecht.maintenance.api.model.VehicleType;
-import de.chriswohlbrecht.maintenance.component.IAccessComponent;
 import de.chriswohlbrecht.maintenance.component.IVehicleExportComponent;
 import de.chriswohlbrecht.maintenance.component.model.VehicleExportFile;
 import de.chriswohlbrecht.maintenance.exception.ImportFormatUnsupportedException;
@@ -48,9 +47,6 @@ class VehicleExportControllerTest {
 
     @MockitoBean
     private IVehicleExportComponent vehicleExportComponent;
-
-    @MockitoBean
-    private IAccessComponent accessComponent;
 
     @Test
     void exportVehicle_isDownloadedAsAttachment() throws Exception {

@@ -56,6 +56,7 @@ public class VehicleExportComponentImpl implements IVehicleExportComponent {
     private final VehicleExportMapper vehicleExportMapper;
     private final Environment environment;
     private final Clock clock;
+    private final IAccessComponent accessComponent;
 
     @Override
     @Transactional(readOnly = true)
@@ -100,6 +101,7 @@ public class VehicleExportComponentImpl implements IVehicleExportComponent {
     @Override
     @Transactional
     public VehicleResponse importVehicle(VehicleExport file) {
+        accessComponent.requireWriteAccess();
         if (!Integer.valueOf(ImportFormatUnsupportedException.SUPPORTED_VERSION).equals(file.getFormatVersion())) {
             throw new ImportFormatUnsupportedException(file.getFormatVersion());
         }

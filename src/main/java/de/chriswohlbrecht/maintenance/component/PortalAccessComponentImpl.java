@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -29,6 +31,8 @@ import java.util.Objects;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PortalAccessComponentImpl implements IAccessComponent {
+
+    private static final String WRITE_GRANTED = PortalAccessComponentImpl.class.getName() + ".writeGranted";
 
     private final SubscriptionRepository subscriptionRepository;
     private final ICurrentUserComponent currentUserComponent;
@@ -63,10 +67,18 @@ public class PortalAccessComponentImpl implements IAccessComponent {
         return new Access(AccessStatus.EXPIRED, latest(paidUntil, trialEnd), hasSubscription);
     }
 
+    /** Remembers a granted write access in the request, see {@link IAccessComponent#requireWriteAccess()}. */
     @Override
     public void requireWriteAccess() {
+        RequestAttributes request = RequestContextHolder.getRequestAttributes();
+        if (request != null && request.getAttribute(WRITE_GRANTED, RequestAttributes.SCOPE_REQUEST) != null) {
+            return;
+        }
         if (!accessOf(currentUserComponent.getCurrentUser()).canWrite()) {
             throw new SubscriptionRequiredException();
+        }
+        if (request != null) {
+            request.setAttribute(WRITE_GRANTED, Boolean.TRUE, RequestAttributes.SCOPE_REQUEST);
         }
     }
 
