@@ -82,10 +82,14 @@ Requirements: Java 25.
 | `BM_PUBLIC_URL` | address of the app used in email links, e.g. `https://app.example.com` |
 | `BM_WEBSITE_URL` | public website (portal only), e.g. `https://www.example.com`; the app links to it and to its legal notice and privacy policy. Unset = no links; anything but an http(s) address stops the startup |
 | `BM_ALTCHA_HMAC_KEY` | secret for the registration captcha, e.g. `openssl rand -hex 32` |
+| `BM_SUBSCRIPTION_TRIAL_DAYS` | length of the free trial in days (portal); no default, the value is a decision of the deployment |
+| `BM_POLAR_ACCESS_TOKEN`, `BM_POLAR_WEBHOOK_SECRET`, `BM_POLAR_PRODUCT_ID` | subscription via Polar (portal): organization access token, `whsec_…` secret of the webhook endpoint `https://<app>/api/v1/webhooks/polar`, id of the yearly product |
+| `BM_POLAR_API_URL` | Polar API, default `https://api.polar.sh`; `https://sandbox-api.polar.sh` for the sandbox |
 | `LOGGING_STRUCTURED_FORMAT_CONSOLE` | `ecs` for JSON log lines (portal operation, collected by the monitoring); unset = readable text |
 
-In portal mode the backend refuses to start without `BM_ALTCHA_HMAC_KEY`, and without `SPRING_MAIL_HOST` unless the
-Spring profile `local` is active. At most `bm.mail.daily-limit` (100) emails are sent per day; unverified accounts are
+In portal mode the backend refuses to start without `BM_ALTCHA_HMAC_KEY` and `BM_SUBSCRIPTION_TRIAL_DAYS`, and
+without `SPRING_MAIL_HOST` and the three `BM_POLAR_*` settings unless the Spring profile `local` is active (there the
+checkout answers 503 without Polar). At most `bm.mail.daily-limit` (100) emails are sent per day; unverified accounts are
 deleted after 7 days.
 
 ### Login & first start (portal mode)
@@ -107,6 +111,10 @@ network. Backend and database publish no ports. The compose files, `.env.example
    SMTP login unless `BM_MAIL_FROM` is set.
 3. **`BM_PUBLIC_URL`:** the address users open (e.g. `https://app.example.com`); email links point there.
 4. **Captcha:** `BM_ALTCHA_HMAC_KEY` (`openssl rand -hex 32`).
+5. **Subscription:** `BM_SUBSCRIPTION_TRIAL_DAYS` and the `BM_POLAR_*` settings. In Polar, create the yearly product
+   and a webhook endpoint for `https://<app>/api/v1/webhooks/polar` with the `subscription.*` events (format raw); the
+   backend only uses an event as a trigger and fetches the current state of the subscription from Polar. Polar only
+   learns the email address (for the invoice) and a random customer reference, never the internal account id.
 
 Further accounts register themselves (email verification required); admins manage roles and lock accounts under
 `/admin/nutzer` in the web app.

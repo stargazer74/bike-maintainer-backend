@@ -228,3 +228,17 @@ Feature: Household mode – profile selection instead of login
       { "name": "Family car", "type": "CAR", "modelYear": 2019, "firstRegistrationDate": "2019-05-01", "currentMileage": 42000 }
       """
     Then the response status code is 201
+
+  Scenario Outline: There is no subscription in household mode
+    Given I have selected a new profile "Anna"
+    When a POST request is sent to "<path>" with body:
+      """
+      {}
+      """
+    Then the response status code is 404
+
+    Examples:
+      | path                                  |
+      | /api/v1/subscription/checkout         |
+      | /api/v1/subscription/customer-portal  |
+      | /api/v1/webhooks/polar                |

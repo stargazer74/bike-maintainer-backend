@@ -47,6 +47,7 @@ public class AccountDeletionComponentImpl implements IAccountDeletionComponent {
     private final MaintenanceLogRepository maintenanceLogRepository;
     private final MaintenanceLogTaskRepository maintenanceLogTaskRepository;
     private final MaintenanceLogMaterialRepository maintenanceLogMaterialRepository;
+    private final ISubscriptionComponent subscriptionComponent;
     private final PasswordEncoder passwordEncoder;
     private final SecurityProperties securityProperties;
     private final Clock clock;
@@ -60,8 +61,9 @@ public class AccountDeletionComponentImpl implements IAccountDeletionComponent {
                                         MaintenanceLogRepository maintenanceLogRepository,
                                         MaintenanceLogTaskRepository maintenanceLogTaskRepository,
                                         MaintenanceLogMaterialRepository maintenanceLogMaterialRepository,
-                                        PasswordEncoder passwordEncoder, SecurityProperties securityProperties,
-                                        Clock clock, MeterRegistry meterRegistry) {
+                                        ISubscriptionComponent subscriptionComponent, PasswordEncoder passwordEncoder,
+                                        SecurityProperties securityProperties, Clock clock,
+                                        MeterRegistry meterRegistry) {
         this.currentUserComponent = currentUserComponent;
         this.sessionComponent = sessionComponent;
         this.appUserRepository = appUserRepository;
@@ -70,6 +72,7 @@ public class AccountDeletionComponentImpl implements IAccountDeletionComponent {
         this.maintenanceLogRepository = maintenanceLogRepository;
         this.maintenanceLogTaskRepository = maintenanceLogTaskRepository;
         this.maintenanceLogMaterialRepository = maintenanceLogMaterialRepository;
+        this.subscriptionComponent = subscriptionComponent;
         this.passwordEncoder = passwordEncoder;
         this.securityProperties = securityProperties;
         this.clock = clock;
@@ -94,6 +97,10 @@ public class AccountDeletionComponentImpl implements IAccountDeletionComponent {
         if (isLastActiveAdmin(user)) {
             throw new LastAdminException("The last active admin cannot delete their account");
         }
+
+        // Before anything is deleted: if the provider cannot be reached, the account stays and nothing is billed
+        // for an account that no longer exists. The subscription rows go with the user (ON DELETE CASCADE).
+        subscriptionComponent.endSubscriptionsOf(user);
 
         // No ON DELETE CASCADE from the vehicle down: remove dependents first, children before parents.
         for (Vehicle vehicle : vehicleRepository.findAllByUser_Id(user.getId())) {

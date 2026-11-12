@@ -69,6 +69,13 @@ public class ApiClient {
         return exchange(HttpMethod.POST, path, jsonBody, false);
     }
 
+    /** POST from another server (e.g. a webhook of the payment provider): no cookies, no session, no CSRF token. */
+    public EntityExchangeResult<byte[]> postAsServer(String path, Map<String, String> headers, String jsonBody) {
+        RestTestClient.RequestBodySpec request = restTestClient.post().uri(path);
+        headers.forEach(request::header);
+        return request.contentType(MediaType.APPLICATION_JSON).body(jsonBody).exchange().returnResult(byte[].class);
+    }
+
     public EntityExchangeResult<byte[]> put(String path, String jsonBody) {
         return exchange(HttpMethod.PUT, path, jsonBody, true);
     }

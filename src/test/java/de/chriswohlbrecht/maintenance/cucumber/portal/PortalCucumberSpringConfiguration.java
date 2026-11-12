@@ -15,6 +15,6 @@ import org.springframework.context.annotation.Import;
         "bm.initial-admin.email=admin@localhost",
         "bm.initial-admin.password=initial-admin-password"
 })
-@Import(RecordingMailService.class)
+@Import({RecordingMailService.class, FakePaymentProviderService.class})
 public class PortalCucumberSpringConfiguration {
 }

@@ -52,6 +52,36 @@ public class GlobalExceptionHandler {
                         request.getRequestURI()));
     }
 
+    @ExceptionHandler(AlreadySubscribedException.class)
+    public ResponseEntity<ErrorResponse> handleAlreadySubscribed(AlreadySubscribedException ex,
+                                                                   HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponses.of(HttpStatus.CONFLICT, AlreadySubscribedException.CODE, ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    /** No details of the provider's answer go to the client; they are logged by the service. */
+    @ExceptionHandler(PaymentProviderUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentProviderUnavailable(PaymentProviderUnavailableException ex,
+                                                                            HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponses.of(HttpStatus.SERVICE_UNAVAILABLE, null, "Payment provider unavailable",
+                        request.getRequestURI()));
+    }
+
+    @ExceptionHandler(WebhookSignatureException.class)
+    public ResponseEntity<ErrorResponse> handleWebhookSignature(WebhookSignatureException ex,
+                                                                  HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponses.of(HttpStatus.FORBIDDEN, null, ex.getMessage(), request.getRequestURI()));
+    }
+
+    @ExceptionHandler(InvalidWebhookException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidWebhook(InvalidWebhookException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponses.of(HttpStatus.BAD_REQUEST, null, ex.getMessage(), request.getRequestURI()));
+    }
+
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException ex,
                                                                  HttpServletRequest request) {

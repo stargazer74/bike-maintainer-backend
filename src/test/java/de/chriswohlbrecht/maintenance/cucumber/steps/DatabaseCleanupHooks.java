@@ -50,7 +50,7 @@ public class DatabaseCleanupHooks {
                 .filter(user -> !isInitialAdmin(user))
                 .toList());
         jdbcTemplate.update("UPDATE app_user SET role = 'ADMIN', active = TRUE, failed_login_attempts = 0, "
-                + "locked_until = NULL");
+                + "locked_until = NULL, billing_customer_ref = NULL");
         jdbcTemplate.update("DELETE FROM SPRING_SESSION_ATTRIBUTES");
         jdbcTemplate.update("DELETE FROM SPRING_SESSION");
     }
