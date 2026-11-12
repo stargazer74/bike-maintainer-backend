@@ -240,12 +240,25 @@ public final class WorksheetScanLayout {
 
         /**
          * Content of the QR code on {@code page}, e.g. {@code BMWS;v=1;t=VALVE_CLEARANCE;id=42;c=4;vpc=4;p=1/2}.
-         * Only the vehicle id identifies anything – no names, no personal data.
          */
         public String qrContent(long vehicleId, int page) {
-            StringBuilder content = new StringBuilder("BMWS;v=").append(VERSION)
-                    .append(";t=").append(template.name())
-                    .append(";id=").append(vehicleId);
+            return content("BMWS", vehicleId, page);
+        }
+
+        /**
+         * QR code of a sheet printed during the trial (backend#138), e.g. {@code BMWD;v=1;t=TIRES;p=1/1}: the app
+         * recognises it, but without the vehicle ID it cannot assign the values and explains why instead.
+         */
+        public String demoQrContent(int page) {
+            return content("BMWD", null, page);
+        }
+
+        private String content(String prefix, Long vehicleId, int page) {
+            StringBuilder content = new StringBuilder(prefix).append(";v=").append(VERSION)
+                    .append(";t=").append(template.name());
+            if (vehicleId != null) {
+                content.append(";id=").append(vehicleId);
+            }
             if (valves != null) {
                 content.append(";c=").append(valves.cylinders()).append(";vpc=").append(valves.valvesPerCylinder());
             }

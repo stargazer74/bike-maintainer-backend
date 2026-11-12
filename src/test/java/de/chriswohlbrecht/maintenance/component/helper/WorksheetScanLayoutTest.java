@@ -132,6 +132,15 @@ class WorksheetScanLayoutTest {
                 .isEqualTo("BMWS;v=1;t=TIRES;id=7;p=1/1");
     }
 
+    /** Demo sheets of the trial (backend#138): own prefix, no vehicle ID, everything else as usual. */
+    @Test
+    void demoQrContent_hasNoVehicleId() {
+        assertThat(WorksheetScanLayout.of(WorksheetTemplate.VALVE_CLEARANCE, new ValveLayout(8, 4)).demoQrContent(2))
+                .isEqualTo("BMWD;v=1;t=VALVE_CLEARANCE;c=8;vpc=4;p=2/3");
+        assertThat(WorksheetScanLayout.of(WorksheetTemplate.TIRES, null).demoQrContent(1))
+                .isEqualTo("BMWD;v=1;t=TIRES;p=1/1");
+    }
+
     /**
      * Positions must not change silently: the app reads photos with the same numbers. If this fails after an
      * intended change, raise {@link WorksheetScanLayout#VERSION}, regenerate the file with

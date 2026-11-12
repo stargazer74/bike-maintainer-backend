@@ -97,3 +97,14 @@ Feature: Access status – trial, subscription and read-only accounts (portal mo
     When a GET request is sent to "/api/v1/auth/me"
     Then the JSON response field "accessStatus" equals "EXPIRED"
     And the JSON response field "hasSubscription" equals "true"
+
+  Scenario: During the trial worksheets are demo sheets
+    When a GET request is sent to "/api/v1/vehicles/{bike}/worksheets/TIRES"
+    Then the response status code is 200
+    And the PDF document contains "DEMO"
+
+  Scenario: With a subscription worksheets can be scanned
+    Given "rider@example.org" has a subscription paid until in 300 days
+    When a GET request is sent to "/api/v1/vehicles/{bike}/worksheets/TIRES"
+    Then the response status code is 200
+    And the PDF document does not contain "DEMO"

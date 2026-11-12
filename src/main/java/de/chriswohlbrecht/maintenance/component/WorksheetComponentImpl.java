@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.api.model.AccessStatus;
 import de.chriswohlbrecht.maintenance.api.model.WorksheetTemplate;
 import de.chriswohlbrecht.maintenance.component.helper.ValveLayout;
 import de.chriswohlbrecht.maintenance.component.helper.WorksheetPdfHelper;
@@ -69,9 +70,11 @@ public class WorksheetComponentImpl implements IWorksheetComponent {
             WorksheetPrefill prefill = prefill(vehicle, template);
             LocalDate today = LocalDate.now(clock);
             Locale locale = userLocaleComponent.localeOf(vehicle.getUser());
+            // During the trial the sheet can be printed and filled in, but the app does not take over its values.
+            boolean demo = accessComponent.accessOf(vehicle.getUser()).status() == AccessStatus.TRIAL;
             return new Worksheet(worksheetPdfHelper.fileName(vehicle, template, today, locale),
                     timedGeneration(() -> worksheetPdfHelper.generate(vehicle, template, layout, prefill, today,
-                            locale)));
+                            locale, demo)));
         });
     }
 

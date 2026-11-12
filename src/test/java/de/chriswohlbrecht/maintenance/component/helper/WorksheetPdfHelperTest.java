@@ -222,6 +222,33 @@ class WorksheetPdfHelperTest {
     /** Rendered at 4 px per point, so one point of the layout is easy to address. */
     private static final float SCALE = 4f;
 
+    /** A demo sheet carries the QR code without vehicle ID and "DEMO"; a normal sheet does not say "DEMO". */
+    @Test
+    void demoSheetCarriesTheDemoQrCodeAndItsLabel() throws IOException {
+        ValveLayout layout = new ValveLayout(8, 3);
+        WorksheetScanLayout.Sheet sheet = WorksheetScanLayout.of(WorksheetTemplate.VALVE_CLEARANCE, layout);
+        byte[] demo = helper.generate(vehicle(), WorksheetTemplate.VALVE_CLEARANCE, layout, WorksheetPrefill.none(),
+                PRINTED, Locale.GERMANY, true);
+
+        assertThat(count(text(demo), WorksheetPdfHelper.DEMO_LABEL)).isEqualTo(sheet.pages().size());
+        try (PDDocument document = Loader.loadPDF(demo)) {
+            for (WorksheetScanLayout.Page page : sheet.pages()) {
+                BufferedImage image = render(document, page.number());
+                boolean[][] expected = WorksheetPdfHelper.qrModules(sheet.demoQrContent(page.number()));
+                float module = WorksheetScanLayout.QR_SIZE / expected.length;
+                for (int y = 0; y < expected.length; y++) {
+                    for (int x = 0; x < expected.length; x++) {
+                        assertThat(dark(image, WorksheetScanLayout.QR_LEFT + (x + 0.5f) * module,
+                                WorksheetScanLayout.QR_TOP + (y + 0.5f) * module))
+                                .as("page %d module %d/%d", page.number(), x, y).isEqualTo(expected[y][x]);
+                    }
+                }
+            }
+        }
+        assertThat(text(helper.generate(vehicle(), WorksheetTemplate.TIRES, null, WorksheetPrefill.none(), PRINTED,
+                Locale.GERMANY))).doesNotContain(WorksheetPdfHelper.DEMO_LABEL);
+    }
+
     @ParameterizedTest
     @EnumSource(WorksheetTemplate.class)
     void everyPageCarriesTheMarkersAndItsQrCode(WorksheetTemplate template) throws IOException {

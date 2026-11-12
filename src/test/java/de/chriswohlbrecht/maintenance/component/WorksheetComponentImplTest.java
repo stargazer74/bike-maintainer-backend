@@ -1,10 +1,12 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.api.model.AccessStatus;
 import de.chriswohlbrecht.maintenance.api.model.WorksheetTemplate;
 import de.chriswohlbrecht.maintenance.component.helper.ValveLayout;
 import de.chriswohlbrecht.maintenance.component.helper.WorksheetPdfHelper;
-import de.chriswohlbrecht.maintenance.component.model.Worksheet;
 import de.chriswohlbrecht.maintenance.component.helper.WorksheetPrefill;
+import de.chriswohlbrecht.maintenance.component.model.Access;
+import de.chriswohlbrecht.maintenance.component.model.Worksheet;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLog;
 import de.chriswohlbrecht.maintenance.persistence.model.MeasurementValve;
 import de.chriswohlbrecht.maintenance.persistence.model.VehicleSpecification;
@@ -39,6 +41,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -83,6 +86,7 @@ class WorksheetComponentImplTest {
         worksheetComponent = new WorksheetComponentImpl(vehicleRepository, vehicleSpecificationRepository,
                 measurementValveRepository, currentUserComponent, userLocaleComponent, worksheetPdfHelper, CLOCK,
                 meterRegistry, accessComponent);
+        lenient().when(accessComponent.accessOf(any())).thenReturn(Access.full(false));
     }
 
     @Test
@@ -106,7 +110,8 @@ class WorksheetComponentImplTest {
                 .thenReturn("worksheet.pdf");
         when(worksheetPdfHelper.generate(ArgumentMatchers.eq(vehicle),
                 ArgumentMatchers.eq(WorksheetTemplate.VALVE_CLEARANCE), ArgumentMatchers.eq(new ValveLayout(2, 4)),
-                any(), ArgumentMatchers.eq(TODAY), ArgumentMatchers.eq(Locale.UK))).thenReturn(new byte[]{1, 2});
+                any(), ArgumentMatchers.eq(TODAY), ArgumentMatchers.eq(Locale.UK), ArgumentMatchers.eq(false)))
+                .thenReturn(new byte[]{1, 2});
 
         Optional<Worksheet> result = worksheetComponent.generateWorksheet(vehicle.getId(),
                 WorksheetTemplate.VALVE_CLEARANCE, 2, 4);
@@ -122,7 +127,7 @@ class WorksheetComponentImplTest {
     void generateWorksheet_otherTemplate_rendersWithoutLayout() {
         Vehicle vehicle = ownVehicle(VehicleType.CAR);
         when(worksheetPdfHelper.generate(ArgumentMatchers.eq(vehicle), ArgumentMatchers.eq(WorksheetTemplate.TIRES),
-                ArgumentMatchers.isNull(), any(), ArgumentMatchers.eq(TODAY), any())).thenReturn(new byte[]{3});
+                ArgumentMatchers.isNull(), any(), ArgumentMatchers.eq(TODAY), any(), anyBoolean())).thenReturn(new byte[]{3});
 
         assertThat(worksheetComponent.generateWorksheet(vehicle.getId(), WorksheetTemplate.TIRES, null, null))
                 .isPresent();
@@ -131,7 +136,7 @@ class WorksheetComponentImplTest {
     @Test
     void generateWorksheet_failingRendering_isCountedAsFailure() {
         Vehicle vehicle = ownVehicle(VehicleType.CAR);
-        when(worksheetPdfHelper.generate(any(), any(), any(), any(), any(), any()))
+        when(worksheetPdfHelper.generate(any(), any(), any(), any(), any(), any(), anyBoolean()))
                 .thenThrow(new IllegalStateException("boom"));
 
         assertThatThrownBy(() -> worksheetComponent.generateWorksheet(vehicle.getId(), WorksheetTemplate.BRAKES,
@@ -189,7 +194,7 @@ class WorksheetComponentImplTest {
                 valve(newer, 1, ValveKind.EXHAUST, "2.000", "1.975"),
                 valve(newer, 2, ValveKind.INTAKE, null, null)));
         ArgumentCaptor<WorksheetPrefill> prefill = ArgumentCaptor.forClass(WorksheetPrefill.class);
-        when(worksheetPdfHelper.generate(any(), any(), any(), prefill.capture(), any(), any()))
+        when(worksheetPdfHelper.generate(any(), any(), any(), prefill.capture(), any(), any(), anyBoolean()))
                 .thenReturn(new byte[]{1});
 
         worksheetComponent.generateWorksheet(vehicle.getId(), WorksheetTemplate.VALVE_CLEARANCE, 2, 2);
@@ -203,11 +208,37 @@ class WorksheetComponentImplTest {
     @Test
     void generateWorksheet_otherTemplate_needsNoShims() {
         Vehicle vehicle = ownVehicle(VehicleType.MOTORCYCLE);
-        when(worksheetPdfHelper.generate(any(), any(), any(), any(), any(), any())).thenReturn(new byte[]{1});
+        when(worksheetPdfHelper.generate(any(), any(), any(), any(), any(), any(), anyBoolean()))
+                .thenReturn(new byte[]{1});
 
         worksheetComponent.generateWorksheet(vehicle.getId(), WorksheetTemplate.BRAKES, null, null);
 
         verifyNoInteractions(measurementValveRepository);
+    }
+
+    /** During the trial the sheet is rendered as a demo (QR code without the vehicle ID). */
+    @Test
+    void generateWorksheet_duringTheTrial_rendersADemoSheet() {
+        Vehicle vehicle = ownVehicle(VehicleType.CAR);
+        when(accessComponent.accessOf(vehicle.getUser()))
+                .thenReturn(new Access(AccessStatus.TRIAL, TODAY.plusDays(3), false));
+        when(worksheetPdfHelper.generate(any(), any(), any(), any(), any(), any(), ArgumentMatchers.eq(true)))
+                .thenReturn(new byte[]{9});
+
+        assertThat(worksheetComponent.generateWorksheet(vehicle.getId(), WorksheetTemplate.TIRES, null, null))
+                .hasValueSatisfying(worksheet -> assertThat(worksheet.content()).containsExactly(9));
+    }
+
+    @Test
+    void generateWorksheet_withASubscription_rendersTheRealSheet() {
+        Vehicle vehicle = ownVehicle(VehicleType.CAR);
+        when(accessComponent.accessOf(vehicle.getUser()))
+                .thenReturn(new Access(AccessStatus.ACTIVE, TODAY.plusDays(300), true));
+        when(worksheetPdfHelper.generate(any(), any(), any(), any(), any(), any(), ArgumentMatchers.eq(false)))
+                .thenReturn(new byte[]{8});
+
+        assertThat(worksheetComponent.generateWorksheet(vehicle.getId(), WorksheetTemplate.TIRES, null, null))
+                .hasValueSatisfying(worksheet -> assertThat(worksheet.content()).containsExactly(8));
     }
 
     private static MeasurementValve valve(MaintenanceLog log, int cylinder, ValveKind kind, String shimOld,
