@@ -22,6 +22,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Conditional(OperatingModeCondition.Portal.class)
 public class SecurityConfiguration {
 
+    private static final String WEBHOOK_ENDPOINT = "/api/v1/webhooks/polar";
+
     private static final String[] PUBLIC_POST_ENDPOINTS = {
             "/api/v1/auth/login",
             "/api/v1/auth/register",
@@ -30,7 +32,9 @@ public class SecurityConfiguration {
             "/api/v1/auth/password-reset/request",
             "/api/v1/auth/password-reset/confirm",
             "/api/v1/auth/device-login",
-            "/api/v1/auth/device-session"
+            "/api/v1/auth/device-session",
+            // The payment provider, authenticated by the signature of the webhook instead of a session.
+            WEBHOOK_ENDPOINT
     };
 
     private static final String[] HOUSEHOLD_ONLY_ENDPOINTS = {
@@ -48,6 +52,8 @@ public class SecurityConfiguration {
         SessionSecurityConfiguration.applySessionDefaults(http, csrfTokenRepository, securityContextRepository,
                 errorWriter);
         http
+                // Signed by the provider instead (Standard Webhooks); a server-to-server call has no CSRF cookie.
+                .csrf(csrf -> csrf.ignoringRequestMatchers(WEBHOOK_ENDPOINT))
                 .authorizeHttpRequests(auth -> auth
                         // error dispatches render the original error (e.g. 400), not a 401 on top of it
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()

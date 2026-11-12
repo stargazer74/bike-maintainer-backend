@@ -53,6 +53,16 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().getDetails()).hasSize(100).startsWith("problem 0");
     }
 
+    @Test
+    void anUnavailablePaymentProvider_isAnswered503_withoutDetailsOfTheProvider() {
+        ResponseEntity<ErrorResponse> response =
+                handler.handlePaymentProviderUnavailable(request("/api/v1/subscription/checkout"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getBody().getMessage()).isEqualTo("Payment provider unavailable");
+        assertThat(response.getBody().getCode()).isNull();
+    }
+
     private static MockHttpServletRequest request(String uri) {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", uri);
         request.setRequestURI(uri);

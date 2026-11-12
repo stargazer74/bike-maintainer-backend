@@ -22,7 +22,8 @@ class PortalStartupCheckTest {
     @Test
     void failsWithoutMailHostOutsideLocalProfile() {
         runner.withPropertyValues("bm.mode=portal", "spring.mail.host=", "bm.altcha.hmac-key=secret",
-                        "bm.subscription.trial-days=10")
+                        "bm.subscription.trial-days=10", "bm.polar.access-token=token",
+                        "bm.polar.webhook-secret=whsec_c2VjcmV0", "bm.polar.product-id=product")
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("SPRING_MAIL_HOST");
@@ -32,14 +33,16 @@ class PortalStartupCheckTest {
     @Test
     void startsWithoutMailHostInLocalProfile() {
         runner.withPropertyValues("bm.mode=portal", "spring.profiles.active=local", "bm.altcha.hmac-key=secret",
-                        "bm.subscription.trial-days=10")
+                        "bm.subscription.trial-days=10", "bm.polar.access-token=token",
+                        "bm.polar.webhook-secret=whsec_c2VjcmV0", "bm.polar.product-id=product")
                 .run(context -> assertThat(context).hasNotFailed());
     }
 
     @Test
     void startsWithMailHostAndAltchaKey() {
         runner.withPropertyValues("bm.mode=portal", "spring.mail.host=smtp.example.org", "bm.altcha.hmac-key=secret",
-                        "bm.subscription.trial-days=10")
+                        "bm.subscription.trial-days=10", "bm.polar.access-token=token",
+                        "bm.polar.webhook-secret=whsec_c2VjcmV0", "bm.polar.product-id=product")
                 .run(context -> assertThat(context).hasNotFailed());
     }
 
@@ -51,6 +54,24 @@ class PortalStartupCheckTest {
                     assertThat(context.getStartupFailure()).rootCause()
                             .hasMessageContaining("BM_SUBSCRIPTION_TRIAL_DAYS");
                 });
+    }
+
+    @Test
+    void failsWithoutPolarOutsideLocalProfile() {
+        runner.withPropertyValues("bm.mode=portal", "spring.mail.host=smtp.example.org", "bm.altcha.hmac-key=secret",
+                        "bm.subscription.trial-days=10", "bm.polar.access-token=token")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).rootCause()
+                            .hasMessageContaining("BM_POLAR_WEBHOOK_SECRET");
+                });
+    }
+
+    @Test
+    void startsWithoutPolarInLocalProfile() {
+        runner.withPropertyValues("bm.mode=portal", "spring.profiles.active=local", "bm.altcha.hmac-key=secret",
+                        "bm.subscription.trial-days=10")
+                .run(context -> assertThat(context).hasNotFailed());
     }
 
     @Test

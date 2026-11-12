@@ -82,6 +82,13 @@ public class AppUser {
     @Column(name = "trial_started_on")
     private LocalDate trialStartedOn;
 
+    /**
+     * Random reference under which the payment provider knows this account (portal mode); never the internal id.
+     * Null until the first checkout.
+     */
+    @Column(name = "billing_customer_ref", length = 36, unique = true)
+    private String billingCustomerRef;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

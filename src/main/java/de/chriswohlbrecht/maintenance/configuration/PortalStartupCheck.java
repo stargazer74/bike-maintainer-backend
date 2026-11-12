@@ -14,6 +14,13 @@ import org.springframework.core.env.Profiles;
 @Conditional(OperatingModeCondition.Portal.class)
 public final class PortalStartupCheck {
 
+    /** Property, environment variable and what it is, for the subscription via Polar. */
+    private static final String[][] POLAR_SETTINGS = {
+            {"bm.polar.access-token", "BM_POLAR_ACCESS_TOKEN", "organization access token of Polar"},
+            {"bm.polar.webhook-secret", "BM_POLAR_WEBHOOK_SECRET", "secret of the Polar webhook endpoint"},
+            {"bm.polar.product-id", "BM_POLAR_PRODUCT_ID", "id of the subscription product in Polar"}
+    };
+
     public PortalStartupCheck(Environment environment) {
         if (isBlank(environment.getProperty("bm.altcha.hmac-key"))) {
             throw new IllegalStateException("BM_ALTCHA_HMAC_KEY must be set in portal mode "
@@ -22,6 +29,14 @@ public final class PortalStartupCheck {
         if (isBlank(environment.getProperty("bm.subscription.trial-days"))) {
             throw new IllegalStateException("BM_SUBSCRIPTION_TRIAL_DAYS must be set in portal mode "
                     + "(length of the free trial in days)");
+        }
+        if (!environment.acceptsProfiles(Profiles.of("local"))) {
+            for (String[] polar : POLAR_SETTINGS) {
+                if (isBlank(environment.getProperty(polar[0]))) {
+                    throw new IllegalStateException(polar[1] + " must be set in portal mode (" + polar[2]
+                            + "; the profile local starts without Polar, checkout then answers 503)");
+                }
+            }
         }
         if (!environment.acceptsProfiles(Profiles.of("local"))
                 && isBlank(environment.getProperty("spring.mail.host"))) {

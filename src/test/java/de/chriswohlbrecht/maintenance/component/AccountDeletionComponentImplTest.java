@@ -3,6 +3,7 @@ package de.chriswohlbrecht.maintenance.component;
 import de.chriswohlbrecht.maintenance.api.model.DeleteAccountRequest;
 import de.chriswohlbrecht.maintenance.configuration.SecurityProperties;
 import de.chriswohlbrecht.maintenance.exception.LastAdminException;
+import de.chriswohlbrecht.maintenance.exception.PaymentProviderUnavailableException;
 import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
 import de.chriswohlbrecht.maintenance.exception.WrongPasswordException;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
@@ -33,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -62,6 +64,8 @@ class AccountDeletionComponentImplTest {
     @Mock
     private MaintenanceLogMaterialRepository maintenanceLogMaterialRepository;
     @Mock
+    private ISubscriptionComponent subscriptionComponent;
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -71,7 +75,7 @@ class AccountDeletionComponentImplTest {
     void setUp() {
         component = new AccountDeletionComponentImpl(currentUserComponent, sessionComponent, appUserRepository,
                 vehicleRepository, maintenanceTaskRepository, maintenanceLogRepository, maintenanceLogTaskRepository,
-                maintenanceLogMaterialRepository, passwordEncoder,
+                maintenanceLogMaterialRepository, subscriptionComponent, passwordEncoder,
                 new SecurityProperties(10, Duration.ofMinutes(15), 3, Duration.ofMinutes(15), Duration.ofDays(90)),
                 Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC), meterRegistry);
     }
@@ -87,9 +91,10 @@ class AccountDeletionComponentImplTest {
 
         component.deleteCurrentUser(request("secret-password"), SESSION);
 
-        InOrder order = inOrder(maintenanceLogMaterialRepository, maintenanceLogTaskRepository,
+        InOrder order = inOrder(subscriptionComponent, maintenanceLogMaterialRepository, maintenanceLogTaskRepository,
                 maintenanceLogRepository, maintenanceTaskRepository, vehicleRepository, appUserRepository,
                 sessionComponent);
+        order.verify(subscriptionComponent).endSubscriptionsOf(user);
         for (Vehicle vehicle : List.of(first, second)) {
             order.verify(maintenanceLogMaterialRepository).deleteAllByLog_Vehicle_Id(vehicle.getId());
             order.verify(maintenanceLogTaskRepository).deleteAllByLog_Vehicle_Id(vehicle.getId());
@@ -100,6 +105,21 @@ class AccountDeletionComponentImplTest {
         order.verify(appUserRepository).delete(user);
         order.verify(sessionComponent).invalidateOtherSessionsOf(7L, SESSION);
         assertThat(meterRegistry.counter("bm.accounts.deleted").count()).isEqualTo(1.0);
+    }
+
+    /** If the provider cannot end the subscription, the account stays, so nothing is billed for a deleted one. */
+    @Test
+    void unreachablePaymentProviderKeepsTheAccount() {
+        AppUser user = user(UserRole.USER);
+        when(currentUserComponent.getCurrentUser()).thenReturn(user);
+        when(passwordEncoder.matches("secret-password", "{bcrypt}hash")).thenReturn(true);
+        doThrow(new PaymentProviderUnavailableException("down")).when(subscriptionComponent).endSubscriptionsOf(user);
+
+        assertThatThrownBy(() -> component.deleteCurrentUser(request("secret-password"), SESSION))
+                .isInstanceOf(PaymentProviderUnavailableException.class);
+
+        verify(appUserRepository, never()).delete(any());
+        verify(vehicleRepository, never()).findAllByUser_Id(any());
     }
 
     @Test

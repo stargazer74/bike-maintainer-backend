@@ -37,7 +37,9 @@ public class HouseholdSecurityConfiguration {
             "/api/v1/auth/device-session",
             "/api/v1/auth/devices",
             "/api/v1/auth/devices/**",
-            "/api/v1/admin/**"
+            "/api/v1/admin/**",
+            "/api/v1/subscription/**",
+            "/api/v1/webhooks/**"
     };
 
     @Bean
