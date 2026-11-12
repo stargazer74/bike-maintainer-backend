@@ -193,11 +193,15 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
         SubscriptionStatus status = statusOf(current);
         subscription.setStatus(status);
         subscription.setPaidUntil(paidUntil(current, status));
-        subscriptionRepository.save(subscription);
-        // Only the change counts: the provider sends several events per change and repeats them.
+        // Only the change counts: the provider sends several events per change and repeats them. Before saving, so
+        // a planned early end is stored together with the status.
         if (status == SubscriptionStatus.CANCELED && previous != SubscriptionStatus.CANCELED) {
-            cancellationNoticeComponent.cancellationReceived(owner.get(), current);
+            cancellationNoticeComponent.cancellationReceived(owner.get(), subscription, current);
+        } else if (previous == SubscriptionStatus.CANCELED
+                && (status == SubscriptionStatus.ACTIVE || status == SubscriptionStatus.PAST_DUE)) {
+            cancellationNoticeComponent.cancellationWithdrawn(subscription);
         }
+        subscriptionRepository.save(subscription);
         meterRegistry.counter(WEBHOOK_METRIC, "result", "synced").increment();
         log.info("Subscription {} of user {} is now {}", subscription.getId(), owner.get().getId(), status);
     }

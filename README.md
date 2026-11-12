@@ -85,6 +85,7 @@ Requirements: Java 25.
 | `BM_SUBSCRIPTION_TRIAL_DAYS` | length of the free trial in days (portal); no default, the value is a decision of the deployment |
 | `BM_POLAR_ACCESS_TOKEN`, `BM_POLAR_WEBHOOK_SECRET`, `BM_POLAR_PRODUCT_ID` | subscription via Polar (portal): organization access token, `whsec_…` secret of the webhook endpoint `https://<app>/api/v1/webhooks/polar`, id of the yearly product |
 | `BM_POLAR_API_URL` | Polar API, default `https://api.polar.sh`; `https://sandbox-api.polar.sh` for the sandbox |
+| `BM_POLAR_EARLY_END_ENABLED` | `true` = a subscription cancelled after its first year is ended automatically one month after the cancellation and the rest of its last payment refunded pro rata (§ 309 no. 9 BGB); needs the token scopes `orders:read` and `refunds:write`. Default `false`: the admins only get an email and do it by hand in Polar |
 | `LOGGING_STRUCTURED_FORMAT_CONSOLE` | `ecs` for JSON log lines (portal operation, collected by the monitoring); unset = readable text |
 
 In portal mode the backend refuses to start without `BM_ALTCHA_HMAC_KEY` and `BM_SUBSCRIPTION_TRIAL_DAYS`, and
@@ -118,6 +119,12 @@ network. Backend and database publish no ports. The compose files, `.env.example
    and a webhook endpoint for `https://<app>/api/v1/webhooks/polar` with the `subscription.*` events (format raw); the
    backend only uses an event as a trigger and fetches the current state of the subscription from Polar. Polar only
    learns the email address (for the invoice) and a random customer reference, never the internal account id.
+   The access token needs `checkouts:write`, `customer_sessions:write`, `subscriptions:read`/`subscriptions:write`
+   and, with
+   `BM_POLAR_EARLY_END_ENABLED=true`, also `orders:read` and `refunds:write`. The early end runs nightly
+   (`bm.cleanup.cron`): revoke the subscription, refund the days after the end pro rata of the last payment's net
+   amount (Polar adds the tax), email the admins; after `bm.polar.early-end.max-attempts` (3) failed nights, or when
+   Polar reports something unexpected, the admins are asked by email to finish it by hand.
 
 Further accounts register themselves (email verification required); admins manage roles and lock accounts under
 `/admin/nutzer` in the web app.

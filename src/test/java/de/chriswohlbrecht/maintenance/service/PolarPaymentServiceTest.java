@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.service;
 
+import de.chriswohlbrecht.maintenance.component.model.ProviderOrder;
 import de.chriswohlbrecht.maintenance.component.model.ProviderSubscription;
 import de.chriswohlbrecht.maintenance.configuration.PolarProperties;
 import de.chriswohlbrecht.maintenance.exception.PaymentProviderUnavailableException;
@@ -15,7 +16,6 @@ import java.time.OffsetDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
@@ -147,17 +147,99 @@ class PolarPaymentServiceTest {
     }
 
     @Test
-    void revokeSubscriptionDeletesItAndToleratesAnUnknownOne() {
+    void revokeSubscriptionDeletesItAndToleratesAnUnknownOrEndedOne() {
         server.expect(requestTo(API + "/v1/subscriptions/sub_1")).andExpect(method(HttpMethod.DELETE))
                 .andRespond(withSuccess("{\"id\":\"sub_1\",\"status\":\"canceled\"}", MediaType.APPLICATION_JSON));
         server.expect(requestTo(API + "/v1/subscriptions/sub_2")).andExpect(method(HttpMethod.DELETE))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
+        server.expect(requestTo(API + "/v1/subscriptions/sub_3")).andExpect(method(HttpMethod.DELETE))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"AlreadyCanceledSubscription\"}"));
 
-        assertThatCode(() -> {
-            service.revokeSubscription("sub_1");
-            service.revokeSubscription("sub_2");
-        }).doesNotThrowAnyException();
+        assertThat(service.revokeSubscription("sub_1")).isTrue();
+        assertThat(service.revokeSubscription("sub_2")).isFalse();
+        assertThat(service.revokeSubscription("sub_3")).isFalse();
         server.verify();
+    }
+
+    @Test
+    void revokeFailsWhenPolarIsDown() {
+        server.expect(requestTo(API + "/v1/subscriptions/sub_1")).andRespond(withServerError());
+
+        assertThatThrownBy(() -> service.revokeSubscription("sub_1"))
+                .isInstanceOf(PaymentProviderUnavailableException.class);
+    }
+
+    /** Skips a payment that is not for a period (plan change) and one that is not paid. */
+    @Test
+    void findLastPeriodOrderTakesTheNewestPaidPeriodPayment() {
+        server.expect(requestTo(API + "/v1/orders/?subscription_id=sub_1&sorting=-created_at&limit=10"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("""
+                        {"items": [
+                          {"id": "ord_4", "billing_reason": "subscription_update", "status": "paid",
+                           "net_amount": 500, "refunded_amount": 0, "refundable_amount": 500, "currency": "eur"},
+                          {"id": "ord_3", "billing_reason": "subscription_cycle", "status": "pending",
+                           "net_amount": 2400, "refunded_amount": 0, "refundable_amount": 0, "currency": "eur"},
+                          {"id": "ord_2", "billing_reason": "subscription_cycle", "status": "partially_refunded",
+                           "net_amount": 2400, "refunded_amount": 100, "refundable_amount": 2300, "currency": "eur"},
+                          {"id": "ord_1", "billing_reason": "subscription_create", "status": "paid",
+                           "net_amount": 2400, "refunded_amount": 0, "refundable_amount": 2400, "currency": "eur"}
+                        ]}""", MediaType.APPLICATION_JSON));
+
+        assertThat(service.findLastPeriodOrder("sub_1"))
+                .contains(new ProviderOrder("ord_2", 2400, 100, 2300, "eur"));
+    }
+
+    @Test
+    void findLastPeriodOrderIsEmptyWithoutPaidPeriodPayment() {
+        server.expect(requestTo(API + "/v1/orders/?subscription_id=sub_1&sorting=-created_at&limit=10"))
+                .andRespond(withSuccess("{\"items\": []}", MediaType.APPLICATION_JSON));
+
+        assertThat(service.findLastPeriodOrder("sub_1")).isEmpty();
+    }
+
+    @Test
+    void getOrderReadsTheAmountsAndToleratesAnUnknownOne() {
+        server.expect(requestTo(API + "/v1/orders/ord_1")).andRespond(withSuccess("""
+                {"id": "ord_1", "net_amount": 2400, "refunded_amount": 1841, "refundable_amount": 559,
+                 "currency": "eur"}""", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(API + "/v1/orders/ord_x")).andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThat(service.getOrder("ord_1")).contains(new ProviderOrder("ord_1", 2400, 1841, 559, "eur"));
+        assertThat(service.getOrder("ord_x")).isEmpty();
+    }
+
+    @Test
+    void orderWithoutAmountIsAProviderProblem() {
+        server.expect(requestTo(API + "/v1/orders/ord_1")).andRespond(withSuccess(
+                "{\"id\": \"ord_1\", \"currency\": \"eur\"}", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> service.getOrder("ord_1")).isInstanceOf(PaymentProviderUnavailableException.class);
+    }
+
+    /** Net amount in cents, marked with our metadata; no personal data. */
+    @Test
+    void refundSendsTheNetAmountAndOurMarker() {
+        server.expect(requestTo(API + "/v1/refunds/"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.order_id").value("ord_1"))
+                .andExpect(jsonPath("$.reason").value("customer_request"))
+                .andExpect(jsonPath("$.amount").value(1841))
+                .andExpect(jsonPath("$.metadata.bm_early_end").value("sub_1"))
+                .andRespond(withSuccess("{\"id\":\"ref_1\"}", MediaType.APPLICATION_JSON));
+
+        service.refund("ord_1", 1841, "sub_1");
+
+        server.verify();
+    }
+
+    @Test
+    void refundFailsWhenPolarRefuses() {
+        server.expect(requestTo(API + "/v1/refunds/")).andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> service.refund("ord_1", 1841, "sub_1"))
+                .isInstanceOf(PaymentProviderUnavailableException.class);
     }
 
     @Test

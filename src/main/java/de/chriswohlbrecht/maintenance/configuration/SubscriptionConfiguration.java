@@ -12,7 +12,7 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 
 @Configuration
-@EnableConfigurationProperties({SubscriptionProperties.class, PolarProperties.class})
+@EnableConfigurationProperties({SubscriptionProperties.class, PolarProperties.class, EarlyEndProperties.class})
 public class SubscriptionConfiguration {
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);

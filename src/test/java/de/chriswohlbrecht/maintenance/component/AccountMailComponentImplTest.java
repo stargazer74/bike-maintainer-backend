@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.component.model.CancellationMail;
 import de.chriswohlbrecht.maintenance.component.model.CancellationNotice;
 import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
@@ -22,6 +23,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AccountMailComponentImplTest {
+
+    private static final CancellationNotice NOTICE = new CancellationNotice(7L, "sub_1", LocalDate.of(2027, 1, 5),
+            LocalDate.of(2027, 2, 5), LocalDate.of(2027, 11, 12), 1841L, "eur");
 
     private final IMailService mailService = mock(IMailService.class);
     private final IMailQuotaComponent mailQuotaComponent = mock(IMailQuotaComponent.class);
@@ -109,7 +113,7 @@ class AccountMailComponentImplTest {
         when(mailQuotaComponent.tryReserve()).thenReturn(false);
 
         component.sendCancellationNotice(user("de"), new CancellationNotice(7L, "sub_1", LocalDate.of(2027, 1, 5),
-                LocalDate.of(2027, 2, 5), LocalDate.of(2027, 11, 12), 1841L, "eur"));
+                LocalDate.of(2027, 2, 5), LocalDate.of(2027, 11, 12), 1841L, "eur"), CancellationMail.MANUAL, null);
 
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(mailService).send(eq("rider@example.org"), eq("Kündigung nach dem ersten Jahr: Abo sub_1"),
@@ -127,12 +131,47 @@ class AccountMailComponentImplTest {
     @Test
     void cancellationNoticeInEnglishWithoutKnownPrice() {
         component.sendCancellationNotice(user("en"), new CancellationNotice(7L, "sub_1", LocalDate.of(2027, 1, 5),
-                LocalDate.of(2027, 2, 5), LocalDate.of(2027, 11, 12), null, null));
+                LocalDate.of(2027, 2, 5), LocalDate.of(2027, 11, 12), null, null), CancellationMail.MANUAL, null);
 
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(mailService).send(eq("rider@example.org"), eq("Cancellation after the first year: subscription sub_1"),
                 body.capture());
         assertThat(body.getValue()).contains("Pro-rata refund: unknown, please calculate it in Polar");
+    }
+
+    @Test
+    void earlyEndScheduledNamesTheDayOfTheAutomaticEnd() {
+        component.sendCancellationNotice(user("de"), NOTICE, CancellationMail.SCHEDULED, null);
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(mailService).send(eq("rider@example.org"),
+                eq("Kündigung nach dem ersten Jahr: Abo sub_1 wird am 6. Februar 2027 beendet"), body.capture());
+        assertThat(body.getValue()).contains("in der Nacht zum 6. Februar 2027")
+                .contains("Voraussichtliche Erstattung (aus dem Abo-Preis): 18,41\u00a0€".translateEscapes());
+        assertThat(meterRegistry.counter("bm.mail.sent", "type", "early_end_scheduled", "result", "queued").count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void earlyEndDoneNamesTheRefund() {
+        component.sendCancellationNotice(user("en"), NOTICE, CancellationMail.DONE, null);
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(mailService).send(eq("rider@example.org"), eq("Subscription sub_1 ended and refunded pro rata"),
+                body.capture());
+        assertThat(body.getValue()).contains("Refunded (net; Polar adds the tax pro rata): €18.41");
+    }
+
+    @Test
+    void earlyEndFailedNamesTheReason() {
+        component.sendCancellationNotice(user("de"), NOTICE, CancellationMail.FAILED,
+                "mail.earlyEnd.reason.alreadyEnded");
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(mailService).send(eq("rider@example.org"),
+                eq("Abo sub_1: Ende nach Kündigung bitte von Hand abschließen"), body.capture());
+        assertThat(body.getValue()).contains("Polar meldet das Abo als schon beendet");
+        verify(mailQuotaComponent, never()).tryReserve();
     }
 
     @Test

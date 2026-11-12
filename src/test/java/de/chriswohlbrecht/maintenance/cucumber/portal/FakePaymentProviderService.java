@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.cucumber.portal;
 
+import de.chriswohlbrecht.maintenance.component.model.ProviderOrder;
 import de.chriswohlbrecht.maintenance.component.model.ProviderSubscription;
 import de.chriswohlbrecht.maintenance.service.IPaymentProviderService;
 import org.springframework.context.annotation.Primary;
@@ -37,8 +38,24 @@ public class FakePaymentProviderService implements IPaymentProviderService {
     }
 
     @Override
-    public void revokeSubscription(String subscriptionId) {
+    public boolean revokeSubscription(String subscriptionId) {
         revoked.add(subscriptionId);
+        return true;
+    }
+
+    @Override
+    public Optional<ProviderOrder> findLastPeriodOrder(String subscriptionId) {
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<ProviderOrder> getOrder(String orderId) {
+        return Optional.empty();
+    }
+
+    @Override
+    public void refund(String orderId, long netAmount, String marker) {
+        throw new UnsupportedOperationException("The scenarios do not refund");
     }
 
     public void put(ProviderSubscription subscription) {

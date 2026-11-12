@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.persistence.model;
 
+import de.chriswohlbrecht.maintenance.persistence.type.EarlyEndState;
 import de.chriswohlbrecht.maintenance.persistence.type.SubscriptionProvider;
 import de.chriswohlbrecht.maintenance.persistence.type.SubscriptionStatus;
 import jakarta.persistence.Column;
@@ -62,6 +63,39 @@ public class Subscription {
     /** Last day of the paid period (inclusive); null while the provider has not reported one. */
     @Column(name = "paid_until")
     private LocalDate paidUntil;
+
+    /** Day a cancellation after the first year was received; null otherwise (backend#147). */
+    @Column(name = "early_end_received_on")
+    private LocalDate earlyEndReceivedOn;
+
+    /** Last day of access after a cancellation after the first year; null otherwise (backend#147). */
+    @Column(name = "early_end_on")
+    private LocalDate earlyEndOn;
+
+    /** First day of the paid period at the time of that cancellation, for the pro-rata refund. */
+    @Column(name = "early_end_period_start")
+    private LocalDate earlyEndPeriodStart;
+
+    /** Last day of the paid period at the time of that cancellation, for the pro-rata refund. */
+    @Column(name = "early_end_period_end")
+    private LocalDate earlyEndPeriodEnd;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "early_end_state", length = 20)
+    private EarlyEndState earlyEndState;
+
+    /** Failed nightly attempts in a row; the early end is handed over to the administrators after a few. */
+    @Builder.Default
+    @Column(name = "early_end_attempts", nullable = false)
+    private Integer earlyEndAttempts = 0;
+
+    /** The provider's order whose rest is refunded; set before the refund is requested. */
+    @Column(name = "early_end_order_id", length = 100)
+    private String earlyEndOrderId;
+
+    /** Amount of that order refunded before our refund, in cents; more than that afterwards means it went through. */
+    @Column(name = "early_end_refunded_before")
+    private Long earlyEndRefundedBefore;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
