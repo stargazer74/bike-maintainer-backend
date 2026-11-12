@@ -36,6 +36,7 @@ public class AuthComponentImpl implements IAuthComponent {
     private final ICurrentUserComponent currentUserComponent;
     private final UserMapper userMapper;
     private final AppUserRepository appUserRepository;
+    private final IAccessComponent accessComponent;
     /** Device logins exist only in portal mode. */
     private final ObjectProvider<IDeviceLoginComponent> deviceLoginComponent;
 
@@ -51,7 +52,7 @@ public class AuthComponentImpl implements IAuthComponent {
         }
 
         sessionComponent.startSession(authentication, httpRequest, httpResponse);
-        return userMapper.toResponse(currentUserComponent.getCurrentUser());
+        return toResponse(currentUserComponent.getCurrentUser());
     }
 
     /**
@@ -74,7 +75,7 @@ public class AuthComponentImpl implements IAuthComponent {
 
     @Override
     public UserResponse getCurrentUser() {
-        return userMapper.toResponse(currentUserComponent.getCurrentUser());
+        return toResponse(currentUserComponent.getCurrentUser());
     }
 
     @Override
@@ -92,6 +93,10 @@ public class AuthComponentImpl implements IAuthComponent {
         if (currency != null) {
             user.setCurrency(currency.getValue());
         }
-        return userMapper.toResponse(appUserRepository.save(user));
+        return toResponse(appUserRepository.save(user));
+    }
+
+    private UserResponse toResponse(AppUser user) {
+        return userMapper.toResponse(user, accessComponent.accessOf(user));
     }
 }

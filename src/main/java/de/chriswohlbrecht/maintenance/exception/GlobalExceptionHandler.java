@@ -44,6 +44,14 @@ public class GlobalExceptionHandler {
                         request.getRequestURI()));
     }
 
+    @ExceptionHandler(SubscriptionRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleSubscriptionRequired(SubscriptionRequiredException ex,
+                                                                      HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponses.of(HttpStatus.FORBIDDEN, SubscriptionRequiredException.CODE, ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException ex,
                                                                  HttpServletRequest request) {

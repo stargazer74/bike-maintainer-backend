@@ -51,6 +51,7 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
     private final IUserLocaleComponent userLocaleComponent;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
+    private final IAccessComponent accessComponent;
 
     /** Most urgent first: overdue, due soon, the rest; within a status the smallest remaining fraction first. */
     private static final Comparator<MaintenanceChecklistEntry> BY_URGENCY = Comparator
@@ -156,6 +157,7 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
     @Override
     @Transactional
     public Optional<MaintenanceTaskResponse> createMaintenanceTask(Long vehicleId, MaintenanceTaskRequest request) {
+        accessComponent.requireWriteAccess();
         return findOwnVehicle(vehicleId).map(vehicle -> {
             validateInterval(request);
             MaintenanceTask task = maintenanceTaskMapper.toEntity(request);
@@ -168,6 +170,7 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
     @Override
     @Transactional
     public Optional<MaintenanceTaskResponse> updateMaintenanceTask(Long vehicleId, Long taskId, MaintenanceTaskRequest request) {
+        accessComponent.requireWriteAccess();
         return findOwnVehicle(vehicleId)
                 .flatMap(vehicle -> maintenanceTaskRepository.findByIdAndVehicle_Id(taskId, vehicleId)
                         .map(task -> {

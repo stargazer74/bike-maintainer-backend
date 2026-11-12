@@ -29,6 +29,7 @@ public class ProfileComponentImpl implements IProfileComponent {
     private final VehicleRepository vehicleRepository;
     private final ISessionComponent sessionComponent;
     private final UserMapper userMapper;
+    private final IAccessComponent accessComponent;
 
     @Override
     public List<ProfileResponse> listProfiles() {
@@ -85,7 +86,7 @@ public class ProfileComponentImpl implements IProfileComponent {
                                                 HttpServletResponse httpResponse) {
         return appUserRepository.findById(profileId).map(profile -> {
             sessionComponent.startSession(SessionUser.authenticationFor(profile), httpRequest, httpResponse);
-            return userMapper.toResponse(profile);
+            return userMapper.toResponse(profile, accessComponent.accessOf(profile));
         });
     }
 

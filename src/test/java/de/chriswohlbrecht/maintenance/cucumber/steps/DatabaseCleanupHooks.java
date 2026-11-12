@@ -40,6 +40,7 @@ public class DatabaseCleanupHooks {
         maintenanceLogRepository.deleteAllInBatch();
         maintenanceTaskRepository.deleteAllInBatch();
         vehicleRepository.deleteAllInBatch();
+        jdbcTemplate.update("DELETE FROM subscription");
         jdbcTemplate.update("DELETE FROM device_login");
         jdbcTemplate.update("DELETE FROM user_token");
         jdbcTemplate.update("DELETE FROM mail_quota");

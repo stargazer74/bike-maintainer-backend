@@ -46,7 +46,8 @@ class AuthComponentImplTest {
     @BeforeEach
     void setUp() {
         component = new AuthComponentImpl(null, null, csrfTokenRepository, currentUserComponent,
-                new UserMapperImpl(), appUserRepository, deviceLoginComponentProvider);
+                new UserMapperImpl(), appUserRepository, new HouseholdAccessComponentImpl(),
+                deviceLoginComponentProvider);
         user = new AppUser();
         user.setLanguage("de");
     }

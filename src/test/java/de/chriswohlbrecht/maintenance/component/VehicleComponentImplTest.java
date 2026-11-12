@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
+import de.chriswohlbrecht.maintenance.exception.SubscriptionRequiredException;
 import de.chriswohlbrecht.maintenance.mapper.VehicleMapperImpl;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
@@ -23,8 +24,10 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,13 +57,17 @@ class VehicleComponentImplTest {
     @Mock
     private ICurrentUserComponent currentUserComponent;
 
+    @Mock
+    private IAccessComponent accessComponent;
+
     private VehicleComponentImpl vehicleComponent;
 
     @BeforeEach
     void setUp() {
         lenient().when(currentUserComponent.getCurrentUserId()).thenReturn(USER_ID);
         vehicleComponent = new VehicleComponentImpl(vehicleRepository, maintenanceTaskRepository, maintenanceLogRepository,
-                maintenanceLogMaterialRepository, maintenanceLogTaskRepository, new VehicleMapperImpl(), currentUserComponent);
+                maintenanceLogMaterialRepository, maintenanceLogTaskRepository, new VehicleMapperImpl(), currentUserComponent,
+                accessComponent);
     }
 
     @Test
@@ -165,5 +172,33 @@ class VehicleComponentImplTest {
         assertThat(result).isFalse();
         verify(vehicleRepository, never()).delete(any());
         verify(maintenanceLogRepository, never()).deleteAllByVehicle_Id(any());
+    }
+
+    /** A read-only account is stopped before anything is looked up or stored. */
+    @Test
+    void createVehicleWithReadOnlyAccountIsRejected() {
+        doThrow(new SubscriptionRequiredException()).when(accessComponent).requireWriteAccess();
+
+        assertThatThrownBy(() -> vehicleComponent.createVehicle(new VehicleRequest()))
+                .isInstanceOf(SubscriptionRequiredException.class);
+
+        verify(vehicleRepository, never()).save(any());
+    }
+
+    @Test
+    void updateVehicleWithReadOnlyAccountIsRejectedBeforeOwnershipIsChecked() {
+        doThrow(new SubscriptionRequiredException()).when(accessComponent).requireWriteAccess();
+
+        assertThatThrownBy(() -> vehicleComponent.updateVehicle(1L, new VehicleRequest()))
+                .isInstanceOf(SubscriptionRequiredException.class);
+
+        verify(vehicleRepository, never()).findByIdAndUser_Id(any(), any());
+    }
+
+    @Test
+    void deleteVehicleDoesNotRequireWriteAccess() {
+        vehicleComponent.deleteVehicle(1L);
+
+        verify(accessComponent, never()).requireWriteAccess();
     }
 }

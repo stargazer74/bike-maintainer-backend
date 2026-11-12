@@ -216,3 +216,15 @@ Feature: Household mode – profile selection instead of login
       """
     Then the response status code is 404
 
+
+  Scenario: Household profiles are never restricted by trial or subscription
+    Given I have selected a new profile "Anna"
+    When a GET request is sent to "/api/v1/auth/me"
+    Then the response status code is 200
+    And the JSON response field "accessStatus" equals "FULL"
+    And the JSON response field "hasSubscription" equals "false"
+    When a POST request is sent to "/api/v1/vehicles" with body:
+      """
+      { "name": "Family car", "type": "CAR", "modelYear": 2019, "firstRegistrationDate": "2019-05-01", "currentMileage": 42000 }
+      """
+    Then the response status code is 201

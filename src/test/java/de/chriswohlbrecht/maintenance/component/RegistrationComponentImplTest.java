@@ -18,6 +18,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +34,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class RegistrationComponentImplTest {
+
+    private static final LocalDate TODAY = LocalDate.of(2026, 11, 12);
 
     @Mock
     private IAltchaComponent altchaComponent;
@@ -49,6 +54,9 @@ class RegistrationComponentImplTest {
 
     @Spy
     private SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+
+    @Spy
+    private Clock clock = Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
 
     @InjectMocks
     private RegistrationComponentImpl component;
@@ -106,6 +114,29 @@ class RegistrationComponentImplTest {
         component.verifyEmail(new TokenRequest().token("token"));
 
         assertThat(registrationCount("verified")).isEqualTo(1.0);
+    }
+
+    @Test
+    void verifiedEmailStartsTheTrial() {
+        AppUser user = AppUser.builder().id(7L).email("new@example.org").role(UserRole.USER).emailVerified(false).build();
+        when(userTokenComponent.consume("token", UserTokenType.EMAIL_VERIFICATION)).thenReturn(Optional.of(user));
+
+        component.verifyEmail(new TokenRequest().token("token"));
+
+        assertThat(user.getEmailVerified()).isTrue();
+        assertThat(user.getTrialStartedOn()).isEqualTo(TODAY);
+    }
+
+    @Test
+    void verifyingAgainDoesNotRestartTheTrial() {
+        LocalDate started = TODAY.minusDays(20);
+        AppUser user = AppUser.builder().id(7L).email("new@example.org").role(UserRole.USER).emailVerified(true)
+                .trialStartedOn(started).build();
+        when(userTokenComponent.consume("token", UserTokenType.EMAIL_VERIFICATION)).thenReturn(Optional.of(user));
+
+        component.verifyEmail(new TokenRequest().token("token"));
+
+        assertThat(user.getTrialStartedOn()).isEqualTo(started);
     }
 
     @Test

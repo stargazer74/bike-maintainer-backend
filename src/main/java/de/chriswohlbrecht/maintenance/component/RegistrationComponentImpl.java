@@ -20,7 +20,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -45,6 +47,7 @@ public class RegistrationComponentImpl implements IRegistrationComponent {
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final MeterRegistry meterRegistry;
+    private final Clock clock;
 
     @Override
     public String createChallengeJson() {
@@ -100,6 +103,10 @@ public class RegistrationComponentImpl implements IRegistrationComponent {
         AppUser user = userTokenComponent.consume(request.getToken(), UserTokenType.EMAIL_VERIFICATION)
                 .orElseThrow(() -> new InvalidTokenException("Token is invalid, expired or already used"));
         user.setEmailVerified(true);
+        if (user.getTrialStartedOn() == null) {
+            // The free trial starts with the verified address; verifying again (new link) does not restart it.
+            user.setTrialStartedOn(LocalDate.now(clock));
+        }
         appUserRepository.save(user);
         meterRegistry.counter(REGISTRATION_METRIC, "step", "verified").increment();
     }

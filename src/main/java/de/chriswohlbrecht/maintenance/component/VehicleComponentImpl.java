@@ -27,6 +27,7 @@ public class VehicleComponentImpl implements IVehicleComponent {
     private final MaintenanceLogTaskRepository maintenanceLogTaskRepository;
     private final VehicleMapper vehicleMapper;
     private final ICurrentUserComponent currentUserComponent;
+    private final IAccessComponent accessComponent;
 
     @Override
     public List<VehicleResponse> listVehicles() {
@@ -42,6 +43,7 @@ public class VehicleComponentImpl implements IVehicleComponent {
 
     @Override
     public VehicleResponse createVehicle(VehicleRequest request) {
+        accessComponent.requireWriteAccess();
         Vehicle vehicle = vehicleMapper.toEntity(request);
         vehicle.setUser(currentUserComponent.getCurrentUser());
         return vehicleMapper.toResponse(vehicleRepository.save(vehicle));
@@ -49,6 +51,7 @@ public class VehicleComponentImpl implements IVehicleComponent {
 
     @Override
     public Optional<VehicleResponse> updateVehicle(Long vehicleId, VehicleRequest request) {
+        accessComponent.requireWriteAccess();
         return findOwnVehicle(vehicleId).map(vehicle -> {
             vehicleMapper.updateEntityFromRequest(request, vehicle);
             return vehicleMapper.toResponse(vehicleRepository.save(vehicle));
