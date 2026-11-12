@@ -30,7 +30,9 @@ import java.util.List;
 public class AccountRetentionComponentImpl implements IAccountRetentionComponent {
 
     private static final String METRIC = "bm.accounts.retention";
-    private static final List<String> ACTIONS = List.of("notice_sent", "notice_deferred", "deleted", "kept", "failed");
+    private static final String NOTICE_SENT = "notice_sent";
+    private static final String DELETED = "deleted";
+    private static final List<String> ACTIONS = List.of(NOTICE_SENT, "notice_deferred", DELETED, "kept", "failed");
     /** Slack for the pre-selection: adding and subtracting months is not exactly reversible at month ends. */
     private static final int PRESELECTION_SLACK_DAYS = 7;
 
@@ -74,9 +76,9 @@ public class AccountRetentionComponentImpl implements IAccountRetentionComponent
         int deleted = 0;
         for (AppUser user : appUserRepository.findRetentionCandidates(UserRole.USER, trialStartedBefore)) {
             try {
-                Outcome outcome = handle(user, today, noticesSent < properties.noticeDailyLimit());
-                noticesSent += outcome == Outcome.NOTICE_SENT ? 1 : 0;
-                deleted += outcome == Outcome.DELETED ? 1 : 0;
+                String action = handle(user, today, noticesSent < properties.noticeDailyLimit());
+                noticesSent += NOTICE_SENT.equals(action) ? 1 : 0;
+                deleted += DELETED.equals(action) ? 1 : 0;
             } catch (RuntimeException e) {
                 // Most likely the payment provider; logged without personal data, retried on the next run.
                 count("failed");
@@ -98,33 +100,32 @@ public class AccountRetentionComponentImpl implements IAccountRetentionComponent
         log.info("User {} logged in after the deletion notice, account kept", user.getId());
     }
 
-    private enum Outcome { NONE, NOTICE_SENT, DELETED }
-
-    private Outcome handle(AppUser user, LocalDate today, boolean mayNotify) {
+    /** @return the action taken ({@link #NOTICE_SENT}, {@link #DELETED}, …), or null if there was nothing to do */
+    private String handle(AppUser user, LocalDate today, boolean mayNotify) {
         LocalDate deletionDay = deletionDayOf(user);
         if (deletionDay == null) {
             withdrawNotice(user);
-            return Outcome.NONE;
+            return null;
         }
         LocalDateTime noticeSentAt = user.getDeletionNoticeSentAt();
         if (noticeSentAt == null) {
             if (today.isBefore(deletionDay.minus(properties.noticePeriod()))) {
-                return Outcome.NONE;
+                return null;
             }
             if (!mayNotify) {
                 count("notice_deferred");
-                return Outcome.NONE;
+                return null;
             }
             sendNotice(user, today, deletionDay);
-            return Outcome.NOTICE_SENT;
+            return NOTICE_SENT;
         }
         // Never earlier than a full notice period after the notice, even if the notice went out late.
         if (today.isBefore(deletionDay)
                 || today.isBefore(noticeSentAt.toLocalDate().plus(properties.noticePeriod()))) {
-            return Outcome.NONE;
+            return null;
         }
         delete(user);
-        return Outcome.DELETED;
+        return DELETED;
     }
 
     /**
@@ -147,7 +148,7 @@ public class AccountRetentionComponentImpl implements IAccountRetentionComponent
         accountMailComponent.sendDeletionNotice(user, deletionDay.isBefore(earliest) ? earliest : deletionDay);
         user.setDeletionNoticeSentAt(LocalDateTime.now(clock));
         appUserRepository.save(user);
-        count("notice_sent");
+        count(NOTICE_SENT);
     }
 
     private void withdrawNotice(AppUser user) {
@@ -160,7 +161,7 @@ public class AccountRetentionComponentImpl implements IAccountRetentionComponent
     private void delete(AppUser user) {
         accountDataDeletionComponent.deleteWithAllData(user);
         sessionComponent.invalidateSessionsOf(user.getId());
-        count("deleted");
+        count(DELETED);
         log.info("User {} deleted: access expired and no login after the deletion notice", user.getId());
     }
 
