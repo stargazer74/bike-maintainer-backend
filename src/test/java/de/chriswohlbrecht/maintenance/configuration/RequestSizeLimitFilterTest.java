@@ -64,6 +64,24 @@ class RequestSizeLimitFilterTest {
         assertThat(read).hasValue(LIMIT);
     }
 
+    /** The webhook of the payment provider is public, so its body is limited far below the import. */
+    @Test
+    void webhookAboveItsLimit_isRejected() throws Exception {
+        int webhookLimit = (int) RequestSizeLimitFilter.WEBHOOK_LIMIT;
+        MockHttpServletRequest tooLarge = new MockHttpServletRequest("POST", "/api/v1/webhooks/polar");
+        tooLarge.setContent(new byte[webhookLimit + 1]);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicInteger calls = new AtomicInteger();
+
+        filter.doFilter(tooLarge, response, (req, res) -> calls.incrementAndGet());
+
+        assertThat(response.getStatus()).isEqualTo(413);
+        assertThat(calls).hasValue(0);
+        FilterChain readAll = (req, res) -> req.getInputStream().readAllBytes();
+        assertThatThrownBy(() -> filter.doFilter(chunked("/api/v1/webhooks/polar", new byte[webhookLimit + 1]),
+                new MockHttpServletResponse(), readAll)).isInstanceOf(PayloadTooLargeException.class);
+    }
+
     @Test
     void otherRequests_areNotLimited() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/vehicles");
@@ -106,7 +124,11 @@ class RequestSizeLimitFilterTest {
 
     /** As a client that sends the body chunked: the length is unknown up front. */
     private static MockHttpServletRequest chunked(byte[] body) {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", IMPORT) {
+        return chunked(IMPORT, body);
+    }
+
+    private static MockHttpServletRequest chunked(String path, byte[] body) {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", path) {
             @Override
             public long getContentLengthLong() {
                 return -1;

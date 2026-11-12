@@ -70,6 +70,12 @@ public class PolarSteps {
         send(event(type, subscriptionId), false);
     }
 
+    @When("an oversized webhook is sent")
+    public void anOversizedWebhookIsSent() {
+        String body = "{\"type\":\"subscription.updated\",\"padding\":\"" + "x".repeat(70 * 1024) + "\"}";
+        send(body, true);
+    }
+
     @Then("Polar revoked subscription {string}")
     public void polarRevoked(String subscriptionId) {
         assertThat(paymentProvider.revoked()).contains(subscriptionId);

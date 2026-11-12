@@ -103,3 +103,7 @@ Feature: Subscription via Polar – checkout, webhooks and customer portal (port
     When I delete my account with password "test-password-123"
     Then the response status code is 204
     And Polar revoked subscription "sub_1"
+
+  Scenario: An oversized webhook is rejected before it is read
+    When an oversized webhook is sent
+    Then the response status code is 413
