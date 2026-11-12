@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.service;
 
+import de.chriswohlbrecht.maintenance.component.model.ProviderOrder;
 import de.chriswohlbrecht.maintenance.component.model.ProviderSubscription;
 import de.chriswohlbrecht.maintenance.configuration.OperatingModeCondition;
 import de.chriswohlbrecht.maintenance.configuration.PolarProperties;
@@ -20,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -31,6 +33,12 @@ import java.util.function.Supplier;
 @Conditional(OperatingModeCondition.Portal.class)
 @RequiredArgsConstructor
 public class PolarPaymentService implements IPaymentProviderService {
+
+    /** Key of the metadata that marks our refunds at Polar. */
+    static final String REFUND_MARKER_KEY = "bm_early_end";
+    private static final int ORDER_PAGE_SIZE = 10;
+    private static final Set<String> PERIOD_BILLING_REASONS = Set.of("subscription_create", "subscription_cycle");
+    private static final Set<String> PAID_ORDER_STATUSES = Set.of("paid", "partially_refunded");
 
     private final RestClient polarRestClient;
     private final PolarProperties polarProperties;
@@ -73,12 +81,82 @@ public class PolarPaymentService implements IPaymentProviderService {
                 .map(PolarPaymentService::toSubscription);
     }
 
+    /** 403 means "already revoked" at Polar ({@code AlreadyCanceledSubscription}). */
     @Override
-    public void revokeSubscription(String subscriptionId) {
-        callOrNotFound("revoke subscription", () -> polarRestClient.delete()
-                .uri("/v1/subscriptions/{id}", subscriptionId)
+    public boolean revokeSubscription(String subscriptionId) {
+        try {
+            return callOrNotFound("revoke subscription", () -> polarRestClient.delete()
+                    .uri("/v1/subscriptions/{id}", subscriptionId)
+                    .retrieve()
+                    .body(JsonNode.class)).isPresent();
+        } catch (PaymentProviderUnavailableException e) {
+            if (e.getCause() instanceof HttpClientErrorException error
+                    && error.getStatusCode() == HttpStatus.FORBIDDEN) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    /** The newest orders first; only payments for a period count, not e.g. a change of plan. */
+    @Override
+    public Optional<ProviderOrder> findLastPeriodOrder(String subscriptionId) {
+        JsonNode page = call("list orders", () -> polarRestClient.get()
+                .uri(uri -> uri.path("/v1/orders/")
+                        .queryParam("subscription_id", subscriptionId)
+                        .queryParam("sorting", "-created_at")
+                        .queryParam("limit", ORDER_PAGE_SIZE)
+                        .build())
                 .retrieve()
                 .body(JsonNode.class));
+        for (JsonNode order : page.path("items")) {
+            if (PERIOD_BILLING_REASONS.contains(order.path("billing_reason").asString(""))
+                    && PAID_ORDER_STATUSES.contains(order.path("status").asString(""))) {
+                return Optional.of(toOrder(order));
+            }
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<ProviderOrder> getOrder(String orderId) {
+        return callOrNotFound("get order", () -> polarRestClient.get()
+                .uri("/v1/orders/{id}", orderId)
+                .retrieve()
+                .body(JsonNode.class))
+                .map(PolarPaymentService::toOrder);
+    }
+
+    @Override
+    public void refund(String orderId, long netAmount, String marker) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("order_id", orderId);
+        body.put("reason", "customer_request");
+        body.put("amount", netAmount);
+        body.put("comment", "Cancelled after the first year: rest refunded pro rata (§ 309 Nr. 9 BGB)");
+        body.put("metadata", Map.of(REFUND_MARKER_KEY, marker));
+        call("create refund", () -> polarRestClient.post()
+                .uri("/v1/refunds/")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(JsonNode.class));
+    }
+
+    static ProviderOrder toOrder(JsonNode order) {
+        return new ProviderOrder(requiredText(order, "id"),
+                requiredAmount(order, "net_amount"),
+                order.path("refunded_amount").asLong(0),
+                requiredAmount(order, "refundable_amount"),
+                requiredText(order, "currency"));
+    }
+
+    private static long requiredAmount(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        if (!value.isIntegralNumber()) {
+            throw new PaymentProviderUnavailableException("Polar answered without " + field);
+        }
+        return value.asLong();
     }
 
     static ProviderSubscription toSubscription(JsonNode subscription) {

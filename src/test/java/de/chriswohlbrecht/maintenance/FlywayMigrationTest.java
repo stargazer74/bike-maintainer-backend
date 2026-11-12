@@ -37,7 +37,7 @@ class FlywayMigrationTest {
     void appliesAllMigrationsSuccessfully() {
         MigrationInfo[] appliedMigrations = flyway.info().applied();
 
-        assertThat(appliedMigrations).hasSize(14);
+        assertThat(appliedMigrations).hasSize(15);
         assertThat(appliedMigrations[0].getDescription()).isEqualTo("init schema");
         assertThat(appliedMigrations[0].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[1].getDescription()).isEqualTo("vehicle model year required");
@@ -66,6 +66,8 @@ class FlywayMigrationTest {
         assertThat(appliedMigrations[12].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[13].getDescription()).isEqualTo("account retention");
         assertThat(appliedMigrations[13].getState()).isEqualTo(MigrationState.SUCCESS);
+        assertThat(appliedMigrations[14].getDescription()).isEqualTo("subscription early end");
+        assertThat(appliedMigrations[14].getState()).isEqualTo(MigrationState.SUCCESS);
     }
 
     /** V12 (backend#137): verified accounts that exist already start their trial; others and profiles do not. */

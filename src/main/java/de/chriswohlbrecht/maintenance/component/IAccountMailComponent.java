@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.component.model.CancellationMail;
 import de.chriswohlbrecht.maintenance.component.model.CancellationNotice;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 
@@ -29,8 +30,11 @@ public interface IAccountMailComponent {
     void sendDeletionNotice(AppUser user, LocalDate deletionDay);
 
     /**
-     * Tells an administrator about a subscription cancelled after its first year, to end it and refund the rest by
-     * hand. Not counted towards the daily limit: it is rare and must not get lost.
+     * Tells an administrator about a subscription cancelled after its first year (to do by hand, scheduled, done or
+     * failed). Not counted towards the daily limit: it is rare and must not get lost.
+     *
+     * @param reasonKey for {@link CancellationMail#FAILED}: message key of the reason, e.g.
+     *                  {@code mail.earlyEnd.reason.alreadyEnded}; null otherwise
      */
-    void sendCancellationNotice(AppUser admin, CancellationNotice notice);
+    void sendCancellationNotice(AppUser admin, CancellationNotice notice, CancellationMail mail, String reasonKey);
 }

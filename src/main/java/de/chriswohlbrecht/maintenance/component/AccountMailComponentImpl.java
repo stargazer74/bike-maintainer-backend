@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.component.model.CancellationMail;
 import de.chriswohlbrecht.maintenance.component.model.CancellationNotice;
 import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
@@ -31,7 +32,10 @@ public class AccountMailComponentImpl implements IAccountMailComponent {
             "mail.passwordReset", "password_reset",
             "mail.registrationExists", "registration_exists",
             "mail.deletionNotice", "deletion_notice",
-            "mail.cancellationNotice", "cancellation_notice");
+            "mail.cancellationNotice", "cancellation_notice",
+            "mail.earlyEndScheduled", "early_end_scheduled",
+            "mail.earlyEndDone", "early_end_done",
+            "mail.earlyEndFailed", "early_end_failed");
 
 
     private final IMailService mailService;
@@ -65,15 +69,17 @@ public class AccountMailComponentImpl implements IAccountMailComponent {
     }
 
     @Override
-    public void sendCancellationNotice(AppUser admin, CancellationNotice notice) {
+    public void sendCancellationNotice(AppUser admin, CancellationNotice notice, CancellationMail mail,
+                                       String reasonKey) {
         Locale locale = userLocaleComponent.localeOf(admin);
         DateTimeFormatter dates = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale);
         String refund = notice.refund() == null || notice.currency() == null
                 ? messageSource.getMessage("mail.cancellationNotice.refundUnknown", null, locale)
                 : money(notice.refund(), notice.currency(), locale);
-        deliver(admin, "mail.cancellationNotice", locale, String.valueOf(notice.userId()), notice.subscriptionId(),
+        String reason = reasonKey == null ? "" : messageSource.getMessage(reasonKey, null, locale);
+        deliver(admin, mail.messageKey(), locale, String.valueOf(notice.userId()), notice.subscriptionId(),
                 notice.receivedOn().format(dates), notice.endsOn().format(dates), notice.paidUntil().format(dates),
-                refund);
+                refund, reason, notice.endsOn().plusDays(1).format(dates));
     }
 
     /** E.g. 2005 + "eur" → "20,05 €" (de) or "€20.05" (en). */

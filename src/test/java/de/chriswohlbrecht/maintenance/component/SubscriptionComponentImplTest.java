@@ -213,7 +213,7 @@ class SubscriptionComponentImplTest {
         receive(event("sub_1"));
 
         assertThat(existing.getStatus()).isEqualTo(SubscriptionStatus.CANCELED);
-        verify(cancellationNoticeComponent, times(1)).cancellationReceived(user, cancelled);
+        verify(cancellationNoticeComponent, times(1)).cancellationReceived(user, existing, cancelled);
     }
 
     @Test
@@ -229,6 +229,23 @@ class SubscriptionComponentImplTest {
         receive(event("sub_1"));
 
         assertThat(existing.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
+        verify(cancellationNoticeComponent).cancellationWithdrawn(existing);
+        verify(cancellationNoticeComponent, never()).cancellationReceived(any(), any(), any());
+    }
+
+    @Test
+    void anEndedSubscriptionIsNoWithdrawal() {
+        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.POLAR)
+                .externalId("sub_1").status(SubscriptionStatus.CANCELED).build();
+        when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(
+                new ProviderSubscription("sub_1", "canceled", PERIOD_END, PERIOD_END, false, "ref-1")));
+        when(appUserRepository.findByBillingCustomerRef("ref-1")).thenReturn(Optional.of(user));
+        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.POLAR, "sub_1"))
+                .thenReturn(Optional.of(existing));
+
+        receive(event("sub_1"));
+
+        assertThat(existing.getStatus()).isEqualTo(SubscriptionStatus.ENDED);
         verifyNoInteractions(cancellationNoticeComponent);
     }
 
