@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.component.model.CancellationNotice;
 import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
@@ -101,6 +102,37 @@ class AccountMailComponentImplTest {
         verify(mailQuotaComponent, never()).tryReserve();
         assertThat(meterRegistry.counter("bm.mail.sent", "type", "deletion_notice", "result", "queued").count())
                 .isEqualTo(1.0);
+    }
+
+    @Test
+    void cancellationNoticeListsEverythingForTheManualRefund() {
+        when(mailQuotaComponent.tryReserve()).thenReturn(false);
+
+        component.sendCancellationNotice(user("de"), new CancellationNotice(7L, "sub_1", LocalDate.of(2027, 1, 5),
+                LocalDate.of(2027, 2, 5), LocalDate.of(2027, 11, 12), 1841L, "eur"));
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(mailService).send(eq("rider@example.org"), eq("Kündigung nach dem ersten Jahr: Abo sub_1"),
+                body.capture());
+        assertThat(body.getValue())
+                .contains("Konto (ID): 7")
+                .contains("Kündigung eingegangen: 5. Januar 2027")
+                .contains("Ende nach Monatsfrist: 5. Februar 2027")
+                .contains("Bezahlt bis: 12. November 2027")
+                .contains("Anteilige Erstattung: 18,41\u00a0€".translateEscapes())
+                .contains("Am 5. Februar 2027 das Abo");
+        verify(mailQuotaComponent, never()).tryReserve();
+    }
+
+    @Test
+    void cancellationNoticeInEnglishWithoutKnownPrice() {
+        component.sendCancellationNotice(user("en"), new CancellationNotice(7L, "sub_1", LocalDate.of(2027, 1, 5),
+                LocalDate.of(2027, 2, 5), LocalDate.of(2027, 11, 12), null, null));
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(mailService).send(eq("rider@example.org"), eq("Cancellation after the first year: subscription sub_1"),
+                body.capture());
+        assertThat(body.getValue()).contains("Pro-rata refund: unknown, please calculate it in Polar");
     }
 
     @Test

@@ -112,6 +112,21 @@ class PolarPaymentServiceTest {
     }
 
     @Test
+    void getSubscriptionReadsPeriodStartCancellationAndPrice() {
+        server.expect(requestTo(API + "/v1/subscriptions/sub_1")).andRespond(withSuccess("""
+                {"id":"sub_1","status":"active","current_period_end":"2027-11-12T10:00:00Z",
+                 "current_period_start":"2026-11-12T10:00:00Z","started_at":"2025-11-12T10:00:00Z",
+                 "canceled_at":"2027-01-05T08:00:00Z","cancel_at_period_end":true,"amount":2400,"currency":"eur",
+                 "customer":{"external_id":"ref-1"}}
+                """, MediaType.APPLICATION_JSON));
+
+        assertThat(service.getSubscription("sub_1")).contains(new ProviderSubscription("sub_1", "active",
+                OffsetDateTime.parse("2027-11-12T10:00:00Z"), null, true, "ref-1",
+                OffsetDateTime.parse("2025-11-12T10:00:00Z"), OffsetDateTime.parse("2026-11-12T10:00:00Z"),
+                OffsetDateTime.parse("2027-01-05T08:00:00Z"), 2400L, "eur"));
+    }
+
+    @Test
     void subscriptionWithoutCustomerReferenceIsRead() {
         server.expect(requestTo(API + "/v1/subscriptions/sub_1")).andRespond(withSuccess(
                 "{\"id\":\"sub_1\",\"status\":\"canceled\",\"ended_at\":\"2026-11-01T00:00:00Z\",\"customer\":{}}",

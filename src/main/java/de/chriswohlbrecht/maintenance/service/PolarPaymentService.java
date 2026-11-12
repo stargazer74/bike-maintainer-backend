@@ -89,7 +89,12 @@ public class PolarPaymentService implements IPaymentProviderService {
                 dateTime(subscription.path("current_period_end")),
                 dateTime(subscription.path("ended_at")),
                 subscription.path("cancel_at_period_end").asBoolean(false),
-                customer.path("external_id").isString() ? customer.path("external_id").asString() : null);
+                customer.path("external_id").isString() ? customer.path("external_id").asString() : null,
+                dateTime(subscription.path("started_at")),
+                dateTime(subscription.path("current_period_start")),
+                dateTime(subscription.path("canceled_at")),
+                subscription.path("amount").isIntegralNumber() ? subscription.path("amount").asLong() : null,
+                subscription.path("currency").isString() ? subscription.path("currency").asString() : null);
     }
 
     private static OffsetDateTime dateTime(JsonNode value) {
