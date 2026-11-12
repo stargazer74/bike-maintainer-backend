@@ -16,19 +16,24 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
- * Limits the body of the vehicle import (Epic #82) to {@link #IMPORT_LIMIT} bytes, so a huge file is neither buffered
- * nor parsed. A declared {@code Content-Length} above the limit is answered with 413 right away; without one
+ * Limits the body of the vehicle import (Epic #82) to {@link #IMPORT_LIMIT} bytes and of the payment provider's
+ * webhook (backend#139, public without login) to {@link #WEBHOOK_LIMIT} bytes, so a huge body is neither buffered nor
+ * parsed. A declared {@code Content-Length} above the limit is answered with 413 right away; without one
  * (chunked), the body is counted while it is read and reading ends with a {@link PayloadTooLargeException}, which
  * {@code GlobalExceptionHandler} turns into 413. Not a Spring bean, for the same reason as {@link RateLimitFilter}.
  */
 class RequestSizeLimitFilter extends OncePerRequestFilter {
 
     static final long IMPORT_LIMIT = 5L * 1024 * 1024;
+    /** Polar events are a few KB; everything far above is not from Polar. */
+    static final long WEBHOOK_LIMIT = 64L * 1024;
 
-    private static final RequestMatcher IMPORT = PathPatternRequestMatcher.withDefaults()
-            .matcher(HttpMethod.POST, "/api/v1/vehicles/import");
+    private static final Map<RequestMatcher, Long> LIMITS = Map.of(
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/v1/vehicles/import"), IMPORT_LIMIT,
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/v1/webhooks/polar"), WEBHOOK_LIMIT);
 
     private final SecurityErrorWriter errorWriter;
 
@@ -38,17 +43,26 @@ class RequestSizeLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !IMPORT.matches(request);
+        return limitOf(request) == null;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        if (request.getContentLengthLong() > IMPORT_LIMIT) {
+        long limit = limitOf(request);
+        if (request.getContentLengthLong() > limit) {
             errorWriter.write(request, response, HttpStatus.CONTENT_TOO_LARGE, "Request body too large");
             return;
         }
-        chain.doFilter(new LimitedRequest(request, IMPORT_LIMIT), response);
+        chain.doFilter(new LimitedRequest(request, limit), response);
+    }
+
+    private static Long limitOf(HttpServletRequest request) {
+        return LIMITS.entrySet().stream()
+                .filter(entry -> entry.getKey().matches(request))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
     }
 
     /** Hands out a body stream that fails once more than the limit has been read. */
