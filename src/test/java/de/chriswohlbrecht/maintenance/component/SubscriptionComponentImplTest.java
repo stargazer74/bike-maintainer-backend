@@ -4,8 +4,7 @@ import de.chriswohlbrecht.maintenance.api.model.AccessStatus;
 import de.chriswohlbrecht.maintenance.component.helper.WebhookSignatureHelper;
 import de.chriswohlbrecht.maintenance.component.model.Access;
 import de.chriswohlbrecht.maintenance.component.model.ProviderSubscription;
-import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
-import de.chriswohlbrecht.maintenance.configuration.PolarProperties;
+import de.chriswohlbrecht.maintenance.configuration.PaddleProperties;
 import de.chriswohlbrecht.maintenance.exception.AlreadySubscribedException;
 import de.chriswohlbrecht.maintenance.exception.InvalidWebhookException;
 import de.chriswohlbrecht.maintenance.exception.PaymentProviderUnavailableException;
@@ -34,14 +33,12 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.support.TransactionOperations;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 
@@ -62,8 +59,7 @@ import static org.mockito.Mockito.when;
 class SubscriptionComponentImplTest {
 
     private static final Instant NOW = Instant.parse("2026-11-12T12:00:00Z");
-    private static final String SECRET = "whsec_" + Base64.getEncoder()
-            .encodeToString("secret".getBytes(StandardCharsets.UTF_8));
+    private static final String SECRET = "pdl_ntfset_secret";
     private static final OffsetDateTime PERIOD_END = OffsetDateTime.parse("2027-11-12T10:00:00Z");
 
     @Mock
@@ -89,8 +85,7 @@ class SubscriptionComponentImplTest {
     void setUp() {
         component = new SubscriptionComponentImpl(currentUserComponent, accessComponent, paymentProviderService,
                 cancellationNoticeComponent, earlyEndComponent, appUserRepository, subscriptionRepository,
-                new PolarProperties("https://api", "token", SECRET, "product-1"),
-                new AccountMailProperties("noreply@example.org", 100, "https://app.example.org/"), new JsonMapper(),
+                new PaddleProperties("https://api", "key", SECRET, "pri_1", "test_token"), new JsonMapper(),
                 Clock.fixed(NOW, ZoneOffset.UTC), meterRegistry, TransactionOperations.withoutTransaction());
         user = AppUser.builder().id(7L).email("rider@example.org").role(UserRole.USER).build();
         lenient().when(subscriptionRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
@@ -103,15 +98,14 @@ class SubscriptionComponentImplTest {
         ArgumentCaptor<String> created = ArgumentCaptor.forClass(String.class);
         when(appUserRepository.setBillingCustomerRefIfMissing(eq(7L), created.capture())).thenReturn(1);
         when(appUserRepository.findBillingCustomerRefById(7L)).thenAnswer(call -> Optional.of(created.getValue()));
-        when(paymentProviderService.createCheckout(anyString(), eq("rider@example.org"),
-                eq("https://app.example.org/konto?abo=danke"), eq("https://app.example.org/konto")))
-                .thenReturn("https://polar.sh/checkout/1");
+        when(paymentProviderService.createCheckout(anyString(), eq("rider@example.org")))
+                .thenReturn("https://app.example.org/abo/bezahlen?_ptxn=txn_1");
 
-        assertThat(component.startCheckout()).isEqualTo("https://polar.sh/checkout/1");
+        assertThat(component.startCheckout()).isEqualTo("https://app.example.org/abo/bezahlen?_ptxn=txn_1");
 
         assertThat(created.getValue()).hasSize(36).isNotEqualTo(String.valueOf(user.getId()));
         assertThat(user.getBillingCustomerRef()).isEqualTo(created.getValue());
-        verify(paymentProviderService).createCheckout(eq(created.getValue()), any(), any(), any());
+        verify(paymentProviderService).createCheckout(eq(created.getValue()), any());
         assertThat(meterRegistry.counter(SubscriptionComponentImpl.CHECKOUT_METRIC, "result", "started").count())
                 .isEqualTo(1.0);
     }
@@ -121,7 +115,7 @@ class SubscriptionComponentImplTest {
         user.setBillingCustomerRef("ref-1");
         when(currentUserComponent.getCurrentUser()).thenReturn(user);
         when(accessComponent.accessOf(user)).thenReturn(new Access(AccessStatus.EXPIRED, null, true));
-        when(paymentProviderService.createCheckout(eq("ref-1"), any(), any(), any())).thenReturn("https://c");
+        when(paymentProviderService.createCheckout(eq("ref-1"), any())).thenReturn("https://c");
 
         component.startCheckout();
 
@@ -135,7 +129,7 @@ class SubscriptionComponentImplTest {
         when(accessComponent.accessOf(user)).thenReturn(new Access(AccessStatus.TRIAL, null, false));
         when(appUserRepository.setBillingCustomerRefIfMissing(eq(7L), anyString())).thenReturn(0);
         when(appUserRepository.findBillingCustomerRefById(7L)).thenReturn(Optional.of("ref-first"));
-        when(paymentProviderService.createCheckout(eq("ref-first"), any(), any(), any())).thenReturn("https://c");
+        when(paymentProviderService.createCheckout(eq("ref-first"), any())).thenReturn("https://c");
 
         assertThat(component.startCheckout()).isEqualTo("https://c");
         assertThat(user.getBillingCustomerRef()).isEqualTo("ref-first");
@@ -155,7 +149,7 @@ class SubscriptionComponentImplTest {
         user.setBillingCustomerRef("ref-1");
         when(currentUserComponent.getCurrentUser()).thenReturn(user);
         when(accessComponent.accessOf(user)).thenReturn(new Access(AccessStatus.TRIAL, null, false));
-        when(paymentProviderService.createCheckout(any(), any(), any(), any()))
+        when(paymentProviderService.createCheckout(any(), any()))
                 .thenThrow(new PaymentProviderUnavailableException("down"));
 
         assertThatThrownBy(component::startCheckout).isInstanceOf(PaymentProviderUnavailableException.class);
@@ -163,25 +157,26 @@ class SubscriptionComponentImplTest {
                 .isEqualTo(1.0);
     }
 
+    /** Opened through the newest subscription of the account, whose customer the portal belongs to. */
     @Test
     void customerPortalOnlyForAccountsWithASubscription() {
         when(currentUserComponent.getCurrentUser()).thenReturn(user);
-        assertThat(component.openCustomerPortal()).isEmpty();
-
-        user.setBillingCustomerRef("ref-1");
         when(subscriptionRepository.findAllByUser_Id(7L)).thenReturn(List.of());
         assertThat(component.openCustomerPortal()).isEmpty();
         verifyNoInteractions(paymentProviderService);
 
-        when(subscriptionRepository.findAllByUser_Id(7L)).thenReturn(List.of(new Subscription()));
-        when(paymentProviderService.createCustomerPortal("ref-1", "https://app.example.org/konto"))
-                .thenReturn(Optional.of("https://polar.sh/portal"));
-        assertThat(component.openCustomerPortal()).contains("https://polar.sh/portal");
+        when(subscriptionRepository.findAllByUser_Id(7L)).thenReturn(List.of(
+                Subscription.builder().id(1L).externalId("sub_old").build(),
+                Subscription.builder().id(2L).externalId("sub_new").build()));
+        when(paymentProviderService.createCustomerPortal("sub_new"))
+                .thenReturn(Optional.of("https://customer-portal.paddle.com/cpl_1"));
+        assertThat(component.openCustomerPortal()).contains("https://customer-portal.paddle.com/cpl_1");
     }
 
     @Test
     void webhookWithAWrongSignatureChangesNothing() {
-        assertThatThrownBy(() -> component.handleWebhook("msg_1", timestamp(), "v1,d3Jvbmc=", event("sub_1")))
+        assertThatThrownBy(() -> component.handleWebhook("ts=" + NOW.getEpochSecond() + ";h1=" + "ab".repeat(32),
+                event("sub_1")))
                 .isInstanceOf(WebhookSignatureException.class);
 
         verifyNoInteractions(paymentProviderService, subscriptionRepository);
@@ -195,7 +190,7 @@ class SubscriptionComponentImplTest {
         when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(
                 new ProviderSubscription("sub_1", "active", PERIOD_END, null, false, "ref-1")));
         when(appUserRepository.findByBillingCustomerRef("ref-1")).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.POLAR, "sub_1"))
+        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.PADDLE, "sub_1"))
                 .thenReturn(Optional.empty());
 
         receive(event("sub_1"));
@@ -215,12 +210,12 @@ class SubscriptionComponentImplTest {
     @Test
     void webhookThatLosesAgainstAConcurrentOneIsStoredAgain() {
         user.setBillingCustomerRef("ref-1");
-        Subscription stored = Subscription.builder().user(user).provider(SubscriptionProvider.POLAR)
+        Subscription stored = Subscription.builder().user(user).provider(SubscriptionProvider.PADDLE)
                 .externalId("sub_1").status(SubscriptionStatus.CANCELED).build();
         ProviderSubscription cancelled = new ProviderSubscription("sub_1", "active", PERIOD_END, null, true, "ref-1");
         when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(cancelled));
         when(appUserRepository.findByBillingCustomerRef("ref-1")).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.POLAR, "sub_1"))
+        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.PADDLE, "sub_1"))
                 .thenReturn(Optional.empty(), Optional.of(stored));
         when(subscriptionRepository.saveAndFlush(any()))
                 .thenThrow(new DataIntegrityViolationException("uk_subscription_provider_external"))
@@ -240,7 +235,7 @@ class SubscriptionComponentImplTest {
         when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(
                 new ProviderSubscription("sub_1", "active", PERIOD_END, null, false, "ref-1")));
         when(appUserRepository.findByBillingCustomerRef("ref-1")).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.POLAR, "sub_1"))
+        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.PADDLE, "sub_1"))
                 .thenReturn(Optional.empty());
         when(subscriptionRepository.saveAndFlush(any()))
                 .thenThrow(new ObjectOptimisticLockingFailureException(Subscription.class, 1L));
@@ -255,17 +250,17 @@ class SubscriptionComponentImplTest {
     /** A lost webhook: subscriptions reported running after their paid period are asked for again each night. */
     @Test
     void resyncAsksTheProviderAgainForOverdueRunningSubscriptions() {
-        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.POLAR)
+        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.PADDLE)
                 .externalId("sub_1").status(SubscriptionStatus.ACTIVE).paidUntil(LocalDate.of(2026, 11, 1)).build();
-        when(subscriptionRepository.findRunningUnpaidSince(SubscriptionProvider.POLAR,
+        when(subscriptionRepository.findRunningUnpaidSince(SubscriptionProvider.PADDLE,
                 List.of(SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE), LocalDate.of(2026, 11, 12)))
                 .thenReturn(List.of("sub_1", "sub_gone", "sub_down"));
         when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(new ProviderSubscription(
-                "sub_1", "canceled", PERIOD_END, OffsetDateTime.parse("2026-11-01T08:00:00Z"), false, "ref-1")));
+                "sub_1", "canceled", null, OffsetDateTime.parse("2026-11-01T08:00:00Z"), false, "ref-1")));
         when(paymentProviderService.getSubscription("sub_gone")).thenReturn(Optional.empty());
         when(paymentProviderService.getSubscription("sub_down")).thenThrow(new PaymentProviderUnavailableException("x"));
         when(appUserRepository.findByBillingCustomerRef("ref-1")).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.POLAR, "sub_1"))
+        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.PADDLE, "sub_1"))
                 .thenReturn(Optional.of(existing));
 
         component.resyncOverdue();
@@ -291,12 +286,12 @@ class SubscriptionComponentImplTest {
     /** Revoked before the period ended (e.g. refund): access ends with the day it ended. */
     @Test
     void webhookUpdatesAnEndedSubscriptionToTheDayItEnded() {
-        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.POLAR)
+        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.PADDLE)
                 .externalId("sub_1").status(SubscriptionStatus.ACTIVE).paidUntil(LocalDate.of(2027, 11, 12)).build();
         when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(new ProviderSubscription(
-                "sub_1", "canceled", PERIOD_END, OffsetDateTime.parse("2026-11-12T08:00:00Z"), false, "ref-1")));
+                "sub_1", "canceled", null, OffsetDateTime.parse("2026-11-12T08:00:00Z"), false, "ref-1")));
         when(appUserRepository.findByBillingCustomerRef("ref-1")).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.POLAR, "sub_1"))
+        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.PADDLE, "sub_1"))
                 .thenReturn(Optional.of(existing));
 
         receive(event("sub_1"));
@@ -309,12 +304,12 @@ class SubscriptionComponentImplTest {
     /** Only the change to "cancelled" counts, not every repeated event of it. */
     @Test
     void aNewCancellationIsPassedOnOnce() {
-        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.POLAR)
+        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.PADDLE)
                 .externalId("sub_1").status(SubscriptionStatus.ACTIVE).build();
         ProviderSubscription cancelled = new ProviderSubscription("sub_1", "active", PERIOD_END, null, true, "ref-1");
         when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(cancelled));
         when(appUserRepository.findByBillingCustomerRef("ref-1")).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.POLAR, "sub_1"))
+        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.PADDLE, "sub_1"))
                 .thenReturn(Optional.of(existing));
 
         receive(event("sub_1"));
@@ -326,12 +321,12 @@ class SubscriptionComponentImplTest {
 
     @Test
     void otherChangesAreNoCancellation() {
-        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.POLAR)
+        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.PADDLE)
                 .externalId("sub_1").status(SubscriptionStatus.CANCELED).build();
         when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(
                 new ProviderSubscription("sub_1", "active", PERIOD_END, null, false, "ref-1")));
         when(appUserRepository.findByBillingCustomerRef("ref-1")).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.POLAR, "sub_1"))
+        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.PADDLE, "sub_1"))
                 .thenReturn(Optional.of(existing));
 
         receive(event("sub_1"));
@@ -343,12 +338,12 @@ class SubscriptionComponentImplTest {
 
     @Test
     void anEndedSubscriptionIsNoWithdrawal() {
-        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.POLAR)
+        Subscription existing = Subscription.builder().user(user).provider(SubscriptionProvider.PADDLE)
                 .externalId("sub_1").status(SubscriptionStatus.CANCELED).build();
         when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(
-                new ProviderSubscription("sub_1", "canceled", PERIOD_END, PERIOD_END, false, "ref-1")));
+                new ProviderSubscription("sub_1", "canceled", null, PERIOD_END, false, "ref-1")));
         when(appUserRepository.findByBillingCustomerRef("ref-1")).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.POLAR, "sub_1"))
+        when(subscriptionRepository.findByProviderAndExternalId(SubscriptionProvider.PADDLE, "sub_1"))
                 .thenReturn(Optional.of(existing));
 
         receive(event("sub_1"));
@@ -381,7 +376,7 @@ class SubscriptionComponentImplTest {
 
     @Test
     void otherEventsAreIgnored() {
-        receive("{\"type\":\"order.created\",\"data\":{\"id\":\"ord_1\"}}");
+        receive("{\"event_type\":\"transaction.completed\",\"data\":{\"id\":\"txn_1\"}}");
 
         verifyNoInteractions(paymentProviderService);
         assertThat(meterRegistry.counter(SubscriptionComponentImpl.WEBHOOK_METRIC, "result", "ignored").count())
@@ -391,7 +386,7 @@ class SubscriptionComponentImplTest {
     @Test
     void unreadableOrIncompleteEventsAreRejected() {
         assertThatThrownBy(() -> receive("not json")).isInstanceOf(InvalidWebhookException.class);
-        assertThatThrownBy(() -> receive("{\"type\":\"subscription.active\",\"data\":{}}"))
+        assertThatThrownBy(() -> receive("{\"event_type\":\"subscription.activated\",\"data\":{}}"))
                 .isInstanceOf(InvalidWebhookException.class);
     }
 
@@ -411,12 +406,9 @@ class SubscriptionComponentImplTest {
             "trialing, false, false, ACTIVE",
             "active, true, false, CANCELED",
             "past_due, false, false, PAST_DUE",
-            "canceled, false, false, CANCELED",
+            "trialing, true, false, CANCELED",
             "canceled, false, true, ENDED",
-            "unpaid, false, false, ENDED",
-            "paused, false, false, ENDED",
-            "incomplete, false, false, ENDED",
-            "incomplete_expired, false, false, ENDED"
+            "paused, false, false, ENDED"
     })
     void providerStatusIsMapped(String status, boolean cancelAtPeriodEnd, boolean ended, SubscriptionStatus expected) {
         ProviderSubscription subscription = new ProviderSubscription("sub_1", status, PERIOD_END,
@@ -425,18 +417,32 @@ class SubscriptionComponentImplTest {
         assertThat(SubscriptionComponentImpl.statusOf(subscription)).isEqualTo(expected);
     }
 
+    /**
+     * The state is read before the revoke (the provider drops the paid period afterwards) and handed on for the refund
+     * after the first year; a subscription the provider had ended already gets no refund.
+     */
     @Test
-    void revokeSubscriptionsOfRevokesAllThatHaveNotEnded() {
-        when(subscriptionRepository.findAllByUser_Id(7L)).thenReturn(List.of(
-                Subscription.builder().id(1L).externalId("sub_1").status(SubscriptionStatus.ACTIVE).build(),
-                Subscription.builder().id(2L).externalId("sub_2").status(SubscriptionStatus.ENDED).build(),
-                Subscription.builder().id(3L).externalId("sub_3").status(SubscriptionStatus.CANCELED).build()));
+    void revokeSubscriptionsOfRevokesAllThatHaveNotEndedAndHandsThemOnForTheRefund() {
+        Subscription active = Subscription.builder().id(1L).externalId("sub_1").status(SubscriptionStatus.ACTIVE).build();
+        Subscription canceled = Subscription.builder().id(3L).externalId("sub_3").status(SubscriptionStatus.CANCELED)
+                .build();
+        when(subscriptionRepository.findAllByUser_Id(7L)).thenReturn(List.of(active,
+                Subscription.builder().id(2L).externalId("sub_2").status(SubscriptionStatus.ENDED).build(), canceled));
+        ProviderSubscription before = new ProviderSubscription("sub_1", "active", PERIOD_END, null, false, "ref-1");
+        when(paymentProviderService.getSubscription("sub_1")).thenReturn(Optional.of(before));
+        when(paymentProviderService.getSubscription("sub_3")).thenReturn(Optional.empty());
+        when(paymentProviderService.revokeSubscription("sub_1")).thenReturn(true);
+        when(paymentProviderService.revokeSubscription("sub_3")).thenReturn(false);
 
         component.revokeSubscriptionsOf(user);
 
-        verify(paymentProviderService).revokeSubscription("sub_1");
+        InOrder order = inOrder(paymentProviderService, earlyEndComponent);
+        order.verify(paymentProviderService).getSubscription("sub_1");
+        order.verify(paymentProviderService).revokeSubscription("sub_1");
+        order.verify(earlyEndComponent).refundAfterDeletion(active, before);
         verify(paymentProviderService).revokeSubscription("sub_3");
         verify(paymentProviderService, never()).revokeSubscription("sub_2");
+        verify(earlyEndComponent, never()).refundAfterDeletion(eq(canceled), any());
         verify(subscriptionRepository, never()).deleteAll(any());
     }
 
@@ -458,16 +464,10 @@ class SubscriptionComponentImplTest {
     }
 
     private void receive(String body) {
-        String timestamp = timestamp();
-        component.handleWebhook("msg_1", timestamp, WebhookSignatureHelper.signature(SECRET, "msg_1", timestamp, body),
-                body);
+        component.handleWebhook(WebhookSignatureHelper.signatureHeader(SECRET, NOW.getEpochSecond(), body), body);
     }
 
     private static String event(String subscriptionId) {
-        return "{\"type\":\"subscription.updated\",\"data\":{\"id\":\"" + subscriptionId + "\"}}";
-    }
-
-    private static String timestamp() {
-        return String.valueOf(NOW.getEpochSecond());
+        return "{\"event_type\":\"subscription.updated\",\"data\":{\"id\":\"" + subscriptionId + "\"}}";
     }
 }

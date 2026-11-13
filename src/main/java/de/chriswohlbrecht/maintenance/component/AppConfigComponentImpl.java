@@ -2,7 +2,9 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.AppConfigResponse;
 import de.chriswohlbrecht.maintenance.api.model.OperatingMode;
+import de.chriswohlbrecht.maintenance.api.model.PaymentConfig;
 import de.chriswohlbrecht.maintenance.configuration.OperatingModeProperties;
+import de.chriswohlbrecht.maintenance.configuration.PaddleProperties;
 import de.chriswohlbrecht.maintenance.configuration.WebsiteProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -20,6 +22,8 @@ public class AppConfigComponentImpl implements IAppConfigComponent {
     /** Only present in portal mode (WebsiteConfiguration). */
     private final ObjectProvider<WebsiteProperties> websiteProperties;
 
+    private final PaddleProperties paddleProperties;
+
     @Override
     public AppConfigResponse getAppConfig() {
         AppConfigResponse response = new AppConfigResponse()
@@ -27,6 +31,12 @@ public class AppConfigComponentImpl implements IAppConfigComponent {
         WebsiteProperties website = websiteProperties.getIfAvailable();
         if (website != null) {
             website.url().map(URI::create).ifPresent(response::websiteUrl);
+        }
+        // Public values for Paddle.js on the payment page; never in household mode, which has no subscription.
+        String clientToken = paddleProperties.clientToken();
+        if (operatingModeProperties.mode() == de.chriswohlbrecht.maintenance.configuration.OperatingMode.PORTAL
+                && clientToken != null && !clientToken.isBlank()) {
+            response.payment(new PaymentConfig().clientToken(clientToken).sandbox(paddleProperties.sandbox()));
         }
         return response;
     }

@@ -57,7 +57,7 @@ public class CancellationNoticeComponentImpl implements ICancellationNoticeCompo
     public void cancellationReceived(AppUser owner, Subscription subscription, ProviderSubscription current) {
         if (current.startedAt() == null || current.currentPeriodStart() == null
                 || current.currentPeriodEnd() == null) {
-            // Polar always reports these; without them the term cannot be judged, so the operator has to look.
+            // Paddle always reports these for a running subscription; without them the term cannot be judged, so the operator has to look.
             count("unknown");
             log.warn("Cancellation of subscription {} of user {} without period data, not judged", current.id(),
                     owner.getId());
@@ -124,7 +124,7 @@ public class CancellationNoticeComponentImpl implements ICancellationNoticeCompo
     }
 
     /** A renewal starts a new period, so the current one begins later than the subscription (a day of slack). */
-    private static boolean renewedAtLeastOnce(ProviderSubscription subscription) {
+    static boolean renewedAtLeastOnce(ProviderSubscription subscription) {
         return subscription.currentPeriodStart().isAfter(subscription.startedAt().plusDays(1));
     }
 

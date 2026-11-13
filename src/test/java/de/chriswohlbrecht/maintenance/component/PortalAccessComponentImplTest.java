@@ -238,7 +238,7 @@ class PortalAccessComponentImplTest {
     }
 
     private static Subscription subscription(SubscriptionStatus status, LocalDate paidUntil) {
-        return Subscription.builder().provider(SubscriptionProvider.POLAR).externalId("sub_1").status(status)
+        return Subscription.builder().provider(SubscriptionProvider.PADDLE).externalId("sub_1").status(status)
                 .paidUntil(paidUntil).build();
     }
 }

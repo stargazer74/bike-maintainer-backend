@@ -3,10 +3,7 @@ package de.chriswohlbrecht.maintenance.component.helper;
 import de.chriswohlbrecht.maintenance.exception.WebhookSignatureException;
 import org.junit.jupiter.api.Test;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.NoSuchElementException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -14,99 +11,80 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class WebhookSignatureHelperTest {
 
-    private static final String SECRET = "whsec_" + Base64.getEncoder()
-            .encodeToString("a-secret-of-the-endpoint".getBytes(StandardCharsets.UTF_8));
-    private static final Instant NOW = Instant.ofEpochSecond(1_800_000_000L);
-    private static final String TIMESTAMP = String.valueOf(NOW.getEpochSecond());
-    private static final String BODY = "{\"type\":\"subscription.active\",\"data\":{\"id\":\"sub_1\"}}";
+    private static final String SECRET = "pdl_ntfset_01gkpjp8bkm3tm53kdgkx6sms7_6h3qd3uFSi9YCD3OLYAShQI90XTI32a2";
+    private static final long TIMESTAMP = 1_671_552_777L;
+    private static final Instant NOW = Instant.ofEpochSecond(TIMESTAMP);
+    private static final String BODY =
+            "{\"event_id\":\"evt_01\",\"event_type\":\"subscription.activated\",\"data\":{\"id\":\"sub_1\"}}";
+    /** Computed outside of Java: printf '%s' "$ts:$body" | openssl dgst -sha256 -hmac "$secret" -hex. */
+    private static final String EXPECTED = "976450f182f56fe8cddc9d50fe45ae4554281f449fb75aed2ac5158d2f86aadf";
 
-    /** Example of the Standard Webhooks specification, so the scheme is checked against an outside reference. */
     @Test
-    void acceptsTheExampleOfTheSpecification() {
-        String secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
-        String body = "{\"test\": 2432232314}";
-
-        assertThat(WebhookSignatureHelper.signature(secret, "msg_p5jXN8AQM9LWM0D4loKWxJek", "1614265330", body))
-                .isEqualTo("v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=");
-        assertThatCode(() -> WebhookSignatureHelper.verify(secret, "msg_p5jXN8AQM9LWM0D4loKWxJek", "1614265330",
-                "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=", body, Instant.ofEpochSecond(1614265330L)))
+    void signsLikeAnOutsideReference() {
+        assertThat(WebhookSignatureHelper.signatureHeader(SECRET, TIMESTAMP, BODY))
+                .isEqualTo("ts=" + TIMESTAMP + ";h1=" + EXPECTED);
+        assertThatCode(() -> WebhookSignatureHelper.verify(SECRET, "ts=" + TIMESTAMP + ";h1=" + EXPECTED, BODY, NOW))
                 .doesNotThrowAnyException();
     }
 
+    /** While the secret is rotated, Paddle sends one h1 per secret. */
     @Test
     void acceptsOneMatchingSignatureAmongSeveral() {
-        String header = "v1,d3Jvbmc= v2,ignored " + WebhookSignatureHelper.signature(SECRET, "msg_1", TIMESTAMP, BODY);
+        String header = "ts=" + TIMESTAMP + ";h1=" + "ab".repeat(32) + ";h1=" + EXPECTED + ";h2=ignored";
 
-        assertThatCode(() -> WebhookSignatureHelper.verify(SECRET, "msg_1", TIMESTAMP, header, BODY, NOW))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> WebhookSignatureHelper.verify(SECRET, header, BODY, NOW)).doesNotThrowAnyException();
     }
 
     @Test
     void rejectsAChangedBody() {
-        String header = WebhookSignatureHelper.signature(SECRET, "msg_1", TIMESTAMP, BODY);
+        String header = WebhookSignatureHelper.signatureHeader(SECRET, TIMESTAMP, BODY);
 
-        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "msg_1", TIMESTAMP, header, BODY + " ", NOW))
-                .isInstanceOf(WebhookSignatureException.class);
+        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, header, BODY.replace("sub_1", "sub_2"), NOW))
+                .isInstanceOf(WebhookSignatureException.class).hasMessageContaining("does not match");
     }
 
     @Test
     void rejectsAnotherSecret() {
-        String other = "whsec_" + Base64.getEncoder().encodeToString("other".getBytes(StandardCharsets.UTF_8));
-        String header = WebhookSignatureHelper.signature(other, "msg_1", TIMESTAMP, BODY);
+        String header = WebhookSignatureHelper.signatureHeader("pdl_ntfset_other", TIMESTAMP, BODY);
 
-        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "msg_1", TIMESTAMP, header, BODY, NOW))
+        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, header, BODY, NOW))
                 .isInstanceOf(WebhookSignatureException.class);
     }
 
+    /** A recorded webhook cannot be replayed later, nor one with a timestamp in the future. */
     @Test
-    void rejectsAReplayOutsideTheTolerance() {
-        String old = String.valueOf(NOW.minus(WebhookSignatureHelper.TOLERANCE).getEpochSecond() - 1);
-        String header = WebhookSignatureHelper.signature(SECRET, "msg_1", old, BODY);
+    void rejectsTimestampsOutOfTolerance() {
+        String header = WebhookSignatureHelper.signatureHeader(SECRET, TIMESTAMP, BODY);
 
-        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "msg_1", old, header, BODY, NOW))
-                .isInstanceOf(WebhookSignatureException.class)
-                .hasMessageContaining("tolerance");
+        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, header, BODY,
+                NOW.plus(WebhookSignatureHelper.TOLERANCE).plusSeconds(1)))
+                .isInstanceOf(WebhookSignatureException.class).hasMessageContaining("tolerance");
+        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, header, BODY,
+                NOW.minus(WebhookSignatureHelper.TOLERANCE).minusSeconds(1)))
+                .isInstanceOf(WebhookSignatureException.class).hasMessageContaining("tolerance");
+        assertThatCode(() -> WebhookSignatureHelper.verify(SECRET, header, BODY,
+                NOW.plus(WebhookSignatureHelper.TOLERANCE))).doesNotThrowAnyException();
     }
 
     @Test
-    void rejectsMissingHeadersAndInvalidValues() {
-        String header = WebhookSignatureHelper.signature(SECRET, "msg_1", TIMESTAMP, BODY);
-
-        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, null, TIMESTAMP, header, BODY, NOW))
-                .isInstanceOf(WebhookSignatureException.class);
-        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "msg_1", " ", header, BODY, NOW))
-                .isInstanceOf(WebhookSignatureException.class);
-        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "msg_1", TIMESTAMP, "", BODY, NOW))
-                .isInstanceOf(WebhookSignatureException.class);
-        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "msg_1", TIMESTAMP, header, null, NOW))
-                .isInstanceOf(WebhookSignatureException.class);
-        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "msg_1", "yesterday", header, BODY, NOW))
-                .isInstanceOf(WebhookSignatureException.class);
-        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "msg_1", TIMESTAMP, "v1,%%%", BODY, NOW))
-                .isInstanceOf(WebhookSignatureException.class);
-    }
-
-    /** Polar endpoints created before 8 September 2026: the key is the UTF-8 bytes of the full secret. */
-    @Test
-    void acceptsTheOlderPolarSecretWhoseKeyIsTheWholeString() {
-        String legacy = "whsec_not-base64_%%%";
-        String header = WebhookSignatureHelper.legacySignature(legacy, "msg_1", TIMESTAMP, BODY);
-
-        assertThatCode(() -> WebhookSignatureHelper.verify(legacy, "msg_1", TIMESTAMP, header, BODY, NOW))
-                .doesNotThrowAnyException();
+    void rejectsMissingOrIncompleteHeaders() {
+        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, null, BODY, NOW))
+                .isInstanceOf(WebhookSignatureException.class).hasMessageContaining("missing");
+        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, " ", BODY, NOW))
+                .isInstanceOf(WebhookSignatureException.class).hasMessageContaining("missing");
+        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "ts=1", null, NOW))
+                .isInstanceOf(WebhookSignatureException.class).hasMessageContaining("missing");
+        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "h1=" + EXPECTED, BODY, NOW))
+                .isInstanceOf(WebhookSignatureException.class).hasMessageContaining("incomplete");
+        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "ts=" + TIMESTAMP + ";junk;=x", BODY, NOW))
+                .isInstanceOf(WebhookSignatureException.class).hasMessageContaining("incomplete");
     }
 
     @Test
-    void acceptsTheOlderSchemeAlsoForASecretThatHappensToBeBase64() {
-        String header = WebhookSignatureHelper.legacySignature(SECRET, "msg_1", TIMESTAMP, BODY);
-
-        assertThatCode(() -> WebhookSignatureHelper.verify(SECRET, "msg_1", TIMESTAMP, header, BODY, NOW))
-                .doesNotThrowAnyException();
-    }
-
-    @Test
-    void aSecretThatIsNoBase64CannotSignInTheNewScheme() {
-        assertThatThrownBy(() -> WebhookSignatureHelper.signature("whsec_%%%", "msg_1", TIMESTAMP, BODY))
-                .isInstanceOf(NoSuchElementException.class);
+    void rejectsAnInvalidTimestampOrSignature() {
+        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "ts=soon;h1=" + EXPECTED, BODY, NOW))
+                .isInstanceOf(WebhookSignatureException.class).hasMessageContaining("timestamp is invalid");
+        assertThatThrownBy(() -> WebhookSignatureHelper.verify(SECRET, "ts=" + TIMESTAMP + ";h1=not-hex", BODY, NOW))
+                .isInstanceOf(WebhookSignatureException.class).hasMessageContaining("does not match");
     }
 }

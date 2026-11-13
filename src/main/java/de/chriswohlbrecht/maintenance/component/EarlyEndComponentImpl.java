@@ -4,6 +4,7 @@ import de.chriswohlbrecht.maintenance.component.helper.AfterCommitHelper;
 import de.chriswohlbrecht.maintenance.component.model.CancellationMail;
 import de.chriswohlbrecht.maintenance.component.model.CancellationNotice;
 import de.chriswohlbrecht.maintenance.component.model.ProviderOrder;
+import de.chriswohlbrecht.maintenance.component.model.ProviderSubscription;
 import de.chriswohlbrecht.maintenance.configuration.EarlyEndProperties;
 import de.chriswohlbrecht.maintenance.configuration.OperatingModeCondition;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
@@ -23,12 +24,13 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
- * Runs also with {@code bm.polar.early-end.enabled} off: early ends planned while it was on are finished anyway.
+ * Runs also with {@code bm.subscription.early-end.enabled} off: early ends planned while it was on are finished anyway.
  * No surrounding transaction: every step is saved before the next call to the provider, and only the early-end
  * columns of the current row are changed, so a webhook in between is not overwritten.
  */
@@ -96,6 +98,63 @@ public class EarlyEndComponentImpl implements IEarlyEndComponent {
         // Only if the account is really gone; the deletion may still be rolled back.
         AfterCommitHelper.afterCommit(() -> admins.forEach(admin -> accountMailComponent.sendCancellationNotice(
                 admin, notice, CancellationMail.FAILED, REASON_PREFIX + "accountDeleted")));
+    }
+
+    @Override
+    public void refundAfterDeletion(Subscription subscription, ProviderSubscription before) {
+        if (subscription.getEarlyEndState() != null || before.startedAt() == null
+                || before.currentPeriodStart() == null || before.currentPeriodEnd() == null
+                || !CancellationNoticeComponentImpl.renewedAtLeastOnce(before)) {
+            return;
+        }
+        LocalDate today = LocalDate.now(clock);
+        LocalDate periodStart = day(before.currentPeriodStart());
+        LocalDate paidUntil = day(before.currentPeriodEnd());
+        if (!today.isBefore(paidUntil)) {
+            return;
+        }
+        Long refund = null;
+        String currency = null;
+        try {
+            Optional<ProviderOrder> found = paymentProviderService.findLastPeriodOrder(subscription.getExternalId());
+            if (found.isEmpty()) {
+                deletionHandedOver(subscription, today, paidUntil, "noOrder");
+                return;
+            }
+            ProviderOrder order = found.get();
+            currency = order.currency();
+            Long prorated = CancellationNoticeComponentImpl.refund(order.netAmount(), periodStart, today, paidUntil);
+            refund = prorated == null ? 0 : Math.min(prorated, order.refundableAmount());
+            if (refund > 0) {
+                paymentProviderService.refund(order.id(), refund, subscription.getExternalId());
+            }
+        } catch (RuntimeException e) {
+            log.warn("Refund of subscription {} after account deletion failed: {}", subscription.getId(),
+                    e.getClass().getSimpleName());
+            deletionHandedOver(subscription, today, paidUntil, "accountDeletedRefund");
+            return;
+        }
+        count("refunded");
+        log.info("Subscription {} revoked with its account, rest refunded", subscription.getId());
+        CancellationNotice notice = new CancellationNotice(subscription.getUser().getId(),
+                subscription.getExternalId(), today, today, paidUntil, refund, currency);
+        appUserRepository.findAllByRoleAndActiveTrue(UserRole.ADMIN).forEach(admin ->
+                accountMailComponent.sendCancellationNotice(admin, notice, CancellationMail.DONE, null));
+    }
+
+    private void deletionHandedOver(Subscription subscription, LocalDate today, LocalDate paidUntil, String reason) {
+        count("manual");
+        log.warn("Refund of subscription {} after account deletion handed over to the administrators: {}",
+                subscription.getId(), reason);
+        CancellationNotice notice = new CancellationNotice(subscription.getUser().getId(),
+                subscription.getExternalId(), today, today, paidUntil, null, null);
+        appUserRepository.findAllByRoleAndActiveTrue(UserRole.ADMIN).forEach(admin ->
+                accountMailComponent.sendCancellationNotice(admin, notice, CancellationMail.FAILED,
+                        REASON_PREFIX + reason));
+    }
+
+    private LocalDate day(OffsetDateTime dateTime) {
+        return dateTime.atZoneSameInstant(clock.getZone()).toLocalDate();
     }
 
     /**

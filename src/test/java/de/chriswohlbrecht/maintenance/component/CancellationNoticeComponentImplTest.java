@@ -66,7 +66,7 @@ class CancellationNoticeComponentImplTest {
         }
     }
 
-    /** First year: minimum term, Polar ends it with the paid year, no refund – nothing to do. */
+    /** First year: minimum term, Paddle ends it with the paid year, no refund – nothing to do. */
     @Test
     void cancellationInTheFirstYearNeedsNothing() {
         component.cancellationReceived(owner, entity, subscription(STARTED, STARTED.plusYears(1),
@@ -179,7 +179,7 @@ class CancellationNoticeComponentImplTest {
                 CancellationMail.MANUAL, null);
     }
 
-    /** The paid period ends within the month anyway: Polar's own end is already in time, nothing to refund. */
+    /** The paid period ends within the month anyway: Paddle's own end is already in time, nothing to refund. */
     @Test
     void periodEndingWithinTheMonthNeedsNothing() {
         component.cancellationReceived(owner, entity, subscription(STARTED, OffsetDateTime.parse("2027-02-01T10:00:00Z"),

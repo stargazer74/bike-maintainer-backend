@@ -22,7 +22,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Conditional(OperatingModeCondition.Portal.class)
 public class SecurityConfiguration {
 
-    private static final String WEBHOOK_ENDPOINT = "/api/v1/webhooks/polar";
+    private static final String WEBHOOK_ENDPOINT = "/api/v1/webhooks/paddle";
 
     private static final String[] PUBLIC_POST_ENDPOINTS = {
             "/api/v1/auth/login",

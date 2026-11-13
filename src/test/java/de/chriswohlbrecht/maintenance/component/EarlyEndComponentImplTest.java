@@ -1,5 +1,9 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import java.time.OffsetDateTime;
+
+import de.chriswohlbrecht.maintenance.component.model.ProviderSubscription;
+
 import de.chriswohlbrecht.maintenance.component.model.CancellationMail;
 import de.chriswohlbrecht.maintenance.component.model.CancellationNotice;
 import de.chriswohlbrecht.maintenance.component.model.ProviderOrder;
@@ -124,7 +128,7 @@ class EarlyEndComponentImplTest {
         assertThat(count("refunded")).isEqualTo(1.0);
     }
 
-    /** Never more than Polar can still refund, e.g. after a partial refund by hand. */
+    /** Never more than Paddle can still refund, e.g. after a partial refund by hand. */
     @Test
     void refundIsCappedAtTheRefundableAmount() {
         due(EarlyEndState.REVOKED);
@@ -169,7 +173,7 @@ class EarlyEndComponentImplTest {
                 null);
     }
 
-    /** The run broke off before the refund reached Polar: refunded now. */
+    /** The run broke off before the refund reached Paddle: refunded now. */
     @Test
     void retryAfterARefundThatDidNotGoThroughRefunds() {
         Subscription subscription = due(EarlyEndState.REFUNDING);
@@ -184,7 +188,7 @@ class EarlyEndComponentImplTest {
         assertThat(saved).containsExactly(EarlyEndState.REFUNDED);
     }
 
-    /** Polar fails on the refund: the order is already stored, the next run checks it before refunding. */
+    /** Paddle fails on the refund: the order is already stored, the next run checks it before refunding. */
     @Test
     void failedRefundIsRetriedFromTheStoredOrder() {
         Subscription subscription = due(EarlyEndState.REVOKED);
@@ -239,7 +243,7 @@ class EarlyEndComponentImplTest {
         assertThat(subscription.getEarlyEndState()).isEqualTo(EarlyEndState.MANUAL);
     }
 
-    /** Polar down three nights in a row: handed over with the step it got stuck at. */
+    /** Paddle down three nights in a row: handed over with the step it got stuck at. */
     @Test
     void afterTheLastAttemptTheEarlyEndIsHandedOver() {
         Subscription subscription = due(EarlyEndState.SCHEDULED);
@@ -303,7 +307,7 @@ class EarlyEndComponentImplTest {
     }
 
     /**
-     * Revoking makes Polar send a webhook, which saves "ended" and the day it ended. The job saves its steps on that
+     * Revoking makes Paddle send a webhook, which saves "ended" and the day it ended. The job saves its steps on that
      * current row, not on the copy it read before, so access really ends (backend review, finding 1).
      */
     @Test
@@ -421,6 +425,87 @@ class EarlyEndComponentImplTest {
     }
 
     /** Due, and the current row is this very object (nothing changes it concurrently). */
+    /** 279 of 365 days (2027-02-06 to 2027-11-12) of 2400 cents, rounded: 1835. */
+    @Test
+    void deletionAfterTheFirstYearRefundsTheRestFromToday() {
+        Subscription subscription = subscription(null, "sub_1");
+        when(paymentProviderService.findLastPeriodOrder("sub_1"))
+                .thenReturn(Optional.of(new ProviderOrder("txn_1", 2400, 0, 2400, "EUR")));
+
+        component.refundAfterDeletion(subscription, renewed());
+
+        verify(paymentProviderService).refund("txn_1", 1835L, "sub_1");
+        verify(accountMailComponent).sendCancellationNotice(admin, new CancellationNotice(7L, "sub_1", TODAY, TODAY,
+                LocalDate.of(2027, 11, 12), 1835L, "EUR"), CancellationMail.DONE, null);
+        assertThat(count("refunded")).isEqualTo(1.0);
+    }
+
+    @Test
+    void deletionRefundIsCappedAndSkippedWhenNothingIsLeft() {
+        Subscription subscription = subscription(null, "sub_1");
+        when(paymentProviderService.findLastPeriodOrder("sub_1"))
+                .thenReturn(Optional.of(new ProviderOrder("txn_1", 2400, 2400, 0, "EUR")));
+
+        component.refundAfterDeletion(subscription, renewed());
+
+        verify(paymentProviderService, never()).refund(any(), anyLong(), any());
+        verify(accountMailComponent).sendCancellationNotice(admin, new CancellationNotice(7L, "sub_1", TODAY, TODAY,
+                LocalDate.of(2027, 11, 12), 0L, "EUR"), CancellationMail.DONE, null);
+    }
+
+    /** First year, an early end of its own, no period data or a paid period that is over: no refund at deletion. */
+    @Test
+    void deletionWithoutARefundDue() {
+        OffsetDateTime start = OffsetDateTime.parse("2026-11-12T10:00:00Z");
+        OffsetDateTime end = OffsetDateTime.parse("2027-11-12T10:00:00Z");
+        component.refundAfterDeletion(subscription(null, "sub_1"), new ProviderSubscription("sub_1", "active", end,
+                null, false, "ref-1", start, start, null, 2400L, "EUR"));
+        component.refundAfterDeletion(subscription(EarlyEndState.REFUNDED, "sub_1"), renewed());
+        component.refundAfterDeletion(subscription(null, "sub_1"),
+                new ProviderSubscription("sub_1", "active", end, null, false, "ref-1"));
+        component.refundAfterDeletion(subscription(null, "sub_1"), new ProviderSubscription("sub_1", "active",
+                OffsetDateTime.parse("2027-02-05T10:00:00Z"), null, false, "ref-1",
+                OffsetDateTime.parse("2025-02-05T10:00:00Z"), OffsetDateTime.parse("2026-02-05T10:00:00Z"), null,
+                2400L, "EUR"));
+
+        verifyNoInteractions(paymentProviderService, accountMailComponent);
+    }
+
+    @Test
+    void deletionWithoutAPaidPeriodIsHandedOver() {
+        when(paymentProviderService.findLastPeriodOrder("sub_1")).thenReturn(Optional.empty());
+
+        component.refundAfterDeletion(subscription(null, "sub_1"), renewed());
+
+        verify(paymentProviderService, never()).refund(any(), anyLong(), any());
+        verify(accountMailComponent).sendCancellationNotice(admin, new CancellationNotice(7L, "sub_1", TODAY, TODAY,
+                LocalDate.of(2027, 11, 12), null, null), CancellationMail.FAILED, "mail.earlyEnd.reason.noOrder");
+        assertThat(count("manual")).isEqualTo(1.0);
+    }
+
+    @Test
+    void failedDeletionRefundIsHandedOver() {
+        when(paymentProviderService.findLastPeriodOrder("sub_1"))
+                .thenReturn(Optional.of(new ProviderOrder("txn_1", 2400, 0, 2400, "EUR")));
+        doThrow(new PaymentProviderUnavailableException("down")).when(paymentProviderService)
+                .refund(any(), anyLong(), any());
+
+        component.refundAfterDeletion(subscription(null, "sub_1"), renewed());
+
+        verify(accountMailComponent).sendCancellationNotice(admin, new CancellationNotice(7L, "sub_1", TODAY, TODAY,
+                LocalDate.of(2027, 11, 12), null, null), CancellationMail.FAILED,
+                "mail.earlyEnd.reason.accountDeletedRefund");
+        assertThat(count("manual")).isEqualTo(1.0);
+        assertThat(count("refunded")).isZero();
+    }
+
+    /** Running in its second year: started 2025-11-12, renewed on 2026-11-12 until 2027-11-12. */
+    private static ProviderSubscription renewed() {
+        return new ProviderSubscription("sub_1", "active", OffsetDateTime.parse("2027-11-12T10:00:00Z"), null, false,
+                "ref-1", OffsetDateTime.parse("2025-11-12T10:00:00Z"), OffsetDateTime.parse("2026-11-12T10:00:00Z"),
+                null, 2400L, "EUR");
+    }
+
     private Subscription due(EarlyEndState state) {
         Subscription subscription = subscription(state, "sub_1");
         when(subscriptionRepository.findEarlyEndsDueBefore(any(), eq(TODAY))).thenReturn(List.of(subscription));
