@@ -11,6 +11,7 @@ import de.chriswohlbrecht.maintenance.component.helper.MaintenanceCostHelper;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportEntry;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportPdfHelper;
 import de.chriswohlbrecht.maintenance.component.helper.ReportMaterial;
+import de.chriswohlbrecht.maintenance.component.model.LogCreation;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
 import de.chriswohlbrecht.maintenance.exception.InvalidLogReferenceException;
 import de.chriswohlbrecht.maintenance.exception.InvalidMaterialException;
@@ -44,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.TreeMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -94,11 +96,31 @@ public class MaintenanceLogComponentImpl implements IMaintenanceLogComponent {
                 .map(this::toResponse);
     }
 
+    /**
+     * With a {@code clientEntryId} the vehicle row is locked first: two attempts of the same entry at the same time
+     * (an offline queue resending while the first answer is still on its way) then run one after the other, and the
+     * second finds the log of the first. The unique key on (vehicle, client entry id) backs this up.
+     */
     @Override
     @Transactional
-    public Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request) {
+    public Optional<LogCreation> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request) {
+        accessComponent.requireWriteAccess();
+        if (request.getClientEntryId() != null) {
+            UUID clientEntryId = request.getClientEntryId();
+            Optional<Vehicle> vehicle =
+                    vehicleRepository.findLockedByIdAndUser_Id(vehicleId, currentUserComponent.getCurrentUserId());
+            if (vehicle.isEmpty()) {
+                return Optional.empty();
+            }
+            Optional<MaintenanceLog> existing =
+                    maintenanceLogRepository.findByVehicle_IdAndClientEntryId(vehicleId, clientEntryId);
+            if (existing.isPresent()) {
+                return Optional.of(new LogCreation(toResponse(existing.get()), false));
+            }
+        }
         return createMaintenanceLog(vehicleId, request,
-                Currency.fromValue(currentUserComponent.getCurrentUser().getCurrency()), Set.of());
+                Currency.fromValue(currentUserComponent.getCurrentUser().getCurrency()), Set.of())
+                .map(log -> new LogCreation(log, true));
     }
 
     @Override

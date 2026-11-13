@@ -5,12 +5,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface MaintenanceLogRepository extends JpaRepository<MaintenanceLog, Long> {
 
     List<MaintenanceLog> findAllByVehicle_Id(Long vehicleId);
 
     Optional<MaintenanceLog> findByIdAndVehicle_Id(Long id, Long vehicleId);
+
+    Optional<MaintenanceLog> findByVehicle_IdAndClientEntryId(Long vehicleId, UUID clientEntryId);
 
     void deleteAllByVehicle_Id(Long vehicleId);
 }

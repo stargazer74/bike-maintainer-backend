@@ -457,3 +457,61 @@ Feature: Maintenance log management
     And the vehicle "bike" has the maintenance tasks:
       | name       | status  | lastServiceMileage |
       | Oil change | OVERDUE |                    |
+
+  Scenario: Resending an entry with the same client entry id creates no duplicate
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "clientEntryId": "5b2c3f8e-1d4a-4c1e-9f00-00000000a001", "performedAt": "2026-01-15", "mileageAtPerformed": 8200, "performedTaskIds": [{oilChange}] }
+      """
+    Then the response status code is 201
+    And the JSON response field "clientEntryId" equals "5b2c3f8e-1d4a-4c1e-9f00-00000000a001"
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "clientEntryId": "5b2c3f8e-1d4a-4c1e-9f00-00000000a001", "performedAt": "2026-01-16", "mileageAtPerformed": 9999, "notes": "changed" }
+      """
+    Then the response status code is 200
+    And the JSON response field "mileageAtPerformed" equals "8200"
+    And the vehicle "bike" has 1 maintenance log
+
+  Scenario: Entries without client entry id are created every time
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "performedAt": "2026-01-15", "mileageAtPerformed": 8200 }
+      """
+    Then the response status code is 201
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "performedAt": "2026-01-15", "mileageAtPerformed": 8200 }
+      """
+    Then the response status code is 201
+    And the vehicle "bike" has 2 maintenance logs
+
+  Scenario: The same client entry id on another vehicle is a separate entry
+    Given a vehicle "car" exists with body:
+      """
+      { "name": "Car", "type": "CAR", "modelYear": 2020, "firstRegistrationDate": "2020-01-01", "currentMileage": 30000 }
+      """
+    When a POST request is sent to "/api/v1/vehicles/{bike}/maintenance-logs" with body:
+      """
+      { "clientEntryId": "5b2c3f8e-1d4a-4c1e-9f00-00000000a002", "performedAt": "2026-01-15", "mileageAtPerformed": 8200 }
+      """
+    Then the response status code is 201
+    When a POST request is sent to "/api/v1/vehicles/{car}/maintenance-logs" with body:
+      """
+      { "clientEntryId": "5b2c3f8e-1d4a-4c1e-9f00-00000000a002", "performedAt": "2026-01-15", "mileageAtPerformed": 30100 }
+      """
+    Then the response status code is 201
+    And the vehicle "car" has 1 maintenance log
+
+  Scenario: Updating a log keeps its client entry id
+    Given a maintenance log "entry" exists for vehicle "bike" with body:
+      """
+      { "clientEntryId": "5b2c3f8e-1d4a-4c1e-9f00-00000000a003", "performedAt": "2026-01-15", "mileageAtPerformed": 8200 }
+      """
+    When a PUT request is sent to "/api/v1/vehicles/{bike}/maintenance-logs/{entry}" with body:
+      """
+      { "clientEntryId": "5b2c3f8e-1d4a-4c1e-9f00-00000000ffff", "performedAt": "2026-01-15", "mileageAtPerformed": 8300 }
+      """
+    Then the response status code is 200
+    And the JSON response field "clientEntryId" equals "5b2c3f8e-1d4a-4c1e-9f00-00000000a003"
+
