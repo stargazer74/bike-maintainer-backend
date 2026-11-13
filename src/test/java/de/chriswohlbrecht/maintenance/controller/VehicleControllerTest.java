@@ -252,4 +252,47 @@ class VehicleControllerTest {
 
         verify(vehicleComponent, times(1)).deleteVehicle(99L);
     }
+
+    /**
+     * Test case for updateMileage.
+     * Verifies that the new mileage is passed on and the vehicle is returned with a 200 OK response.
+     */
+    @Test
+    void testUpdateMileageShouldReturnTheVehicle() throws Exception {
+        VehicleResponse response = Instancio.create(VehicleResponse.class).id(1L).currentMileage(1500);
+        when(vehicleComponent.updateMileage(1L, 1500)).thenReturn(Optional.of(response));
+
+        mockMvc.perform(put(VehiclesApi.PATH_UPDATE_MILEAGE, 1L)
+                        .contentType("application/json")
+                        .content("{\"mileage\":1500}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentMileage").value(1500));
+    }
+
+    /**
+     * Test case for updateMileage.
+     * Verifies that an unknown or foreign vehicle answers 404.
+     */
+    @Test
+    void testUpdateMileageOfUnknownVehicleShouldReturnNotFound() throws Exception {
+        when(vehicleComponent.updateMileage(eq(2L), any(Integer.class))).thenReturn(Optional.empty());
+
+        mockMvc.perform(put(VehiclesApi.PATH_UPDATE_MILEAGE, 2L)
+                        .contentType("application/json")
+                        .content("{\"mileage\":1500}"))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Test case for updateMileage.
+     * Verifies that a missing or negative mileage is rejected before the component is called.
+     */
+    @Test
+    void testUpdateMileageWithInvalidBodyShouldReturnBadRequest() throws Exception {
+        mockMvc.perform(put(VehiclesApi.PATH_UPDATE_MILEAGE, 1L).contentType("application/json").content("{\"mileage\":-1}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put(VehiclesApi.PATH_UPDATE_MILEAGE, 1L).contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest());
+        verify(vehicleComponent, times(0)).updateMileage(any(), any(Integer.class));
+    }
 }

@@ -127,6 +127,14 @@ public class GlobalExceptionHandler {
                         request.getRequestURI()));
     }
 
+    @ExceptionHandler(MileageBelowCurrentException.class)
+    public ResponseEntity<ErrorResponse> handleMileageBelowCurrent(MileageBelowCurrentException ex,
+                                                                   HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponses.of(HttpStatus.CONFLICT, MileageBelowCurrentException.CODE, ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<ErrorResponse> handleInvalidToken(InvalidTokenException ex, HttpServletRequest request) {
         return ResponseEntity.badRequest()

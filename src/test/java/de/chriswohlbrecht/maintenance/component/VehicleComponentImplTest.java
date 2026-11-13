@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
+import de.chriswohlbrecht.maintenance.exception.MileageBelowCurrentException;
 import de.chriswohlbrecht.maintenance.exception.SubscriptionRequiredException;
 import de.chriswohlbrecht.maintenance.mapper.VehicleMapperImpl;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
@@ -200,5 +201,63 @@ class VehicleComponentImplTest {
         vehicleComponent.deleteVehicle(1L);
 
         verify(accessComponent, never()).requireWriteAccess();
+    }
+
+    private Vehicle vehicleWithMileage(int mileage) {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        vehicle.setCurrentMileage(mileage);
+        return vehicle;
+    }
+
+    @Test
+    void updateMileage_higherValue_isSavedWithoutTouchingOtherFields() {
+        Vehicle vehicle = vehicleWithMileage(1000);
+        String name = vehicle.getName();
+        when(vehicleRepository.findLockedByIdAndUser_Id(1L, USER_ID)).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.save(vehicle)).thenReturn(vehicle);
+
+        Optional<VehicleResponse> result = vehicleComponent.updateMileage(1L, 1500);
+
+        assertThat(result).get().extracting(VehicleResponse::getCurrentMileage).isEqualTo(1500);
+        assertThat(vehicle.getName()).isEqualTo(name);
+        verify(vehicleRepository).save(vehicle);
+    }
+
+    @Test
+    void updateMileage_sameValue_changesNothing() {
+        Vehicle vehicle = vehicleWithMileage(1000);
+        when(vehicleRepository.findLockedByIdAndUser_Id(1L, USER_ID)).thenReturn(Optional.of(vehicle));
+
+        Optional<VehicleResponse> result = vehicleComponent.updateMileage(1L, 1000);
+
+        assertThat(result).get().extracting(VehicleResponse::getCurrentMileage).isEqualTo(1000);
+        verify(vehicleRepository, never()).save(any());
+    }
+
+    @Test
+    void updateMileage_lowerValue_isRejected() {
+        Vehicle vehicle = vehicleWithMileage(1000);
+        when(vehicleRepository.findLockedByIdAndUser_Id(1L, USER_ID)).thenReturn(Optional.of(vehicle));
+
+        assertThatThrownBy(() -> vehicleComponent.updateMileage(1L, 999))
+                .isInstanceOf(MileageBelowCurrentException.class);
+        assertThat(vehicle.getCurrentMileage()).isEqualTo(1000);
+        verify(vehicleRepository, never()).save(any());
+    }
+
+    @Test
+    void updateMileage_foreignOrUnknownVehicle_isEmpty() {
+        when(vehicleRepository.findLockedByIdAndUser_Id(1L, USER_ID)).thenReturn(Optional.empty());
+
+        assertThat(vehicleComponent.updateMileage(1L, 1500)).isEmpty();
+    }
+
+    @Test
+    void updateMileage_readOnlyAccount_isRejectedBeforeLoading() {
+        doThrow(new SubscriptionRequiredException()).when(accessComponent).requireWriteAccess();
+
+        assertThatThrownBy(() -> vehicleComponent.updateMileage(1L, 1500))
+                .isInstanceOf(SubscriptionRequiredException.class);
+        verify(vehicleRepository, never()).findLockedByIdAndUser_Id(any(), any());
     }
 }

@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
+import de.chriswohlbrecht.maintenance.exception.MileageBelowCurrentException;
 import de.chriswohlbrecht.maintenance.mapper.VehicleMapper;
 import de.chriswohlbrecht.maintenance.persistence.model.Vehicle;
 import de.chriswohlbrecht.maintenance.persistence.repository.MaintenanceLogMaterialRepository;
@@ -56,6 +57,30 @@ public class VehicleComponentImpl implements IVehicleComponent {
             vehicleMapper.updateEntityFromRequest(request, vehicle);
             return vehicleMapper.toResponse(vehicleRepository.save(vehicle));
         });
+    }
+
+    /**
+     * The row stays locked from reading to saving, so two raises at the same time cannot end with the lower one. Only
+     * this column changes: a client may send it long after loading the vehicle (offline queue) without undoing other
+     * changes made in the meantime.
+     */
+    @Override
+    @Transactional
+    public Optional<VehicleResponse> updateMileage(Long vehicleId, int mileage) {
+        accessComponent.requireWriteAccess();
+        return vehicleRepository.findLockedByIdAndUser_Id(vehicleId, currentUserComponent.getCurrentUserId())
+                .map(vehicle -> {
+                    int current = vehicle.getCurrentMileage();
+                    if (mileage < current) {
+                        throw new MileageBelowCurrentException(
+                                "Mileage " + mileage + " is below the current mileage " + current);
+                    }
+                    if (mileage == current) {
+                        return vehicleMapper.toResponse(vehicle);
+                    }
+                    vehicle.setCurrentMileage(mileage);
+                    return vehicleMapper.toResponse(vehicleRepository.save(vehicle));
+                });
     }
 
     @Override
