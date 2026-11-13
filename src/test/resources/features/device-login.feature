@@ -34,6 +34,34 @@ Feature: Apps stay logged in with a device token
     When the app exchanges its device token
     Then the response status code is 200
 
+  Scenario: A lost answer of the exchange does not cost the login when the app chose the next token
+    Given I log in on a device "Pixel 8" as "rider@example.org" with password "correct-horse-battery"
+    And the app exchanges its device token choosing the next one, but the answer is lost
+    And the device "Pixel 8" was last used 2 minutes ago
+    When the app exchanges the token it chose
+    Then the response status code is 200
+    And the user "rider@example.org" has 1 device
+    When a GET request is sent to "/api/v1/vehicles"
+    Then the response status code is 200
+
+  Scenario: A chosen next token that is not new is rejected and changes nothing
+    Given I log in on a device "Pixel 8" as "rider@example.org" with password "correct-horse-battery"
+    And the app exchanges its device token
+    When the app exchanges its device token choosing the same token as next
+    Then the response status code is 400
+    When the app exchanges its device token choosing its previous token as next
+    Then the response status code is 400
+    When the app exchanges its device token
+    Then the response status code is 200
+
+  Scenario: A chosen next token in the wrong format is rejected
+    Given I log in on a device "Pixel 8" as "rider@example.org" with password "correct-horse-battery"
+    When a POST request is sent to "/api/v1/auth/device-session" with body:
+      """
+      { "deviceToken": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "nextDeviceToken": "too short" }
+      """
+    Then the response status code is 400
+
   Scenario: A detected copy also ends the session the thief opened with it
     Given I log in on a device "Pixel 8" as "rider@example.org" with password "correct-horse-battery"
     And a thief exchanges a copy of the device token

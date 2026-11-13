@@ -42,6 +42,7 @@ public class DeviceLoginSteps {
 
     private String deviceToken;
     private String previousDeviceToken;
+    private String chosenDeviceToken;
     private List<Integer> parallelStatuses;
     private ApiClient webApp;
     private ApiClient thief;
@@ -79,6 +80,35 @@ public class DeviceLoginSteps {
             previousDeviceToken = deviceToken;
             deviceToken = body(response).getString("deviceToken");
         }
+    }
+
+    /** The exchange reaches the server, but its answer never reaches the app: it only knows the token it chose. */
+    @When("the app exchanges its device token choosing the next one, but the answer is lost")
+    public void theAppExchangesChoosingTheNextOneButTheAnswerIsLost() {
+        chosenDeviceToken = newToken();
+        exchange(apiClient, deviceToken, chosenDeviceToken);
+    }
+
+    @When("the app exchanges the token it chose")
+    public void theAppExchangesTheTokenItChose() {
+        String next = newToken();
+        EntityExchangeResult<byte[]> response = exchange(apiClient, chosenDeviceToken, next);
+        scenarioContext.setLastResponse(response);
+        if (response.getStatus().value() == 200) {
+            assertThat(body(response).getString("deviceToken")).isEqualTo(next);
+            previousDeviceToken = chosenDeviceToken;
+            deviceToken = next;
+        }
+    }
+
+    @When("the app exchanges its device token choosing the same token as next")
+    public void theAppExchangesChoosingTheSameToken() {
+        scenarioContext.setLastResponse(exchange(apiClient, deviceToken, deviceToken));
+    }
+
+    @When("the app exchanges its device token choosing its previous token as next")
+    public void theAppExchangesChoosingThePreviousToken() {
+        scenarioContext.setLastResponse(exchange(apiClient, deviceToken, previousDeviceToken));
     }
 
     @When("the app exchanges its previous device token")
@@ -192,6 +222,18 @@ public class DeviceLoginSteps {
 
     private EntityExchangeResult<byte[]> exchange(ApiClient client, String token) {
         return client.post(DEVICE_SESSION, new JSONObject().put("deviceToken", token).toString());
+    }
+
+    private EntityExchangeResult<byte[]> exchange(ApiClient client, String token, String next) {
+        return client.post(DEVICE_SESSION, new JSONObject().put("deviceToken", token).put("nextDeviceToken", next)
+                .toString());
+    }
+
+    /** Like the app: 256 random bits as Base64url without padding. */
+    private static String newToken() {
+        byte[] bytes = new byte[32];
+        new java.security.SecureRandom().nextBytes(bytes);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     private Long deviceId(String name) {
