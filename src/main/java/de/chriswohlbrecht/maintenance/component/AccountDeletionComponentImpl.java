@@ -15,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -60,9 +59,11 @@ public class AccountDeletionComponentImpl implements IAccountDeletionComponent {
         meterRegistry.counter(DELETED_METRIC);
     }
 
-    /** The failed attempt of a wrong password is committed although the exception ends the request. */
+    /**
+     * No surrounding transaction: the deletion calls the payment provider before its own short transaction. The
+     * failed attempt of a wrong password is saved on its own, before the exception ends the request.
+     */
     @Override
-    @Transactional(noRollbackFor = WrongPasswordException.class)
     public void deleteCurrentUser(DeleteAccountRequest request, String currentSessionId) {
         AppUser user = currentUserComponent.getCurrentUser();
         LocalDateTime now = LocalDateTime.now(clock);

@@ -32,11 +32,20 @@ public interface IPaymentProviderService {
      */
     boolean revokeSubscription(String subscriptionId);
 
-    /** @return the latest paid order of the subscription's current or a renewed period, empty if there is none */
+    /**
+     * @return the newest order paying a period of the subscription (also if refunded already), empty if there is
+     *         none or the newest one is not paid
+     */
     Optional<ProviderOrder> findLastPeriodOrder(String subscriptionId);
 
     /** @return the order, empty if the provider does not know it */
     Optional<ProviderOrder> getOrder(String orderId);
+
+    /**
+     * @return sum of the refunds of the order that carry the marker and went through or are still pending, in cents;
+     *         0 if there are none
+     */
+    long markedRefundAmount(String orderId, String marker);
 
     /**
      * Refunds part of an order because the customer cancelled; the provider adds the matching tax.

@@ -17,7 +17,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.Locale;
 
 @Component
@@ -38,6 +40,7 @@ public class PasswordComponentImpl implements IPasswordComponent {
     private final PasswordEncoder passwordEncoder;
     private final IDeviceLoginComponent deviceLoginComponent;
     private final MeterRegistry meterRegistry;
+    private final Clock clock;
 
     @Override
     public void requestReset(EmailRequest request) {
@@ -61,7 +64,12 @@ public class PasswordComponentImpl implements IPasswordComponent {
                 .filter(owner -> Boolean.TRUE.equals(owner.getActive()))
                 .orElseThrow(() -> new InvalidTokenException("Token is invalid, expired or already used"));
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        // The reset link proves the address like the verification link, so the free trial starts here as well if it
+        // has not (registered, never verified, then reset the password); without it the account would be expired.
         user.setEmailVerified(true);
+        if (user.getTrialStartedOn() == null) {
+            user.setTrialStartedOn(LocalDate.now(clock));
+        }
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
         appUserRepository.save(user);

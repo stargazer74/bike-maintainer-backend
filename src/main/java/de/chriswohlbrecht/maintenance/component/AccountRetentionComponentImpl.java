@@ -18,6 +18,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Only portal mode has expiring accounts; household profiles and administrators are never touched. Each account is
@@ -32,7 +33,8 @@ public class AccountRetentionComponentImpl implements IAccountRetentionComponent
     private static final String METRIC = "bm.accounts.retention";
     private static final String NOTICE_SENT = "notice_sent";
     private static final String DELETED = "deleted";
-    private static final List<String> ACTIONS = List.of(NOTICE_SENT, "notice_deferred", DELETED, "kept", "failed");
+    private static final String FAILED = "failed";
+    private static final List<String> ACTIONS = List.of(NOTICE_SENT, "notice_deferred", DELETED, "kept", FAILED);
     /** Slack for the pre-selection: adding and subtracting months is not exactly reversible at month ends. */
     private static final int PRESELECTION_SLACK_DAYS = 7;
 
@@ -74,15 +76,20 @@ public class AccountRetentionComponentImpl implements IAccountRetentionComponent
                 .plusDays(PRESELECTION_SLACK_DAYS);
         int noticesSent = 0;
         int deleted = 0;
-        for (AppUser user : appUserRepository.findRetentionCandidates(UserRole.USER, trialStartedBefore)) {
+        for (AppUser candidate : appUserRepository.findRetentionCandidates(UserRole.USER, trialStartedBefore)) {
             try {
-                String action = handle(user, today, noticesSent < properties.noticeDailyLimit());
+                // Read again: the list is a snapshot, the person may have logged in or been deleted since.
+                Optional<AppUser> user = appUserRepository.findById(candidate.getId());
+                if (user.isEmpty()) {
+                    continue;
+                }
+                String action = handle(user.get(), today, noticesSent < properties.noticeDailyLimit());
                 noticesSent += NOTICE_SENT.equals(action) ? 1 : 0;
                 deleted += DELETED.equals(action) ? 1 : 0;
             } catch (RuntimeException e) {
                 // Most likely the payment provider; logged without personal data, retried on the next run.
-                count("failed");
-                log.warn("Retention of user {} failed: {}", user.getId(), e.getClass().getSimpleName());
+                count(FAILED);
+                log.warn("Retention of user {} failed: {}", candidate.getId(), e.getClass().getSimpleName());
             }
         }
         log.info("Retention: sent {} deletion notices, deleted {} expired accounts", noticesSent, deleted);
@@ -116,16 +123,14 @@ public class AccountRetentionComponentImpl implements IAccountRetentionComponent
                 count("notice_deferred");
                 return null;
             }
-            sendNotice(user, today, deletionDay);
-            return NOTICE_SENT;
+            return sendNotice(user, today, deletionDay) ? NOTICE_SENT : FAILED;
         }
         // Never earlier than a full notice period after the notice, even if the notice went out late.
         if (today.isBefore(deletionDay)
                 || today.isBefore(noticeSentAt.toLocalDate().plus(properties.noticePeriod()))) {
             return null;
         }
-        delete(user);
-        return DELETED;
+        return delete(user, today, noticeSentAt) ? DELETED : null;
     }
 
     /**
@@ -142,27 +147,49 @@ public class AccountRetentionComponentImpl implements IAccountRetentionComponent
         return keepUntil != null && keepUntil.isAfter(due) ? keepUntil : due;
     }
 
-    /** The mail names the real day: never earlier than a full notice period from now. */
-    private void sendNotice(AppUser user, LocalDate today, LocalDate deletionDay) {
+    /**
+     * The mail names the real day: never earlier than a full notice period from now. It only counts as sent once the
+     * mail server accepted it, otherwise it is tried again on the next run – an account is never deleted without it.
+     */
+    private boolean sendNotice(AppUser user, LocalDate today, LocalDate deletionDay) {
         LocalDate earliest = today.plus(properties.noticePeriod());
-        accountMailComponent.sendDeletionNotice(user, deletionDay.isBefore(earliest) ? earliest : deletionDay);
-        user.setDeletionNoticeSentAt(LocalDateTime.now(clock));
-        appUserRepository.save(user);
+        if (!accountMailComponent.sendDeletionNotice(user, deletionDay.isBefore(earliest) ? earliest : deletionDay)) {
+            count(FAILED);
+            log.warn("Deletion notice to user {} not accepted by the mail server, tried again next run", user.getId());
+            return false;
+        }
+        // Only this column: the copy of the account may be outdated by now.
+        appUserRepository.setDeletionNoticeSentAt(user.getId(), LocalDateTime.now(clock));
         count(NOTICE_SENT);
+        return true;
     }
 
     private void withdrawNotice(AppUser user) {
         if (user.getDeletionNoticeSentAt() != null) {
-            user.setDeletionNoticeSentAt(null);
-            appUserRepository.save(user);
+            appUserRepository.setDeletionNoticeSentAt(user.getId(), null);
         }
     }
 
-    private void delete(AppUser user) {
-        accountDataDeletionComponent.deleteWithAllData(user);
+    /**
+     * Checked once more on the locked account right before deleting: a login since then (notice withdrawn, account
+     * kept) or a new subscription keeps it.
+     */
+    private boolean delete(AppUser user, LocalDate today, LocalDateTime noticeSentAt) {
+        boolean deleted = accountDataDeletionComponent.deleteWithAllData(user, current ->
+                noticeSentAt.equals(current.getDeletionNoticeSentAt()) && isDue(current, today));
+        if (!deleted) {
+            log.info("User {} not deleted: the account changed during the retention run", user.getId());
+            return false;
+        }
         sessionComponent.invalidateSessionsOf(user.getId());
         count(DELETED);
         log.info("User {} deleted: access expired and no login after the deletion notice", user.getId());
+        return true;
+    }
+
+    private boolean isDue(AppUser user, LocalDate today) {
+        LocalDate deletionDay = deletionDayOf(user);
+        return deletionDay != null && !today.isBefore(deletionDay);
     }
 
     private void count(String action) {

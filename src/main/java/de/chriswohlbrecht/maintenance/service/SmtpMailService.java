@@ -38,6 +38,12 @@ public class SmtpMailService implements IMailService {
     @Async
     @Override
     public void send(String to, String subject, String body) {
+        sendNow(to, subject, body);
+    }
+
+    /** Not asynchronous: only for jobs, where the response time reveals nothing to anyone. */
+    @Override
+    public boolean sendNow(String to, String subject, String body) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(mailProperties.from());
         message.setTo(to);
@@ -46,11 +52,13 @@ public class SmtpMailService implements IMailService {
         try {
             mailSender.send(message);
             countDelivery("success", 1);
+            return true;
         } catch (MailException e) {
             countDelivery("failure", 1);
             // Only the domain: the log must not become a list of email addresses.
             // Without the exception: SMTP replies in its message and stack trace often repeat the recipient address.
             log.error("Sending email to *@{} failed: {}", domainOf(to), e.getClass().getSimpleName());
+            return false;
         }
     }
 

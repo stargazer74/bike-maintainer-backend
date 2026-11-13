@@ -25,9 +25,11 @@ public interface IAccountMailComponent {
     /**
      * The expired account will be deleted on {@code deletionDay} unless the person logs in before; links to the login.
      * Not counted towards the daily limit – the caller limits these notices itself
-     * ({@code bm.retention.notice-daily-limit}).
+     * ({@code bm.retention.notice-daily-limit}). Sent right away, not in the background.
+     *
+     * @return whether the mail server accepted it; only then does the notice count as sent
      */
-    void sendDeletionNotice(AppUser user, LocalDate deletionDay);
+    boolean sendDeletionNotice(AppUser user, LocalDate deletionDay);
 
     /**
      * Tells an administrator about a subscription cancelled after its first year (to do by hand, scheduled, done or

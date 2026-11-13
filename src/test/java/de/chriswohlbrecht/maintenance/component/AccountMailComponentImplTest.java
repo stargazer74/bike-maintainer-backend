@@ -76,10 +76,12 @@ class AccountMailComponentImplTest {
 
     @Test
     void deletionNoticeNamesTheDayAndLinksToLogin() {
-        component.sendDeletionNotice(user("de"), LocalDate.of(2027, 12, 1));
+        when(mailService.sendNow(anyString(), anyString(), anyString())).thenReturn(true);
+
+        assertThat(component.sendDeletionNotice(user("de"), LocalDate.of(2027, 12, 1))).isTrue();
 
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
-        verify(mailService).send(eq("rider@example.org"),
+        verify(mailService).sendNow(eq("rider@example.org"),
                 eq("Dein Konto bei Bike Maintainer wird am 1. Dezember 2027 gelöscht"), body.capture());
         assertThat(body.getValue())
                 .contains("am 1. Dezember 2027 gelöscht")
@@ -87,11 +89,20 @@ class AccountMailComponentImplTest {
                 .contains("exportieren");
     }
 
+    /** Sent right away: only if the mail server accepted it does the notice count as sent. */
+    @Test
+    void deletionNoticeReportsARejectedEmail() {
+        when(mailService.sendNow(anyString(), anyString(), anyString())).thenReturn(false);
+
+        assertThat(component.sendDeletionNotice(user("de"), LocalDate.of(2027, 12, 1))).isFalse();
+        verify(mailService, never()).send(anyString(), anyString(), anyString());
+    }
+
     @Test
     void deletionNoticeInEnglish() {
         component.sendDeletionNotice(user("en"), LocalDate.of(2027, 12, 1));
 
-        verify(mailService).send(eq("rider@example.org"),
+        verify(mailService).sendNow(eq("rider@example.org"),
                 eq("Your Bike Maintainer account will be deleted on 1 December 2027"), anyString());
     }
 
@@ -102,7 +113,7 @@ class AccountMailComponentImplTest {
 
         component.sendDeletionNotice(user("de"), LocalDate.of(2027, 12, 1));
 
-        verify(mailService).send(eq("rider@example.org"), anyString(), anyString());
+        verify(mailService).sendNow(eq("rider@example.org"), anyString(), anyString());
         verify(mailQuotaComponent, never()).tryReserve();
         assertThat(meterRegistry.counter("bm.mail.sent", "type", "deletion_notice", "result", "queued").count())
                 .isEqualTo(1.0);

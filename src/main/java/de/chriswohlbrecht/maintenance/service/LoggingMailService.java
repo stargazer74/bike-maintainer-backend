@@ -14,4 +14,10 @@ public class LoggingMailService implements IMailService {
     public void send(String to, String subject, String body) {
         log.info("Email not sent (profile local)\nTo: {}\nSubject: {}\n\n{}", to, subject, body);
     }
+
+    @Override
+    public boolean sendNow(String to, String subject, String body) {
+        send(to, subject, body);
+        return true;
+    }
 }

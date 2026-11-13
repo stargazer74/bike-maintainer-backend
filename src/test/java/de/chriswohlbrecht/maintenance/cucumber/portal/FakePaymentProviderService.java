@@ -54,6 +54,11 @@ public class FakePaymentProviderService implements IPaymentProviderService {
     }
 
     @Override
+    public long markedRefundAmount(String orderId, String marker) {
+        return 0;
+    }
+
+    @Override
     public void refund(String orderId, long netAmount, String marker) {
         throw new UnsupportedOperationException("The scenarios do not refund");
     }

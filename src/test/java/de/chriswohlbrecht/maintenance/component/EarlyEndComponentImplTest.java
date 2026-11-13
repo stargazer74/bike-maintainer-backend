@@ -22,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -39,6 +40,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -284,7 +286,10 @@ class EarlyEndComponentImplTest {
     void failuresAreIsolated() {
         Subscription first = subscription(EarlyEndState.SCHEDULED, "sub_1");
         Subscription second = subscription(EarlyEndState.SCHEDULED, "sub_2");
+        second.setId(4L);
         when(subscriptionRepository.findEarlyEndsDueBefore(any(), eq(TODAY))).thenReturn(List.of(first, second));
+        when(subscriptionRepository.findById(3L)).thenReturn(Optional.of(first));
+        when(subscriptionRepository.findById(4L)).thenReturn(Optional.of(second));
         when(paymentProviderService.revokeSubscription("sub_1")).thenThrow(new IllegalStateException("bug"));
         when(subscriptionRepository.save(first)).thenThrow(new IllegalStateException("db"));
         when(paymentProviderService.revokeSubscription("sub_2")).thenReturn(true);
@@ -297,6 +302,115 @@ class EarlyEndComponentImplTest {
         assertThat(second.getEarlyEndState()).isEqualTo(EarlyEndState.REFUNDED);
     }
 
+    /**
+     * Revoking makes Polar send a webhook, which saves "ended" and the day it ended. The job saves its steps on that
+     * current row, not on the copy it read before, so access really ends (backend review, finding 1).
+     */
+    @Test
+    void aWebhookSavedWhileRevokingIsNotOverwritten() {
+        Subscription read = subscription(EarlyEndState.SCHEDULED, "sub_1");
+        Subscription afterWebhook = subscription(EarlyEndState.SCHEDULED, "sub_1");
+        afterWebhook.setStatus(SubscriptionStatus.ENDED);
+        afterWebhook.setPaidUntil(TODAY);
+        when(subscriptionRepository.findEarlyEndsDueBefore(any(), eq(TODAY))).thenReturn(List.of(read));
+        when(subscriptionRepository.findById(3L)).thenReturn(Optional.of(read), Optional.of(afterWebhook));
+        when(paymentProviderService.revokeSubscription("sub_1")).thenReturn(true);
+        when(paymentProviderService.findLastPeriodOrder("sub_1"))
+                .thenReturn(Optional.of(new ProviderOrder("ord_1", 2400, 0, 2400, "eur")));
+
+        component.carryOutDueEarlyEnds();
+
+        verify(subscriptionRepository, never()).save(read);
+        assertThat(afterWebhook.getStatus()).isEqualTo(SubscriptionStatus.ENDED);
+        assertThat(afterWebhook.getPaidUntil()).isEqualTo(TODAY);
+        assertThat(afterWebhook.getEarlyEndState()).isEqualTo(EarlyEndState.REFUNDED);
+    }
+
+    /** The row changed between reading and saving (optimistic locking): the change is applied to it again. */
+    @Test
+    void aSaveThatLosesAgainstAConcurrentChangeIsRepeated() {
+        Subscription subscription = due(EarlyEndState.REVOKED);
+        when(paymentProviderService.findLastPeriodOrder("sub_1"))
+                .thenReturn(Optional.of(new ProviderOrder("ord_1", 2400, 2400, 0, "eur")));
+        when(subscriptionRepository.save(subscription))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Subscription.class, 3L))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        component.carryOutDueEarlyEnds();
+
+        verify(subscriptionRepository, times(2)).save(subscription);
+        assertThat(subscription.getEarlyEndState()).isEqualTo(EarlyEndState.REFUNDED);
+    }
+
+    /** Taken back after the list was read: the fresh row has no early end any more. */
+    @Test
+    void anEarlyEndWithdrawnMeanwhileIsLeftAlone() {
+        Subscription read = subscription(EarlyEndState.SCHEDULED, "sub_1");
+        Subscription withdrawn = subscription(null, "sub_1");
+        when(subscriptionRepository.findEarlyEndsDueBefore(any(), eq(TODAY))).thenReturn(List.of(read));
+        when(subscriptionRepository.findById(3L)).thenReturn(Optional.of(withdrawn));
+
+        component.carryOutDueEarlyEnds();
+
+        verifyNoInteractions(paymentProviderService, accountMailComponent);
+        verify(subscriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void anAccountDeletedMeanwhileIsLeftAlone() {
+        Subscription read = subscription(EarlyEndState.SCHEDULED, "sub_1");
+        when(subscriptionRepository.findEarlyEndsDueBefore(any(), eq(TODAY))).thenReturn(List.of(read));
+        when(subscriptionRepository.findById(3L)).thenReturn(Optional.empty());
+
+        component.carryOutDueEarlyEnds();
+
+        verifyNoInteractions(paymentProviderService);
+    }
+
+    /**
+     * A refund that is still pending does not show in the order's refunded amount yet; our marker on it shows it was
+     * requested, so it is not requested a second time (finding 6).
+     */
+    @Test
+    void retryAfterAPendingRefundDoesNotRefundTwice() {
+        Subscription subscription = due(EarlyEndState.REFUNDING);
+        subscription.setEarlyEndOrderId("ord_1");
+        subscription.setEarlyEndRefundedBefore(0L);
+        when(paymentProviderService.getOrder("ord_1"))
+                .thenReturn(Optional.of(new ProviderOrder("ord_1", 2400, 0, 2400, "eur")));
+        when(paymentProviderService.markedRefundAmount("ord_1", "sub_1")).thenReturn(REFUND);
+
+        component.carryOutDueEarlyEnds();
+
+        verify(paymentProviderService, never()).refund(anyString(), anyLong(), anyString());
+        assertThat(saved).containsExactly(EarlyEndState.REFUNDED);
+        verify(accountMailComponent).sendCancellationNotice(admin, notice(REFUND, "eur"), CancellationMail.DONE,
+                null);
+    }
+
+    /** Account deleted with an early end under way: the administrators finish the refund (finding 5). */
+    @Test
+    void anOpenEarlyEndOfADeletedAccountIsHandedOver() {
+        for (EarlyEndState state : List.of(EarlyEndState.SCHEDULED, EarlyEndState.REVOKED, EarlyEndState.REFUNDING)) {
+            component.accountDeleted(subscription(state, "sub_1"));
+        }
+
+        verify(accountMailComponent, times(3)).sendCancellationNotice(admin, notice(null, null),
+                CancellationMail.FAILED, "mail.earlyEnd.reason.accountDeleted");
+        assertThat(count("manual")).isEqualTo(3.0);
+        verifyNoInteractions(paymentProviderService);
+    }
+
+    @Test
+    void aFinishedOrMissingEarlyEndOfADeletedAccountNeedsNothing() {
+        component.accountDeleted(subscription(null, "sub_1"));
+        component.accountDeleted(subscription(EarlyEndState.REFUNDED, "sub_1"));
+        component.accountDeleted(subscription(EarlyEndState.MANUAL, "sub_1"));
+
+        verifyNoInteractions(accountMailComponent);
+        assertThat(count("manual")).isZero();
+    }
+
     @Test
     void amountWithoutAUsablePeriodIsZero() {
         Subscription subscription = subscription(EarlyEndState.REVOKED, "sub_1");
@@ -306,9 +420,11 @@ class EarlyEndComponentImplTest {
                 .isZero();
     }
 
+    /** Due, and the current row is this very object (nothing changes it concurrently). */
     private Subscription due(EarlyEndState state) {
         Subscription subscription = subscription(state, "sub_1");
         when(subscriptionRepository.findEarlyEndsDueBefore(any(), eq(TODAY))).thenReturn(List.of(subscription));
+        when(subscriptionRepository.findById(3L)).thenReturn(Optional.of(subscription));
         return subscription;
     }
 

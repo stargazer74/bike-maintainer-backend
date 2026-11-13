@@ -16,13 +16,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.util.List;
+import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -53,7 +57,8 @@ class AccountDataDeletionComponentImplTest {
     void setUp() {
         component = new AccountDataDeletionComponentImpl(appUserRepository, vehicleRepository,
                 maintenanceTaskRepository, maintenanceLogRepository, maintenanceLogTaskRepository,
-                maintenanceLogMaterialRepository, subscriptionComponent);
+                maintenanceLogMaterialRepository, subscriptionComponent, TransactionOperations.withoutTransaction());
+        lenient().when(appUserRepository.findLockedById(7L)).thenReturn(Optional.of(user));
     }
 
     @Test
@@ -62,11 +67,13 @@ class AccountDataDeletionComponentImplTest {
         Vehicle second = Vehicle.builder().id(12L).build();
         when(vehicleRepository.findAllByUser_Id(7L)).thenReturn(List.of(first, second));
 
-        component.deleteWithAllData(user);
+        assertThat(component.deleteWithAllData(user)).isTrue();
 
         InOrder order = inOrder(subscriptionComponent, maintenanceLogMaterialRepository, maintenanceLogTaskRepository,
                 maintenanceLogRepository, maintenanceTaskRepository, vehicleRepository, appUserRepository);
-        order.verify(subscriptionComponent).endSubscriptionsOf(user);
+        order.verify(subscriptionComponent).revokeSubscriptionsOf(user);
+        order.verify(appUserRepository).findLockedById(7L);
+        order.verify(subscriptionComponent).removeSubscriptionsOf(user);
         for (Vehicle vehicle : List.of(first, second)) {
             order.verify(maintenanceLogMaterialRepository).deleteAllByLog_Vehicle_Id(vehicle.getId());
             order.verify(maintenanceLogTaskRepository).deleteAllByLog_Vehicle_Id(vehicle.getId());
@@ -90,12 +97,32 @@ class AccountDataDeletionComponentImplTest {
     /** If the provider cannot end the subscription, the account stays, so nothing is billed for a deleted one. */
     @Test
     void unreachablePaymentProviderDeletesNothing() {
-        doThrow(new PaymentProviderUnavailableException("down")).when(subscriptionComponent).endSubscriptionsOf(user);
+        doThrow(new PaymentProviderUnavailableException("down")).when(subscriptionComponent)
+                .revokeSubscriptionsOf(user);
 
         assertThatThrownBy(() -> component.deleteWithAllData(user))
                 .isInstanceOf(PaymentProviderUnavailableException.class);
 
         verify(appUserRepository, never()).delete(any());
         verifyNoInteractions(vehicleRepository);
+    }
+
+    /** E.g. a login since the retention run decided: the locked, fresh account is checked once more. */
+    @Test
+    void accountThatIsNoLongerDueIsKept() {
+        assertThat(component.deleteWithAllData(user, current -> false)).isFalse();
+
+        verify(subscriptionComponent, never()).removeSubscriptionsOf(any());
+        verify(appUserRepository, never()).delete(any());
+        verifyNoInteractions(vehicleRepository);
+    }
+
+    @Test
+    void accountDeletedMeanwhileIsNotDeletedAgain() {
+        when(appUserRepository.findLockedById(7L)).thenReturn(Optional.empty());
+
+        assertThat(component.deleteWithAllData(user)).isFalse();
+
+        verify(appUserRepository, never()).delete(any());
     }
 }

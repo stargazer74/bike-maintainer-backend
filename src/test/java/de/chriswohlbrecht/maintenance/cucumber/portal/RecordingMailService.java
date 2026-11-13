@@ -20,6 +20,12 @@ public class RecordingMailService implements IMailService {
         sent.add(new SentMail(to, subject, body));
     }
 
+    @Override
+    public boolean sendNow(String to, String subject, String body) {
+        send(to, subject, body);
+        return true;
+    }
+
     public List<SentMail> sentTo(String to) {
         return sent.stream().filter(mail -> mail.to().equals(to)).toList();
     }

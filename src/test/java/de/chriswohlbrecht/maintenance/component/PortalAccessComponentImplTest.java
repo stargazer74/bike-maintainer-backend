@@ -24,10 +24,13 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -103,6 +106,57 @@ class PortalAccessComponentImplTest {
         assertThat(component.accessOf(user).status()).isEqualTo(AccessStatus.ACTIVE);
     }
 
+    /**
+     * A lost webhook must not grant access forever (backend review, finding 9): a subscription reported running whose
+     * paid period is over by more than the tolerance only counts while a recent sync confirms it.
+     */
+    @Test
+    void runningButLongOverdueWithoutConfirmationIsExpired() {
+        AppUser user = user(TODAY.minusDays(400));
+        Subscription stale = subscription(SubscriptionStatus.ACTIVE,
+                TODAY.minusDays(PortalAccessComponentImpl.RUNNING_TOLERANCE_DAYS + 1L));
+        stale.setSyncedAt(TODAY.minusDays(30).atStartOfDay());
+        subscriptions(user, stale);
+
+        assertThat(component.accessOf(user).status()).isEqualTo(AccessStatus.EXPIRED);
+    }
+
+    /** The provider still retries the payment and the nightly re-sync confirmed that: access goes on. */
+    @Test
+    void runningAndOverdueButRecentlyConfirmedIsActive() {
+        AppUser user = user(TODAY.minusDays(400));
+        Subscription retried = subscription(SubscriptionStatus.PAST_DUE, TODAY.minusDays(20));
+        retried.setSyncedAt(TODAY.minusDays(PortalAccessComponentImpl.RUNNING_TOLERANCE_DAYS).atTime(3, 30));
+        subscriptions(user, retried);
+
+        assertThat(component.accessOf(user).status()).isEqualTo(AccessStatus.ACTIVE);
+    }
+
+    @Test
+    void runningWithoutAnyPeriodOrConfirmationIsNoAccess() {
+        AppUser user = user(TODAY.minusDays(400));
+        subscriptions(user, subscription(SubscriptionStatus.ACTIVE, null));
+
+        assertThat(component.accessOf(user).status()).isEqualTo(AccessStatus.EXPIRED);
+    }
+
+    /** The admin list: one query for all accounts, each gets its own access. */
+    @Test
+    void accessOfManyAccountsUsesOneQuery() {
+        AppUser subscriber = user(TODAY.minusDays(400));
+        AppUser trial = AppUser.builder().id(8L).email("new@example.org").role(UserRole.USER).emailVerified(true)
+                .trialStartedOn(TODAY).build();
+        Subscription subscription = subscription(SubscriptionStatus.ACTIVE, TODAY.plusDays(30));
+        subscription.setUser(subscriber);
+        when(subscriptionRepository.findAllByUser_IdIn(List.of(7L, 8L))).thenReturn(List.of(subscription));
+
+        Map<Long, Access> access = component.accessOf(List.of(subscriber, trial));
+
+        assertThat(access.get(7L)).isEqualTo(new Access(AccessStatus.ACTIVE, TODAY.plusDays(30), true));
+        assertThat(access.get(8L).status()).isEqualTo(AccessStatus.TRIAL);
+        verify(subscriptionRepository, never()).findAllByUser_Id(any());
+    }
+
     @Test
     void subscriptionWinsOverARunningTrial() {
         AppUser user = user(TODAY);
@@ -157,8 +211,8 @@ class PortalAccessComponentImplTest {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
         when(currentUserComponent.getCurrentUser()).thenReturn(user(TODAY));
 
-        component.requireWriteAccess();
-        component.requireWriteAccess();
+        Access first = component.requireWriteAccess();
+        assertThat(component.requireWriteAccess()).isSameAs(first);
 
         verify(currentUserComponent, times(1)).getCurrentUser();
     }

@@ -86,7 +86,7 @@ class WorksheetComponentImplTest {
         worksheetComponent = new WorksheetComponentImpl(vehicleRepository, vehicleSpecificationRepository,
                 measurementValveRepository, currentUserComponent, userLocaleComponent, worksheetPdfHelper, CLOCK,
                 meterRegistry, accessComponent);
-        lenient().when(accessComponent.accessOf(any())).thenReturn(Access.full(false));
+        lenient().when(accessComponent.requireWriteAccess()).thenReturn(Access.full(false));
     }
 
     @Test
@@ -220,7 +220,7 @@ class WorksheetComponentImplTest {
     @Test
     void generateWorksheet_duringTheTrial_rendersADemoSheet() {
         Vehicle vehicle = ownVehicle(VehicleType.CAR);
-        when(accessComponent.accessOf(vehicle.getUser()))
+        when(accessComponent.requireWriteAccess())
                 .thenReturn(new Access(AccessStatus.TRIAL, TODAY.plusDays(3), false));
         when(worksheetPdfHelper.generate(any(), any(), any(), any(), any(), any(), ArgumentMatchers.eq(true)))
                 .thenReturn(new byte[]{9});
@@ -232,7 +232,7 @@ class WorksheetComponentImplTest {
     @Test
     void generateWorksheet_withASubscription_rendersTheRealSheet() {
         Vehicle vehicle = ownVehicle(VehicleType.CAR);
-        when(accessComponent.accessOf(vehicle.getUser()))
+        when(accessComponent.requireWriteAccess())
                 .thenReturn(new Access(AccessStatus.ACTIVE, TODAY.plusDays(300), true));
         when(worksheetPdfHelper.generate(any(), any(), any(), any(), any(), any(), ArgumentMatchers.eq(false)))
                 .thenReturn(new byte[]{8});

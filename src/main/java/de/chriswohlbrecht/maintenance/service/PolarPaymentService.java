@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.JsonNode;
 
 import java.time.OffsetDateTime;
@@ -38,7 +39,13 @@ public class PolarPaymentService implements IPaymentProviderService {
     static final String REFUND_MARKER_KEY = "bm_early_end";
     private static final int ORDER_PAGE_SIZE = 10;
     private static final Set<String> PERIOD_BILLING_REASONS = Set.of("subscription_create", "subscription_cycle");
-    private static final Set<String> PAID_ORDER_STATUSES = Set.of("paid", "partially_refunded");
+    /** A refunded order still is the payment of its period: its rest to refund is simply 0. */
+    private static final Set<String> PAID_ORDER_STATUSES = Set.of("paid", "partially_refunded", "refunded");
+    /** Refunds that went through or may still go through; failed and canceled ones refunded nothing. */
+    private static final Set<String> COUNTING_REFUND_STATUSES = Set.of("pending", "succeeded");
+    private static final int REFUND_PAGE_SIZE = 100;
+    /** Error type of the 403 Polar answers for a subscription that is revoked already. */
+    private static final String ALREADY_CANCELED = "AlreadyCanceledSubscription";
 
     private final RestClient polarRestClient;
     private final PolarProperties polarProperties;
@@ -81,7 +88,10 @@ public class PolarPaymentService implements IPaymentProviderService {
                 .map(PolarPaymentService::toSubscription);
     }
 
-    /** 403 means "already revoked" at Polar ({@code AlreadyCanceledSubscription}). */
+    /**
+     * Only a 403 of the type {@code AlreadyCanceledSubscription} means "already revoked"; any other 403 (e.g. a token
+     * without the needed scope) is a provider problem, so an account is not deleted while Polar keeps billing.
+     */
     @Override
     public boolean revokeSubscription(String subscriptionId) {
         try {
@@ -91,14 +101,19 @@ public class PolarPaymentService implements IPaymentProviderService {
                     .body(JsonNode.class)).isPresent();
         } catch (PaymentProviderUnavailableException e) {
             if (e.getCause() instanceof HttpClientErrorException error
-                    && error.getStatusCode() == HttpStatus.FORBIDDEN) {
+                    && error.getStatusCode() == HttpStatus.FORBIDDEN
+                    && error.getResponseBodyAsString().contains(ALREADY_CANCELED)) {
                 return false;
             }
             throw e;
         }
     }
 
-    /** The newest orders first; only payments for a period count, not e.g. a change of plan. */
+    /**
+     * Only the newest payment for a period counts, not e.g. a change of plan. If it is refunded already, it is still
+     * returned (with nothing left to refund) instead of falling back to the order of an earlier period; a newest one
+     * that is not paid (yet) gives empty.
+     */
     @Override
     public Optional<ProviderOrder> findLastPeriodOrder(String subscriptionId) {
         JsonNode page = call("list orders", () -> polarRestClient.get()
@@ -110,12 +125,31 @@ public class PolarPaymentService implements IPaymentProviderService {
                 .retrieve()
                 .body(JsonNode.class));
         for (JsonNode order : page.path("items")) {
-            if (PERIOD_BILLING_REASONS.contains(order.path("billing_reason").asString(""))
-                    && PAID_ORDER_STATUSES.contains(order.path("status").asString(""))) {
-                return Optional.of(toOrder(order));
+            if (PERIOD_BILLING_REASONS.contains(order.path("billing_reason").asString(""))) {
+                return PAID_ORDER_STATUSES.contains(order.path("status").asString(""))
+                        ? Optional.of(toOrder(order)) : Optional.empty();
             }
         }
         return Optional.empty();
+    }
+
+    @Override
+    public long markedRefundAmount(String orderId, String marker) {
+        JsonNode page = call("list refunds", () -> polarRestClient.get()
+                .uri(uri -> uri.path("/v1/refunds/")
+                        .queryParam("order_id", orderId)
+                        .queryParam("limit", REFUND_PAGE_SIZE)
+                        .build())
+                .retrieve()
+                .body(JsonNode.class));
+        long amount = 0;
+        for (JsonNode refund : page.path("items")) {
+            if (marker.equals(refund.path("metadata").path(REFUND_MARKER_KEY).asString(""))
+                    && COUNTING_REFUND_STATUSES.contains(refund.path("status").asString(""))) {
+                amount += requiredAmount(refund, "amount");
+            }
+        }
+        return amount;
     }
 
     @Override
@@ -205,7 +239,9 @@ public class PolarPaymentService implements IPaymentProviderService {
         try {
             return request.get();
         } catch (RestClientException e) {
-            log.warn("Polar: {} failed: {}", action, e.getMessage());
+            // Never the message: it contains Polar's response body, which may repeat the customer's email address.
+            log.warn("Polar: {} failed: {}", action, e instanceof RestClientResponseException response
+                    ? "HTTP " + response.getStatusCode().value() : e.getClass().getSimpleName());
             throw new PaymentProviderUnavailableException("Polar: " + action + " failed", e);
         }
     }

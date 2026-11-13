@@ -37,7 +37,7 @@ class FlywayMigrationTest {
     void appliesAllMigrationsSuccessfully() {
         MigrationInfo[] appliedMigrations = flyway.info().applied();
 
-        assertThat(appliedMigrations).hasSize(15);
+        assertThat(appliedMigrations).hasSize(16);
         assertThat(appliedMigrations[0].getDescription()).isEqualTo("init schema");
         assertThat(appliedMigrations[0].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[1].getDescription()).isEqualTo("vehicle model year required");
@@ -68,6 +68,51 @@ class FlywayMigrationTest {
         assertThat(appliedMigrations[13].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[14].getDescription()).isEqualTo("subscription early end");
         assertThat(appliedMigrations[14].getState()).isEqualTo(MigrationState.SUCCESS);
+        assertThat(appliedMigrations[15].getDescription()).isEqualTo("subscription review fixes");
+        assertThat(appliedMigrations[15].getState()).isEqualTo(MigrationState.SUCCESS);
+    }
+
+    /**
+     * V16: accounts verified by a password reset never got a trial and start it now; a running trial is kept.
+     * Existing subscriptions start with version 0 and count as confirmed when they were last changed.
+     */
+    @Test
+    void v16StartsTheMissingTrialAndPreparesExistingSubscriptions() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(
+                "jdbc:h2:mem:migration-" + UUID.randomUUID() + ";MODE=MariaDB;DB_CLOSE_DELAY=-1", "sa", "");
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .placeholders(Map.of("initialAdminEmail", "admin@localhost"))
+                .target("15")
+                .load()
+                .migrate();
+        JdbcTemplate before = new JdbcTemplate(dataSource);
+        before.update("INSERT INTO app_user (id, email, display_name, role, email_verified, trial_started_on) VALUES"
+                + " (101, 'reset@example.org', NULL, 'USER', TRUE, NULL),"
+                + " (102, 'trial@example.org', NULL, 'USER', TRUE, DATE '2026-10-01'),"
+                + " (103, 'unverified@example.org', NULL, 'USER', FALSE, NULL),"
+                + " (104, NULL, 'Anna', 'USER', FALSE, NULL)");
+        before.update("INSERT INTO subscription (user_id, provider, external_id, status, updated_at)"
+                + " VALUES (102, 'POLAR', 'sub_1', 'ACTIVE', TIMESTAMP '2026-11-01 10:00:00')");
+
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .placeholders(Map.of("initialAdminEmail", "admin@localhost"))
+                .load()
+                .migrate();
+
+        JdbcTemplate after = new JdbcTemplate(dataSource);
+        assertThat(after.queryForObject("SELECT COUNT(*) FROM app_user WHERE id = 101"
+                + " AND trial_started_on = CURRENT_DATE", Integer.class)).isEqualTo(1);
+        assertThat(after.queryForObject("SELECT trial_started_on FROM app_user WHERE id = 102", String.class))
+                .isEqualTo("2026-10-01");
+        assertThat(after.queryForList("SELECT trial_started_on FROM app_user WHERE id IN (103, 104)", Object.class))
+                .containsExactly(null, null);
+        Map<String, Object> subscription = after.queryForMap("SELECT version, synced_at FROM subscription");
+        assertThat(subscription.get("VERSION")).isEqualTo(0L);
+        assertThat(subscription.get("SYNCED_AT")).hasToString("2026-11-01 10:00:00.0");
     }
 
     /** V12 (backend#137): verified accounts that exist already start their trial; others and profiles do not. */

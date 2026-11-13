@@ -6,6 +6,7 @@ import de.chriswohlbrecht.maintenance.component.helper.ValveLayout;
 import de.chriswohlbrecht.maintenance.component.helper.WorksheetPdfHelper;
 import de.chriswohlbrecht.maintenance.component.helper.WorksheetPrefill;
 import de.chriswohlbrecht.maintenance.component.helper.WorksheetTemplates;
+import de.chriswohlbrecht.maintenance.component.model.Access;
 import de.chriswohlbrecht.maintenance.component.model.Worksheet;
 import de.chriswohlbrecht.maintenance.exception.InvalidWorksheetRequestException;
 import de.chriswohlbrecht.maintenance.persistence.model.MaintenanceLog;
@@ -60,7 +61,8 @@ public class WorksheetComponentImpl implements IWorksheetComponent {
     @Override
     public Optional<Worksheet> generateWorksheet(Long vehicleId, WorksheetTemplate template, Integer cylinders,
                                                  Integer valvesPerCylinder) {
-        accessComponent.requireWriteAccess();
+        // The vehicle is the user's own, so this is also the access of its owner – computed once, not twice.
+        Access access = accessComponent.requireWriteAccess();
         return findOwnVehicle(vehicleId).map(vehicle -> {
             if (!WorksheetTemplates.isAvailable(template, vehicle.getType())) {
                 throw new InvalidWorksheetRequestException("Worksheet " + template + " is not available for "
@@ -71,7 +73,7 @@ public class WorksheetComponentImpl implements IWorksheetComponent {
             LocalDate today = LocalDate.now(clock);
             Locale locale = userLocaleComponent.localeOf(vehicle.getUser());
             // During the trial the sheet can be printed and filled in, but the app does not take over its values.
-            boolean demo = accessComponent.accessOf(vehicle.getUser()).status() == AccessStatus.TRIAL;
+            boolean demo = access.status() == AccessStatus.TRIAL;
             return new Worksheet(worksheetPdfHelper.fileName(vehicle, template, today, locale),
                     timedGeneration(() -> worksheetPdfHelper.generate(vehicle, template, layout, prefill, today,
                             locale, demo)));

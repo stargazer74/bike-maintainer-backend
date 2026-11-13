@@ -162,6 +162,17 @@ class PolarPaymentServiceTest {
         server.verify();
     }
 
+    /** E.g. a token without the needed scope: not "already revoked", or an account is deleted while Polar bills. */
+    @Test
+    void revokeTreatsAnyOtherForbiddenAsAProviderProblem() {
+        server.expect(requestTo(API + "/v1/subscriptions/sub_1")).andExpect(method(HttpMethod.DELETE))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"NotPermitted\",\"detail\":\"Insufficient scope\"}"));
+
+        assertThatThrownBy(() -> service.revokeSubscription("sub_1"))
+                .isInstanceOf(PaymentProviderUnavailableException.class);
+    }
+
     @Test
     void revokeFailsWhenPolarIsDown() {
         server.expect(requestTo(API + "/v1/subscriptions/sub_1")).andRespond(withServerError());
@@ -170,17 +181,15 @@ class PolarPaymentServiceTest {
                 .isInstanceOf(PaymentProviderUnavailableException.class);
     }
 
-    /** Skips a payment that is not for a period (plan change) and one that is not paid. */
+    /** Skips a payment that is not for a period (plan change). */
     @Test
-    void findLastPeriodOrderTakesTheNewestPaidPeriodPayment() {
+    void findLastPeriodOrderTakesTheNewestPeriodPayment() {
         server.expect(requestTo(API + "/v1/orders/?subscription_id=sub_1&sorting=-created_at&limit=10"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("""
                         {"items": [
                           {"id": "ord_4", "billing_reason": "subscription_update", "status": "paid",
                            "net_amount": 500, "refunded_amount": 0, "refundable_amount": 500, "currency": "eur"},
-                          {"id": "ord_3", "billing_reason": "subscription_cycle", "status": "pending",
-                           "net_amount": 2400, "refunded_amount": 0, "refundable_amount": 0, "currency": "eur"},
                           {"id": "ord_2", "billing_reason": "subscription_cycle", "status": "partially_refunded",
                            "net_amount": 2400, "refunded_amount": 100, "refundable_amount": 2300, "currency": "eur"},
                           {"id": "ord_1", "billing_reason": "subscription_create", "status": "paid",
@@ -189,6 +198,64 @@ class PolarPaymentServiceTest {
 
         assertThat(service.findLastPeriodOrder("sub_1"))
                 .contains(new ProviderOrder("ord_2", 2400, 100, 2300, "eur"));
+    }
+
+    /**
+     * The newest period payment is refunded already: it is returned with nothing left to refund, never the payment of
+     * the year before – that would refund the customer twice (backend review, finding 4).
+     */
+    @Test
+    void findLastPeriodOrderDoesNotFallBackBehindARefundedPayment() {
+        server.expect(requestTo(API + "/v1/orders/?subscription_id=sub_1&sorting=-created_at&limit=10"))
+                .andRespond(withSuccess("""
+                        {"items": [
+                          {"id": "ord_2", "billing_reason": "subscription_cycle", "status": "refunded",
+                           "net_amount": 2400, "refunded_amount": 2400, "refundable_amount": 0, "currency": "eur"},
+                          {"id": "ord_1", "billing_reason": "subscription_create", "status": "paid",
+                           "net_amount": 2400, "refunded_amount": 0, "refundable_amount": 2400, "currency": "eur"}
+                        ]}""", MediaType.APPLICATION_JSON));
+
+        assertThat(service.findLastPeriodOrder("sub_1"))
+                .contains(new ProviderOrder("ord_2", 2400, 2400, 0, "eur"));
+    }
+
+    /** The newest period payment is not paid (yet): nothing to refund from, the administrators look at it. */
+    @Test
+    void findLastPeriodOrderIsEmptyWhenTheNewestPeriodPaymentIsNotPaid() {
+        server.expect(requestTo(API + "/v1/orders/?subscription_id=sub_1&sorting=-created_at&limit=10"))
+                .andRespond(withSuccess("""
+                        {"items": [
+                          {"id": "ord_2", "billing_reason": "subscription_cycle", "status": "pending",
+                           "net_amount": 2400, "refunded_amount": 0, "refundable_amount": 0, "currency": "eur"},
+                          {"id": "ord_1", "billing_reason": "subscription_create", "status": "paid",
+                           "net_amount": 2400, "refunded_amount": 0, "refundable_amount": 2400, "currency": "eur"}
+                        ]}""", MediaType.APPLICATION_JSON));
+
+        assertThat(service.findLastPeriodOrder("sub_1")).isEmpty();
+    }
+
+    /** Only refunds with our marker that went through or are pending count; failed or canceled ones do not. */
+    @Test
+    void markedRefundAmountSumsOurPendingAndSucceededRefunds() {
+        server.expect(requestTo(API + "/v1/refunds/?order_id=ord_1&limit=100"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("""
+                        {"items": [
+                          {"id": "r_1", "status": "pending", "amount": 1841, "metadata": {"bm_early_end": "sub_1"}},
+                          {"id": "r_2", "status": "failed", "amount": 1841, "metadata": {"bm_early_end": "sub_1"}},
+                          {"id": "r_3", "status": "succeeded", "amount": 500, "metadata": {}},
+                          {"id": "r_4", "status": "succeeded", "amount": 100, "metadata": {"bm_early_end": "sub_9"}}
+                        ]}""", MediaType.APPLICATION_JSON));
+
+        assertThat(service.markedRefundAmount("ord_1", "sub_1")).isEqualTo(1841);
+    }
+
+    @Test
+    void markedRefundAmountIsZeroWithoutRefunds() {
+        server.expect(requestTo(API + "/v1/refunds/?order_id=ord_1&limit=100"))
+                .andRespond(withSuccess("{\"items\": []}", MediaType.APPLICATION_JSON));
+
+        assertThat(service.markedRefundAmount("ord_1", "sub_1")).isZero();
     }
 
     @Test

@@ -14,6 +14,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -96,6 +97,15 @@ public class Subscription {
     /** Amount of that order refunded before our refund, in cents; more than that afterwards means it went through. */
     @Column(name = "early_end_refunded_before")
     private Long earlyEndRefundedBefore;
+
+    /** Last time the provider confirmed the state (webhook or nightly re-sync); null before the first sync. */
+    @Column(name = "synced_at")
+    private LocalDateTime syncedAt;
+
+    /** Optimistic locking: webhook, early end and re-sync never overwrite each other's changes. */
+    @Version
+    @Column(nullable = false)
+    private Long version;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

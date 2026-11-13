@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.NoSuchElementException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -85,9 +86,27 @@ class WebhookSignatureHelperTest {
                 .isInstanceOf(WebhookSignatureException.class);
     }
 
+    /** Polar endpoints created before 8 September 2026: the key is the UTF-8 bytes of the full secret. */
     @Test
-    void anInvalidSecretIsAConfigurationError() {
+    void acceptsTheOlderPolarSecretWhoseKeyIsTheWholeString() {
+        String legacy = "whsec_not-base64_%%%";
+        String header = WebhookSignatureHelper.legacySignature(legacy, "msg_1", TIMESTAMP, BODY);
+
+        assertThatCode(() -> WebhookSignatureHelper.verify(legacy, "msg_1", TIMESTAMP, header, BODY, NOW))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void acceptsTheOlderSchemeAlsoForASecretThatHappensToBeBase64() {
+        String header = WebhookSignatureHelper.legacySignature(SECRET, "msg_1", TIMESTAMP, BODY);
+
+        assertThatCode(() -> WebhookSignatureHelper.verify(SECRET, "msg_1", TIMESTAMP, header, BODY, NOW))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void aSecretThatIsNoBase64CannotSignInTheNewScheme() {
         assertThatThrownBy(() -> WebhookSignatureHelper.signature("whsec_%%%", "msg_1", TIMESTAMP, BODY))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(NoSuchElementException.class);
     }
 }

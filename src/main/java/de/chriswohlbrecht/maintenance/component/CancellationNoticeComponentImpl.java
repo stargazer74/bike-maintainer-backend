@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.component.helper.AfterCommitHelper;
 import de.chriswohlbrecht.maintenance.component.model.CancellationMail;
 import de.chriswohlbrecht.maintenance.component.model.CancellationNotice;
 import de.chriswohlbrecht.maintenance.component.model.ProviderSubscription;
@@ -99,9 +100,10 @@ public class CancellationNoticeComponentImpl implements ICancellationNoticeCompo
             mail = CancellationMail.SCHEDULED;
         }
         List<AppUser> admins = appUserRepository.findAllByRoleAndActiveTrue(UserRole.ADMIN);
-        for (AppUser admin : admins) {
-            accountMailComponent.sendCancellationNotice(admin, notice, mail, null);
-        }
+        CancellationMail chosen = mail;
+        // Only once the subscription with its early end is saved: a concurrent webhook that loses sends nothing.
+        AfterCommitHelper.afterCommit(() -> admins.forEach(admin ->
+                accountMailComponent.sendCancellationNotice(admin, notice, chosen, null)));
         log.info("Subscription {} of user {} cancelled after the first year, ends on {} ({}); {} admins notified",
                 current.id(), owner.getId(), endsOn, mail, admins.size());
     }
