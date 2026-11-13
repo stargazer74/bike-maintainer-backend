@@ -29,6 +29,23 @@ public interface ISubscriptionComponent {
      */
     void handleWebhook(String id, String timestamp, String signature, String body);
 
-    /** Ends all running subscriptions of the user at the provider and removes them, before the account is deleted. */
-    void endSubscriptionsOf(AppUser user);
+    /**
+     * Daily run ({@code bm.cleanup.cron}): asks the provider again for every subscription it reported running whose
+     * paid period is over, in case a webhook got lost.
+     */
+    void resyncOverdue();
+
+    /**
+     * Ends all running subscriptions of the user at the provider, before the account is deleted. Must not run inside
+     * a transaction (calls to the provider).
+     *
+     * @throws de.chriswohlbrecht.maintenance.exception.PaymentProviderUnavailableException provider not reachable
+     */
+    void revokeSubscriptionsOf(AppUser user);
+
+    /**
+     * Removes the subscriptions of the user, in the transaction that deletes the account. An early end still under
+     * way is handed over to the administrators, so its refund is not lost.
+     */
+    void removeSubscriptionsOf(AppUser user);
 }

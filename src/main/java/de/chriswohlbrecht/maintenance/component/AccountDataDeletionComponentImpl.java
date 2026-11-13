@@ -12,7 +12,10 @@ import de.chriswohlbrecht.maintenance.persistence.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
+
+import java.util.Optional;
+import java.util.function.Predicate;
 
 /** Used by the own deletion ({@link IAccountDeletionComponent}) and the deletion of expired accounts. */
 @Component
@@ -27,13 +30,28 @@ public class AccountDataDeletionComponentImpl implements IAccountDataDeletionCom
     private final MaintenanceLogTaskRepository maintenanceLogTaskRepository;
     private final MaintenanceLogMaterialRepository maintenanceLogMaterialRepository;
     private final ISubscriptionComponent subscriptionComponent;
+    private final TransactionOperations transactionOperations;
 
+    /**
+     * The provider first, outside of a transaction (its calls may take seconds): if it cannot be reached, the account
+     * stays and nothing is billed for an account that no longer exists. Then everything in one transaction on the
+     * locked, freshly read account.
+     */
     @Override
-    @Transactional
-    public void deleteWithAllData(AppUser user) {
-        // Before anything is deleted: if the provider cannot be reached, the account stays and nothing is billed
-        // for an account that no longer exists. The subscription rows go with the user (ON DELETE CASCADE).
-        subscriptionComponent.endSubscriptionsOf(user);
+    public boolean deleteWithAllData(AppUser user, Predicate<AppUser> stillDue) {
+        subscriptionComponent.revokeSubscriptionsOf(user);
+        return Boolean.TRUE.equals(transactionOperations.execute(status -> {
+            Optional<AppUser> locked = appUserRepository.findLockedById(user.getId());
+            if (locked.isEmpty() || !stillDue.test(locked.get())) {
+                return false;
+            }
+            deleteLocked(locked.get());
+            return true;
+        }));
+    }
+
+    private void deleteLocked(AppUser user) {
+        subscriptionComponent.removeSubscriptionsOf(user);
 
         // No ON DELETE CASCADE from the vehicle down: remove dependents first, children before parents.
         for (Vehicle vehicle : vehicleRepository.findAllByUser_Id(user.getId())) {
@@ -43,7 +61,7 @@ public class AccountDataDeletionComponentImpl implements IAccountDataDeletionCom
             maintenanceTaskRepository.deleteAllByVehicle_Id(vehicle.getId());
             vehicleRepository.delete(vehicle);
         }
-        // Tokens, devices and subscriptions of the user go with it (ON DELETE CASCADE).
+        // Tokens and devices of the user go with it (ON DELETE CASCADE).
         appUserRepository.delete(user);
     }
 }

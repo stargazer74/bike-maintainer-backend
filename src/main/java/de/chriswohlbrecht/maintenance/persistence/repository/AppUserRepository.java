@@ -2,10 +2,13 @@ package de.chriswohlbrecht.maintenance.persistence.repository;
 
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
 import de.chriswohlbrecht.maintenance.persistence.type.UserRole;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -17,6 +20,26 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findByEmailIgnoreCase(String email);
 
     Optional<AppUser> findByBillingCustomerRef(String billingCustomerRef);
+
+    /** Sets the reference only if the account has none yet: of two checkouts at the same time, the first one wins. */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE AppUser u SET u.billingCustomerRef = :ref WHERE u.id = :id AND u.billingCustomerRef IS NULL")
+    int setBillingCustomerRefIfMissing(@Param("id") Long id, @Param("ref") String ref);
+
+    @Query("SELECT u.billingCustomerRef FROM AppUser u WHERE u.id = :id")
+    Optional<String> findBillingCustomerRefById(@Param("id") Long id);
+
+    /** Locks the row until the end of the transaction, e.g. so a login cannot interleave with a deletion. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM AppUser u WHERE u.id = :id")
+    Optional<AppUser> findLockedById(@Param("id") Long id);
+
+    /** Only this column, so a stale copy of the account never overwrites e.g. a password changed in the meantime. */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE AppUser u SET u.deletionNoticeSentAt = :sentAt WHERE u.id = :id")
+    int setDeletionNoticeSentAt(@Param("id") Long id, @Param("sentAt") LocalDateTime sentAt);
 
     boolean existsByDisplayNameIgnoreCase(String displayName);
 

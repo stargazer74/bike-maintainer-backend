@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.component.helper.AfterCommitHelper;
 import de.chriswohlbrecht.maintenance.component.model.CancellationMail;
 import de.chriswohlbrecht.maintenance.component.model.CancellationNotice;
 import de.chriswohlbrecht.maintenance.component.model.ProviderOrder;
@@ -16,6 +17,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Conditional;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -23,10 +25,12 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Runs also with {@code bm.polar.early-end.enabled} off: early ends planned while it was on are finished anyway.
- * No surrounding transaction: every step is saved before the next call to the provider.
+ * No surrounding transaction: every step is saved before the next call to the provider, and only the early-end
+ * columns of the current row are changed, so a webhook in between is not overwritten.
  */
 @Slf4j
 @Component
@@ -39,6 +43,8 @@ public class EarlyEndComponentImpl implements IEarlyEndComponent {
     private static final List<EarlyEndState> OPEN_STATES =
             List.of(EarlyEndState.SCHEDULED, EarlyEndState.REVOKED, EarlyEndState.REFUNDING);
     private static final String REASON_PREFIX = "mail.earlyEnd.reason.";
+    /** Saves that lose against a concurrent webhook are repeated on the current row this often. */
+    static final int MAX_SAVE_ATTEMPTS = 3;
 
     private final SubscriptionRepository subscriptionRepository;
     private final AppUserRepository appUserRepository;
@@ -69,16 +75,39 @@ public class EarlyEndComponentImpl implements IEarlyEndComponent {
     public void carryOutDueEarlyEnds() {
         List<Subscription> due = subscriptionRepository.findEarlyEndsDueBefore(OPEN_STATES, LocalDate.now(clock));
         for (Subscription subscription : due) {
-            carryOut(subscription);
+            carryOut(subscription.getId());
         }
         if (!due.isEmpty()) {
             log.info("Early end: handled {} subscriptions", due.size());
         }
     }
 
-    /** Each subscription on its own: a failure counts as an attempt and never stops the others. */
-    private void carryOut(Subscription subscription) {
-        Subscription current = subscription;
+    /** The account is deleted while its early end is under way: the administrators finish the refund by hand. */
+    @Override
+    public void accountDeleted(Subscription subscription) {
+        if (subscription.getEarlyEndState() == null || !subscription.getEarlyEndState().isOpen()) {
+            return;
+        }
+        count("manual");
+        log.warn("Early end of subscription {} handed over to the administrators: account deleted in state {}",
+                subscription.getId(), subscription.getEarlyEndState());
+        CancellationNotice notice = noticeOf(subscription, null, null);
+        List<AppUser> admins = appUserRepository.findAllByRoleAndActiveTrue(UserRole.ADMIN);
+        // Only if the account is really gone; the deletion may still be rolled back.
+        AfterCommitHelper.afterCommit(() -> admins.forEach(admin -> accountMailComponent.sendCancellationNotice(
+                admin, notice, CancellationMail.FAILED, REASON_PREFIX + "accountDeleted")));
+    }
+
+    /**
+     * Each subscription on its own: a failure counts as an attempt and never stops the others. Loaded again first:
+     * the cancellation may have been taken back or the account deleted since the list was read.
+     */
+    private void carryOut(Long id) {
+        Optional<Subscription> found = subscriptionRepository.findById(id);
+        if (found.isEmpty() || found.get().getEarlyEndState() == null || !found.get().getEarlyEndState().isOpen()) {
+            return;
+        }
+        Subscription current = found.get();
         try {
             if (current.getEarlyEndState() == EarlyEndState.SCHEDULED) {
                 current = revoke(current);
@@ -101,11 +130,13 @@ public class EarlyEndComponentImpl implements IEarlyEndComponent {
             handOver(subscription, "alreadyEnded", null);
             return null;
         }
-        subscription.setEarlyEndState(EarlyEndState.REVOKED);
-        subscription.setEarlyEndAttempts(0);
+        Subscription saved = update(subscription, current -> {
+            current.setEarlyEndState(EarlyEndState.REVOKED);
+            current.setEarlyEndAttempts(0);
+        });
         count("revoked");
-        log.info("Early end: subscription {} revoked", subscription.getId());
-        return subscriptionRepository.save(subscription);
+        log.info("Early end: subscription {} revoked", saved.getId());
+        return saved;
     }
 
     /** Remembers the order and what was refunded before, then refunds; null if handed over or finished. */
@@ -121,16 +152,20 @@ public class EarlyEndComponentImpl implements IEarlyEndComponent {
             finished(subscription, 0, order.currency());
             return null;
         }
-        subscription.setEarlyEndOrderId(order.id());
-        subscription.setEarlyEndRefundedBefore(order.refundedAmount());
-        subscription.setEarlyEndState(EarlyEndState.REFUNDING);
-        Subscription saved = subscriptionRepository.save(subscription);
+        Subscription saved = update(subscription, current -> {
+            current.setEarlyEndOrderId(order.id());
+            current.setEarlyEndRefundedBefore(order.refundedAmount());
+            current.setEarlyEndState(EarlyEndState.REFUNDING);
+        });
         paymentProviderService.refund(order.id(), amount, saved.getExternalId());
         finished(saved, amount, order.currency());
         return null;
     }
 
-    /** A run broke off after asking for the refund: refund only if the order shows nothing new since. */
+    /**
+     * A run broke off after asking for the refund: refund only if neither a refund with our marker (also a pending
+     * one, which the order does not show yet) nor a higher refunded amount of the order shows it went through.
+     */
     private void finishRefund(Subscription subscription) {
         Optional<ProviderOrder> found = paymentProviderService.getOrder(subscription.getEarlyEndOrderId());
         if (found.isEmpty()) {
@@ -138,6 +173,11 @@ public class EarlyEndComponentImpl implements IEarlyEndComponent {
             return;
         }
         ProviderOrder order = found.get();
+        long marked = paymentProviderService.markedRefundAmount(order.id(), subscription.getExternalId());
+        if (marked > 0) {
+            finished(subscription, marked, order.currency());
+            return;
+        }
         long refundedBefore = subscription.getEarlyEndRefundedBefore() == null
                 ? 0 : subscription.getEarlyEndRefundedBefore();
         if (order.refundedAmount() > refundedBefore) {
@@ -160,9 +200,10 @@ public class EarlyEndComponentImpl implements IEarlyEndComponent {
     }
 
     private void finished(Subscription subscription, long refund, String currency) {
-        subscription.setEarlyEndState(EarlyEndState.REFUNDED);
-        subscription.setEarlyEndAttempts(0);
-        Subscription saved = subscriptionRepository.save(subscription);
+        Subscription saved = update(subscription, current -> {
+            current.setEarlyEndState(EarlyEndState.REFUNDED);
+            current.setEarlyEndAttempts(0);
+        });
         count("refunded");
         log.info("Early end: subscription {} ended and refunded", saved.getId());
         notifyAdmins(saved, CancellationMail.DONE, null, refund, currency);
@@ -170,44 +211,67 @@ public class EarlyEndComponentImpl implements IEarlyEndComponent {
 
     private void failed(Subscription subscription, RuntimeException e) {
         EarlyEndState state = subscription.getEarlyEndState();
-        int attempts = subscription.getEarlyEndAttempts() + 1;
-        subscription.setEarlyEndAttempts(attempts);
-        log.warn("Early end of subscription {} failed in state {} (attempt {}): {}", subscription.getId(), state,
-                attempts, e.getClass().getSimpleName());
         try {
+            Subscription saved = update(subscription,
+                    current -> current.setEarlyEndAttempts(current.getEarlyEndAttempts() + 1));
+            int attempts = saved.getEarlyEndAttempts();
+            log.warn("Early end of subscription {} failed in state {} (attempt {}): {}", saved.getId(), state,
+                    attempts, e.getClass().getSimpleName());
             if (attempts < properties.maxAttempts()) {
-                subscriptionRepository.save(subscription);
                 count("retry");
                 return;
             }
-            handOver(subscription, switch (state) {
+            handOver(saved, switch (state) {
                 case SCHEDULED -> "unreachableBeforeEnd";
                 case REVOKED -> "unreachableBeforeRefund";
                 default -> "unreachableDuringRefund";
             }, null);
         } catch (RuntimeException saveFailure) {
-            log.warn("Early end of subscription {}: saving the failure failed: {}", subscription.getId(),
-                    saveFailure.getClass().getSimpleName());
+            log.warn("Early end of subscription {} failed ({}), saving the failure failed too: {}",
+                    subscription.getId(), e.getClass().getSimpleName(), saveFailure.getClass().getSimpleName());
         }
     }
 
     private void handOver(Subscription subscription, String reason, Long refund) {
-        subscription.setEarlyEndState(EarlyEndState.MANUAL);
-        Subscription saved = subscriptionRepository.save(subscription);
+        Subscription saved = update(subscription, current -> current.setEarlyEndState(EarlyEndState.MANUAL));
         count("manual");
         log.warn("Early end of subscription {} handed over to the administrators: {}", saved.getId(), reason);
         notifyAdmins(saved, CancellationMail.FAILED, REASON_PREFIX + reason, refund, null);
     }
 
+    /**
+     * Applies a change of the early-end columns to the current row, never to the copy read before a call to the
+     * provider: the webhook of that call (ended, paid period) may have been saved meanwhile and must not be
+     * overwritten. Repeated on the newest row if it changes while saving (optimistic locking).
+     */
+    private Subscription update(Subscription subscription, Consumer<Subscription> change) {
+        for (int attempt = 1; ; attempt++) {
+            Subscription current = subscriptionRepository.findById(subscription.getId())
+                    .orElseThrow(() -> new IllegalStateException("Subscription " + subscription.getId() + " is gone"));
+            change.accept(current);
+            try {
+                return subscriptionRepository.save(current);
+            } catch (ConcurrencyFailureException e) {
+                if (attempt >= MAX_SAVE_ATTEMPTS) {
+                    throw e;
+                }
+            }
+        }
+    }
+
     private void notifyAdmins(Subscription subscription, CancellationMail mail, String reasonKey, Long refund,
                               String currency) {
-        AppUser owner = subscription.getUser();
-        CancellationNotice notice = new CancellationNotice(owner.getId(), subscription.getExternalId(),
-                subscription.getEarlyEndReceivedOn(), subscription.getEarlyEndOn(),
-                subscription.getEarlyEndPeriodEnd(), refund, currency);
+        CancellationNotice notice = noticeOf(subscription, refund, currency);
         for (AppUser admin : appUserRepository.findAllByRoleAndActiveTrue(UserRole.ADMIN)) {
             accountMailComponent.sendCancellationNotice(admin, notice, mail, reasonKey);
         }
+    }
+
+    /** The owner is only needed by id, which a lazy reference knows without loading it. */
+    private static CancellationNotice noticeOf(Subscription subscription, Long refund, String currency) {
+        return new CancellationNotice(subscription.getUser().getId(), subscription.getExternalId(),
+                subscription.getEarlyEndReceivedOn(), subscription.getEarlyEndOn(),
+                subscription.getEarlyEndPeriodEnd(), refund, currency);
     }
 
     private void count(String result) {

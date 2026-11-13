@@ -18,9 +18,13 @@ import org.springframework.web.context.request.RequestContextHolder;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Portal mode: a free trial from the day the email address was verified, then a paid subscription; without either
@@ -33,19 +37,41 @@ import java.util.Objects;
 public class PortalAccessComponentImpl implements IAccessComponent {
 
     private static final String WRITE_GRANTED = PortalAccessComponentImpl.class.getName() + ".writeGranted";
+    /**
+     * How long a subscription the provider reports running still counts after its paid period, and how long a
+     * confirmation by the provider (webhook or nightly re-sync) is trusted for it. Covers the delay of the renewal
+     * webhook; after a lost webhook access ends then instead of never.
+     */
+    static final int RUNNING_TOLERANCE_DAYS = 3;
 
     private final SubscriptionRepository subscriptionRepository;
     private final ICurrentUserComponent currentUserComponent;
     private final SubscriptionProperties subscriptionProperties;
     private final Clock clock;
 
-    /**
-     * A subscription counts while the provider reports it running (also after a failed payment, until the provider
-     * gives up) or while its paid period lasts (e.g. after a cancellation). It wins over the trial.
-     */
     @Override
     public Access accessOf(AppUser user) {
-        List<Subscription> subscriptions = subscriptionRepository.findAllByUser_Id(user.getId());
+        return accessOf(user, subscriptionRepository.findAllByUser_Id(user.getId()));
+    }
+
+    @Override
+    public Map<Long, Access> accessOf(List<AppUser> users) {
+        Map<Long, List<Subscription>> byUser = subscriptionRepository
+                .findAllByUser_IdIn(users.stream().map(AppUser::getId).toList()).stream()
+                .collect(Collectors.groupingBy(subscription -> subscription.getUser().getId()));
+        Map<Long, Access> access = new HashMap<>();
+        for (AppUser user : users) {
+            access.put(user.getId(), accessOf(user, byUser.getOrDefault(user.getId(), List.of())));
+        }
+        return access;
+    }
+
+    /**
+     * A subscription counts while its paid period lasts (e.g. after a cancellation), and while the provider reports it
+     * running (also after a failed payment, until the provider gives up) – the latter only as long as that is
+     * confirmed: within a few days after the paid period, or by a recent sync. It wins over the trial.
+     */
+    private Access accessOf(AppUser user, List<Subscription> subscriptions) {
         boolean hasSubscription = !subscriptions.isEmpty();
         if (user.getRole() == UserRole.ADMIN) {
             return Access.full(hasSubscription);
@@ -56,7 +82,7 @@ public class PortalAccessComponentImpl implements IAccessComponent {
                 .filter(Objects::nonNull)
                 .max(Comparator.naturalOrder())
                 .orElse(null);
-        boolean running = subscriptions.stream().anyMatch(subscription -> subscription.getStatus().isRunning());
+        boolean running = subscriptions.stream().anyMatch(subscription -> isConfirmedRunning(subscription, today));
         if (running || paidUntil != null && !paidUntil.isBefore(today)) {
             return new Access(AccessStatus.ACTIVE, paidUntil, true);
         }
@@ -69,17 +95,31 @@ public class PortalAccessComponentImpl implements IAccessComponent {
 
     /** Remembers a granted write access in the request, see {@link IAccessComponent#requireWriteAccess()}. */
     @Override
-    public void requireWriteAccess() {
+    public Access requireWriteAccess() {
         RequestAttributes request = RequestContextHolder.getRequestAttributes();
-        if (request != null && request.getAttribute(WRITE_GRANTED, RequestAttributes.SCOPE_REQUEST) != null) {
-            return;
+        if (request != null && request.getAttribute(WRITE_GRANTED, RequestAttributes.SCOPE_REQUEST)
+                instanceof Access granted) {
+            return granted;
         }
-        if (!accessOf(currentUserComponent.getCurrentUser()).canWrite()) {
+        Access access = accessOf(currentUserComponent.getCurrentUser());
+        if (!access.canWrite()) {
             throw new SubscriptionRequiredException();
         }
         if (request != null) {
-            request.setAttribute(WRITE_GRANTED, Boolean.TRUE, RequestAttributes.SCOPE_REQUEST);
+            request.setAttribute(WRITE_GRANTED, access, RequestAttributes.SCOPE_REQUEST);
         }
+        return access;
+    }
+
+    private boolean isConfirmedRunning(Subscription subscription, LocalDate today) {
+        if (!subscription.getStatus().isRunning()) {
+            return false;
+        }
+        LocalDate oldest = today.minusDays(RUNNING_TOLERANCE_DAYS);
+        LocalDate paidUntil = subscription.getPaidUntil();
+        LocalDateTime syncedAt = subscription.getSyncedAt();
+        return paidUntil != null && !paidUntil.isBefore(oldest)
+                || syncedAt != null && !syncedAt.toLocalDate().isBefore(oldest);
     }
 
     private LocalDate trialEnd(AppUser user) {

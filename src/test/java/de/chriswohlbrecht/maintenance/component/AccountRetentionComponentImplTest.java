@@ -11,6 +11,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -20,10 +21,14 @@ import java.time.LocalDateTime;
 import java.time.Period;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -55,6 +60,8 @@ class AccountRetentionComponentImplTest {
                 accountDataDeletionComponent, sessionComponent,
                 new RetentionProperties(Period.ofMonths(12), Period.ofDays(30), 2),
                 Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC), meterRegistry);
+        lenient().when(accountMailComponent.sendDeletionNotice(any(), any())).thenReturn(true);
+        lenient().when(accountDataDeletionComponent.deleteWithAllData(any(), any())).thenReturn(true);
     }
 
     @Test
@@ -80,7 +87,7 @@ class AccountRetentionComponentImplTest {
         component.applyRetention();
 
         verifyNoInteractions(accountMailComponent, accountDataDeletionComponent);
-        verify(appUserRepository, never()).save(any());
+        verify(appUserRepository, never()).setDeletionNoticeSentAt(any(), any());
     }
 
     @Test
@@ -91,10 +98,24 @@ class AccountRetentionComponentImplTest {
         component.applyRetention();
 
         verify(accountMailComponent).sendDeletionNotice(user, LocalDate.of(2026, 12, 12));
-        assertThat(user.getDeletionNoticeSentAt()).isEqualTo(NOW);
-        verify(appUserRepository).save(user);
+        verify(appUserRepository).setDeletionNoticeSentAt(1L, NOW);
+        verify(appUserRepository, never()).save(any());
         verifyNoInteractions(accountDataDeletionComponent);
         assertThat(meterRegistry.counter("bm.accounts.retention", "action", "notice_sent").count()).isEqualTo(1.0);
+    }
+
+    /** The mail server did not accept the notice: it does not count as sent, so no deletion follows without it. */
+    @Test
+    void aNoticeTheMailServerRejectedIsNotCountedAsSent() {
+        AppUser user = candidates(user(1L, null)).getFirst();
+        expired(user, LocalDate.of(2025, 12, 12));
+        when(accountMailComponent.sendDeletionNotice(user, LocalDate.of(2026, 12, 12))).thenReturn(false);
+
+        component.applyRetention();
+
+        verify(appUserRepository, never()).setDeletionNoticeSentAt(any(), any());
+        assertThat(meterRegistry.counter("bm.accounts.retention", "action", "notice_sent").count()).isZero();
+        assertThat(meterRegistry.counter("bm.accounts.retention", "action", "failed").count()).isEqualTo(1.0);
     }
 
     /** A notice that goes out late (e.g. deferred by the limit) still gives the full notice period. */
@@ -116,10 +137,63 @@ class AccountRetentionComponentImplTest {
 
         component.applyRetention();
 
-        verify(accountDataDeletionComponent).deleteWithAllData(user);
+        verify(accountDataDeletionComponent).deleteWithAllData(eq(user), any());
         verify(sessionComponent).invalidateSessionsOf(1L);
         verifyNoInteractions(accountMailComponent);
         assertThat(meterRegistry.counter("bm.accounts.retention", "action", "deleted").count()).isEqualTo(1.0);
+    }
+
+    /**
+     * The condition checked on the locked account right before deleting: the same pending notice and still due. A
+     * login since then withdrew the notice; a new subscription ended the expiry.
+     */
+    @Test
+    void deletionIsCheckedAgainOnTheCurrentAccount() {
+        LocalDateTime noticeSentAt = LocalDateTime.of(2026, 10, 13, 3, 30);
+        AppUser user = candidates(user(1L, noticeSentAt)).getFirst();
+        expired(user, LocalDate.of(2025, 11, 1));
+        ArgumentCaptor<Predicate<AppUser>> stillDue = ArgumentCaptor.captor();
+
+        component.applyRetention();
+
+        verify(accountDataDeletionComponent).deleteWithAllData(eq(user), stillDue.capture());
+        assertThat(stillDue.getValue().test(user)).isTrue();
+
+        AppUser loggedIn = user(1L, null);
+        loggedIn.setKeepUntil(LocalDate.of(2027, 11, 12));
+        assertThat(stillDue.getValue().test(loggedIn)).isFalse();
+
+        AppUser subscribed = user(1L, noticeSentAt);
+        when(accessComponent.accessOf(subscribed)).thenReturn(new Access(AccessStatus.ACTIVE, TODAY, true));
+        assertThat(stillDue.getValue().test(subscribed)).isFalse();
+    }
+
+    @Test
+    void anAccountThatChangedBeforeTheDeletionIsKept() {
+        AppUser user = candidates(user(1L, LocalDateTime.of(2026, 10, 13, 3, 30))).getFirst();
+        expired(user, LocalDate.of(2025, 11, 1));
+        when(accountDataDeletionComponent.deleteWithAllData(eq(user), any())).thenReturn(false);
+
+        component.applyRetention();
+
+        verifyNoInteractions(sessionComponent);
+        assertThat(meterRegistry.counter("bm.accounts.retention", "action", "deleted").count()).isZero();
+    }
+
+    /** The candidate list is a snapshot: each account is read again, e.g. a login withdrew the notice since. */
+    @Test
+    void eachCandidateIsReadAgainBeforeItIsHandled() {
+        AppUser listed = user(1L, LocalDateTime.of(2026, 10, 13, 3, 30));
+        when(appUserRepository.findRetentionCandidates(any(), any())).thenReturn(List.of(listed, user(2L, null)));
+        AppUser current = user(1L, null);
+        current.setKeepUntil(LocalDate.of(2027, 11, 12));
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(current));
+        when(appUserRepository.findById(2L)).thenReturn(Optional.empty());
+        expired(current, LocalDate.of(2025, 11, 1));
+
+        component.applyRetention();
+
+        verifyNoInteractions(accountDataDeletionComponent, accountMailComponent);
     }
 
     @Test
@@ -150,8 +224,8 @@ class AccountRetentionComponentImplTest {
 
         component.applyRetention();
 
-        assertThat(user.getDeletionNoticeSentAt()).isNull();
-        verify(appUserRepository).save(user);
+        verify(appUserRepository).setDeletionNoticeSentAt(1L, null);
+        verify(appUserRepository, never()).save(any());
         verifyNoInteractions(accountDataDeletionComponent, accountMailComponent);
     }
 
@@ -164,7 +238,7 @@ class AccountRetentionComponentImplTest {
         component.applyRetention();
 
         verifyNoInteractions(accountDataDeletionComponent, accountMailComponent);
-        verify(appUserRepository, never()).save(any());
+        verify(appUserRepository, never()).setDeletionNoticeSentAt(any(), any());
     }
 
     @Test
@@ -201,7 +275,7 @@ class AccountRetentionComponentImplTest {
         verify(accountMailComponent).sendDeletionNotice(users.get(0), LocalDate.of(2026, 12, 12));
         verify(accountMailComponent).sendDeletionNotice(users.get(1), LocalDate.of(2026, 12, 12));
         verify(accountMailComponent, never()).sendDeletionNotice(users.get(2), LocalDate.of(2026, 12, 12));
-        assertThat(users.get(2).getDeletionNoticeSentAt()).isNull();
+        verify(appUserRepository, never()).setDeletionNoticeSentAt(eq(3L), any());
         assertThat(meterRegistry.counter("bm.accounts.retention", "action", "notice_deferred").count())
                 .isEqualTo(1.0);
     }
@@ -212,11 +286,11 @@ class AccountRetentionComponentImplTest {
         List<AppUser> users = candidates(user(1L, noticeSentAt), user(2L, noticeSentAt));
         users.forEach(user -> expired(user, LocalDate.of(2025, 10, 1)));
         doThrow(new PaymentProviderUnavailableException("down")).when(accountDataDeletionComponent)
-                .deleteWithAllData(users.get(0));
+                .deleteWithAllData(eq(users.get(0)), any());
 
         component.applyRetention();
 
-        verify(accountDataDeletionComponent).deleteWithAllData(users.get(1));
+        verify(accountDataDeletionComponent).deleteWithAllData(eq(users.get(1)), any());
         verify(sessionComponent, never()).invalidateSessionsOf(1L);
         verify(sessionComponent).invalidateSessionsOf(2L);
         assertThat(meterRegistry.counter("bm.accounts.retention", "action", "failed").count()).isEqualTo(1.0);
@@ -245,8 +319,12 @@ class AccountRetentionComponentImplTest {
         verifyNoInteractions(appUserRepository);
     }
 
+    /** Listed, and read again unchanged. */
     private List<AppUser> candidates(AppUser... users) {
         when(appUserRepository.findRetentionCandidates(any(), any())).thenReturn(List.of(users));
+        for (AppUser user : users) {
+            lenient().when(appUserRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        }
         return List.of(users);
     }
 

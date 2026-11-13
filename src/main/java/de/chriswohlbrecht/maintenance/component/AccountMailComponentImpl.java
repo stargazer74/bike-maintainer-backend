@@ -62,10 +62,14 @@ public class AccountMailComponentImpl implements IAccountMailComponent {
     }
 
     @Override
-    public void sendDeletionNotice(AppUser user, LocalDate deletionDay) {
+    public boolean sendDeletionNotice(AppUser user, LocalDate deletionDay) {
         Locale locale = userLocaleComponent.localeOf(user);
         String date = deletionDay.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale));
-        deliver(user, "mail.deletionNotice", locale, date, mailProperties.linkBaseUrl() + "/anmelden");
+        String key = "mail.deletionNotice";
+        Object[] arguments = {date, mailProperties.linkBaseUrl() + "/anmelden"};
+        meterRegistry.counter(SENT_METRIC, "type", MAIL_TYPES.get(key), "result", "queued").increment();
+        return mailService.sendNow(user.getEmail(), messageSource.getMessage(key + ".subject", arguments, locale),
+                messageSource.getMessage(key + ".body", arguments, locale));
     }
 
     @Override

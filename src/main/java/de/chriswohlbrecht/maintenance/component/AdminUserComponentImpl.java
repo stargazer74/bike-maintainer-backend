@@ -2,6 +2,7 @@ package de.chriswohlbrecht.maintenance.component;
 
 import de.chriswohlbrecht.maintenance.api.model.UpdateUserRequest;
 import de.chriswohlbrecht.maintenance.api.model.UserResponse;
+import de.chriswohlbrecht.maintenance.component.model.Access;
 import de.chriswohlbrecht.maintenance.configuration.OperatingModeCondition;
 import de.chriswohlbrecht.maintenance.exception.InvalidUserUpdateException;
 import de.chriswohlbrecht.maintenance.mapper.UserMapper;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -38,8 +40,11 @@ public class AdminUserComponentImpl implements IAdminUserComponent {
     @Override
     @Transactional(readOnly = true)
     public List<UserResponse> listUsers() {
-        return appUserRepository.findAll(Sort.by("createdAt", "id")).stream()
-                .map(user -> userMapper.toResponse(user, accessComponent.accessOf(user)))
+        List<AppUser> users = appUserRepository.findAll(Sort.by("createdAt", "id"));
+        // One query for the subscriptions of all accounts, not one per account.
+        Map<Long, Access> access = accessComponent.accessOf(users);
+        return users.stream()
+                .map(user -> userMapper.toResponse(user, access.get(user.getId())))
                 .toList();
     }
 

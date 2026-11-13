@@ -18,7 +18,11 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,6 +61,8 @@ class PasswordComponentImplTest {
 
     @Spy
     private SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    @Spy
+    private Clock clock = Clock.fixed(Instant.parse("2026-11-13T10:00:00Z"), ZoneOffset.UTC);
 
     @InjectMocks
     private PasswordComponentImpl component;
@@ -85,9 +91,22 @@ class PasswordComponentImplTest {
         assertThat(user.getEmailVerified()).isTrue();
         assertThat(user.getFailedLoginAttempts()).isZero();
         assertThat(user.getLockedUntil()).isNull();
+        assertThat(user.getTrialStartedOn()).isEqualTo(LocalDate.of(2026, 11, 13));
         verify(appUserRepository).save(user);
         verify(sessionComponent).invalidateSessionsOf(7L);
         verify(deviceLoginComponent).revokeAllOf(7L);
+    }
+
+    @Test
+    void resetDoesNotRestartARunningTrial() {
+        AppUser user = user(true);
+        user.setTrialStartedOn(LocalDate.of(2026, 10, 1));
+        when(userTokenComponent.consume("token", UserTokenType.PASSWORD_RESET)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("brand-new-password")).thenReturn("{bcrypt}new");
+
+        component.confirmReset(new PasswordResetConfirmRequest().token("token").newPassword("brand-new-password"));
+
+        assertThat(user.getTrialStartedOn()).isEqualTo(LocalDate.of(2026, 10, 1));
     }
 
     @Test
