@@ -10,7 +10,7 @@ public interface ISubscriptionComponent {
     /**
      * Starts the checkout for the logged-in user.
      *
-     * @return address of the provider's hosted checkout page
+     * @return address of the payment page of the web app with the provider's checkout attached
      * @throws de.chriswohlbrecht.maintenance.exception.AlreadySubscribedException         a subscription is active
      * @throws de.chriswohlbrecht.maintenance.exception.PaymentProviderUnavailableException provider not reachable
      */
@@ -27,7 +27,7 @@ public interface ISubscriptionComponent {
      * @throws de.chriswohlbrecht.maintenance.exception.PaymentProviderUnavailableException provider not reachable;
      *                                                                                     the provider retries
      */
-    void handleWebhook(String id, String timestamp, String signature, String body);
+    void handleWebhook(String signature, String body);
 
     /**
      * Daily run ({@code bm.cleanup.cron}): asks the provider again for every subscription it reported running whose

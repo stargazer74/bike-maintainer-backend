@@ -7,7 +7,7 @@ import de.chriswohlbrecht.maintenance.persistence.model.Subscription;
 /**
  * Cancellations after the first year (portal mode, backend#145/#147): the provider would let the subscription run
  * until the end of the paid year, but after the first year it may only run one more month, and the rest is refunded.
- * With {@code bm.polar.early-end.enabled} the early end is planned on the subscription and carried out by
+ * With {@code bm.subscription.early-end.enabled} the early end is planned on the subscription and carried out by
  * {@link IEarlyEndComponent}; without it, the administrators get an email to do it by hand.
  */
 public interface ICancellationNoticeComponent {

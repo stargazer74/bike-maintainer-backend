@@ -1,7 +1,7 @@
 package de.chriswohlbrecht.maintenance.component.model;
 
 /**
- * A payment at the provider (Polar order). Amounts in the smallest unit of the currency (cents), net = before taxes;
+ * A payment at the provider (Paddle transaction). Amounts in the smallest unit of the currency (cents), net = before taxes;
  * the provider refunds the matching tax itself.
  *
  * @param id               id of the order at the provider

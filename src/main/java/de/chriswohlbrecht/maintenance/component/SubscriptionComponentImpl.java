@@ -3,9 +3,8 @@ package de.chriswohlbrecht.maintenance.component;
 import de.chriswohlbrecht.maintenance.api.model.AccessStatus;
 import de.chriswohlbrecht.maintenance.component.helper.WebhookSignatureHelper;
 import de.chriswohlbrecht.maintenance.component.model.ProviderSubscription;
-import de.chriswohlbrecht.maintenance.configuration.AccountMailProperties;
 import de.chriswohlbrecht.maintenance.configuration.OperatingModeCondition;
-import de.chriswohlbrecht.maintenance.configuration.PolarProperties;
+import de.chriswohlbrecht.maintenance.configuration.PaddleProperties;
 import de.chriswohlbrecht.maintenance.exception.AlreadySubscribedException;
 import de.chriswohlbrecht.maintenance.exception.InvalidWebhookException;
 import de.chriswohlbrecht.maintenance.exception.PaymentProviderUnavailableException;
@@ -33,12 +32,13 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Subscription via Polar. The provider is the source of truth: a webhook is only a trigger to fetch the current
+ * Subscription via Paddle. The provider is the source of truth: a webhook is only a trigger to fetch the current
  * state of the subscription, so duplicates and events out of order do no harm. Calls to the provider (up to several
  * seconds) never run inside a database transaction; the transactions around them are short.
  */
@@ -57,7 +57,6 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
     private static final List<SubscriptionStatus> RUNNING =
             List.of(SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE);
     private static final String SUBSCRIPTION_EVENT_PREFIX = "subscription.";
-    private static final String ACCOUNT_PATH = "/konto";
 
     private final ICurrentUserComponent currentUserComponent;
     private final IAccessComponent accessComponent;
@@ -66,8 +65,7 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
     private final IEarlyEndComponent earlyEndComponent;
     private final AppUserRepository appUserRepository;
     private final SubscriptionRepository subscriptionRepository;
-    private final PolarProperties polarProperties;
-    private final AccountMailProperties accountMailProperties;
+    private final PaddleProperties paddleProperties;
     private final JsonMapper jsonMapper;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
@@ -79,9 +77,9 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
                                      IPaymentProviderService paymentProviderService,
                                      ICancellationNoticeComponent cancellationNoticeComponent,
                                      IEarlyEndComponent earlyEndComponent, AppUserRepository appUserRepository,
-                                     SubscriptionRepository subscriptionRepository, PolarProperties polarProperties,
-                                     AccountMailProperties accountMailProperties, JsonMapper jsonMapper, Clock clock,
-                                     MeterRegistry meterRegistry, TransactionOperations transactionOperations) {
+                                     SubscriptionRepository subscriptionRepository, PaddleProperties paddleProperties,
+                                     JsonMapper jsonMapper, Clock clock, MeterRegistry meterRegistry,
+                                     TransactionOperations transactionOperations) {
         this.currentUserComponent = currentUserComponent;
         this.accessComponent = accessComponent;
         this.paymentProviderService = paymentProviderService;
@@ -89,8 +87,7 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
         this.earlyEndComponent = earlyEndComponent;
         this.appUserRepository = appUserRepository;
         this.subscriptionRepository = subscriptionRepository;
-        this.polarProperties = polarProperties;
-        this.accountMailProperties = accountMailProperties;
+        this.paddleProperties = paddleProperties;
         this.jsonMapper = jsonMapper;
         this.clock = clock;
         this.meterRegistry = meterRegistry;
@@ -117,8 +114,7 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
         }
         String customerRef = customerRefOf(user);
         try {
-            String url = paymentProviderService.createCheckout(customerRef, user.getEmail(),
-                    accountUrl() + "?abo=danke", accountUrl());
+            String url = paymentProviderService.createCheckout(customerRef, user.getEmail());
             meterRegistry.counter(CHECKOUT_METRIC, "result", "started").increment();
             log.info("User {} started a checkout", user.getId());
             return url;
@@ -128,20 +124,19 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
         }
     }
 
+    /** The portal belongs to the provider's customer; it is opened through the newest subscription of the account. */
     @Override
     public Optional<String> openCustomerPortal() {
         AppUser user = currentUserComponent.getCurrentUser();
-        if (user.getBillingCustomerRef() == null || subscriptionRepository.findAllByUser_Id(user.getId()).isEmpty()) {
-            return Optional.empty();
-        }
-        return paymentProviderService.createCustomerPortal(user.getBillingCustomerRef(), accountUrl());
+        return subscriptionRepository.findAllByUser_Id(user.getId()).stream()
+                .max(Comparator.comparing(Subscription::getId))
+                .flatMap(newest -> paymentProviderService.createCustomerPortal(newest.getExternalId()));
     }
 
     @Override
-    public void handleWebhook(String id, String timestamp, String signature, String body) {
+    public void handleWebhook(String signature, String body) {
         try {
-            WebhookSignatureHelper.verify(polarProperties.webhookSecret(), id, timestamp, signature, body,
-                    clock.instant());
+            WebhookSignatureHelper.verify(paddleProperties.webhookSecret(), signature, body, clock.instant());
         } catch (RuntimeException e) {
             meterRegistry.counter(WEBHOOK_METRIC, "result", "invalid_signature").increment();
             throw e;
@@ -152,7 +147,7 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
         } catch (JacksonException e) {
             throw new InvalidWebhookException("Webhook body is not JSON");
         }
-        String type = event.path("type").asString("");
+        String type = event.path("event_type").asString("");
         String subscriptionId = event.path("data").path("id").asString("");
         if (!type.startsWith(SUBSCRIPTION_EVENT_PREFIX)) {
             meterRegistry.counter(WEBHOOK_METRIC, "result", "ignored").increment();
@@ -183,7 +178,7 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
     @Override
     @Scheduled(cron = "${bm.cleanup.cron}")
     public void resyncOverdue() {
-        List<String> overdue = subscriptionRepository.findRunningUnpaidSince(SubscriptionProvider.POLAR, RUNNING,
+        List<String> overdue = subscriptionRepository.findRunningUnpaidSince(SubscriptionProvider.PADDLE, RUNNING,
                 LocalDate.now(clock));
         for (String subscriptionId : overdue) {
             try {
@@ -203,15 +198,23 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
         }
     }
 
-    /** Revoked right away: the account and with it everything the subscription paid for is gone. */
+    /**
+     * Revoked right away: the account and with it everything the subscription paid for is gone. After the first year
+     * the prepaid rest is refunded pro rata; the state is read before, because the provider drops the paid period once
+     * the subscription is revoked.
+     */
     @Override
     public void revokeSubscriptionsOf(AppUser user) {
         subscriptionRepository.findAllByUser_Id(user.getId()).stream()
                 .filter(subscription -> subscription.getStatus() != SubscriptionStatus.ENDED)
                 .forEach(subscription -> {
-                    paymentProviderService.revokeSubscription(subscription.getExternalId());
-                    log.info("Subscription {} of user {} revoked before account deletion", subscription.getId(),
-                            user.getId());
+                    Optional<ProviderSubscription> before =
+                            paymentProviderService.getSubscription(subscription.getExternalId());
+                    if (paymentProviderService.revokeSubscription(subscription.getExternalId())) {
+                        log.info("Subscription {} of user {} revoked before account deletion", subscription.getId(),
+                                user.getId());
+                        before.ifPresent(current -> earlyEndComponent.refundAfterDeletion(subscription, current));
+                    }
                 });
     }
 
@@ -270,10 +273,10 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
             return UNKNOWN_CUSTOMER;
         }
         Subscription subscription = subscriptionRepository
-                .findByProviderAndExternalId(SubscriptionProvider.POLAR, current.id())
+                .findByProviderAndExternalId(SubscriptionProvider.PADDLE, current.id())
                 .orElseGet(() -> Subscription.builder()
                         .user(owner.get())
-                        .provider(SubscriptionProvider.POLAR)
+                        .provider(SubscriptionProvider.PADDLE)
                         .externalId(current.id())
                         .build());
         SubscriptionStatus previous = subscription.getStatus();
@@ -295,16 +298,15 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
     }
 
     /**
-     * Polar statuses: {@code trialing}/{@code active} run (cancelled ones until the period ends), {@code past_due}
-     * retries the payment, {@code canceled} with {@code ended_at} is over; {@code unpaid}, {@code paused},
-     * {@code incomplete} and {@code incomplete_expired} give no access.
+     * Paddle statuses: {@code trialing}/{@code active} run (cancelled ones, with a scheduled cancel, until the period
+     * ends), {@code past_due} retries the payment, {@code canceled} is over (at the end of the period, or right away
+     * after a revoke or an EU withdrawal); {@code paused} gives no access.
      */
     static SubscriptionStatus statusOf(ProviderSubscription subscription) {
         return switch (subscription.status()) {
             case "active", "trialing" -> subscription.cancelAtPeriodEnd()
                     ? SubscriptionStatus.CANCELED : SubscriptionStatus.ACTIVE;
             case "past_due" -> SubscriptionStatus.PAST_DUE;
-            case "canceled" -> subscription.endedAt() == null ? SubscriptionStatus.CANCELED : SubscriptionStatus.ENDED;
             default -> SubscriptionStatus.ENDED;
         };
     }
@@ -314,9 +316,5 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
         OffsetDateTime end = status == SubscriptionStatus.ENDED ? subscription.endedAt()
                 : subscription.currentPeriodEnd();
         return end == null ? null : end.atZoneSameInstant(clock.getZone()).toLocalDate();
-    }
-
-    private String accountUrl() {
-        return accountMailProperties.linkBaseUrl() + ACCOUNT_PATH;
     }
 }

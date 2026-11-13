@@ -17,9 +17,8 @@ public class WebhookController implements WebhooksApi {
     private final ISubscriptionComponent subscriptionComponent;
 
     @Override
-    public ResponseEntity<Void> receivePolarWebhook(String webhookId, String webhookTimestamp, String webhookSignature,
-                                                    String body) {
-        subscriptionComponent.handleWebhook(webhookId, webhookTimestamp, webhookSignature, body);
+    public ResponseEntity<Void> receivePaddleWebhook(String paddleSignature, String body) {
+        subscriptionComponent.handleWebhook(paddleSignature, body);
         return ResponseEntity.accepted().build();
     }
 }

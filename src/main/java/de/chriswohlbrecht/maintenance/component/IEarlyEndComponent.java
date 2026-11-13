@@ -1,5 +1,6 @@
 package de.chriswohlbrecht.maintenance.component;
 
+import de.chriswohlbrecht.maintenance.component.model.ProviderSubscription;
 import de.chriswohlbrecht.maintenance.persistence.model.Subscription;
 
 /**
@@ -20,4 +21,14 @@ public interface IEarlyEndComponent {
      * promised refund is not lost with the row.
      */
     void accountDeleted(Subscription subscription);
+
+    /**
+     * Called after a subscription was revoked because its account is deleted (outside of a transaction): after the
+     * first year the prepaid rest from today on is refunded pro rata. The administrators get an email with the result,
+     * also when it fails and has to be finished by hand. Does nothing in the first year and for a subscription with an
+     * early end of its own (that one is handed over by {@link #accountDeleted}).
+     *
+     * @param before state at the provider read before the revoke (it drops the paid period afterwards)
+     */
+    void refundAfterDeletion(Subscription subscription, ProviderSubscription before);
 }

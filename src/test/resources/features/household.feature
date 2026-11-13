@@ -241,4 +241,4 @@ Feature: Household mode – profile selection instead of login
       | path                                  |
       | /api/v1/subscription/checkout         |
       | /api/v1/subscription/customer-portal  |
-      | /api/v1/webhooks/polar                |
+      | /api/v1/webhooks/paddle                |

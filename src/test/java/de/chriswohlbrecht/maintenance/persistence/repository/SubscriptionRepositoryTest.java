@@ -45,7 +45,7 @@ class SubscriptionRepositoryTest {
         save(user, "sub_cancelled", SubscriptionStatus.CANCELED, TODAY.minusDays(10));
         save(user, "sub_ended", SubscriptionStatus.ENDED, TODAY.minusDays(10));
 
-        assertThat(subscriptionRepository.findRunningUnpaidSince(SubscriptionProvider.POLAR, RUNNING, TODAY))
+        assertThat(subscriptionRepository.findRunningUnpaidSince(SubscriptionProvider.PADDLE, RUNNING, TODAY))
                 .containsExactly("sub_overdue", "sub_unknown");
     }
 
@@ -95,7 +95,7 @@ class SubscriptionRepositoryTest {
     }
 
     private Subscription save(AppUser user, String externalId, SubscriptionStatus status, LocalDate paidUntil) {
-        return subscriptionRepository.save(Subscription.builder().user(user).provider(SubscriptionProvider.POLAR)
+        return subscriptionRepository.save(Subscription.builder().user(user).provider(SubscriptionProvider.PADDLE)
                 .externalId(externalId).status(status).paidUntil(paidUntil).build());
     }
 }

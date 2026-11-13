@@ -147,7 +147,7 @@ class AccountMailComponentImplTest {
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(mailService).send(eq("rider@example.org"), eq("Cancellation after the first year: subscription sub_1"),
                 body.capture());
-        assertThat(body.getValue()).contains("Pro-rata refund: unknown, please calculate it in Polar");
+        assertThat(body.getValue()).contains("Pro-rata refund: unknown, please calculate it in Paddle");
     }
 
     @Test
@@ -170,7 +170,7 @@ class AccountMailComponentImplTest {
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(mailService).send(eq("rider@example.org"), eq("Subscription sub_1 ended and refunded pro rata"),
                 body.capture());
-        assertThat(body.getValue()).contains("Refunded (net; Polar adds the tax pro rata): €18.41");
+        assertThat(body.getValue()).contains("Refunded (net; Paddle adds the tax pro rata): €18.41");
     }
 
     @Test
@@ -181,7 +181,7 @@ class AccountMailComponentImplTest {
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(mailService).send(eq("rider@example.org"),
                 eq("Abo sub_1: Ende nach Kündigung bitte von Hand abschließen"), body.capture());
-        assertThat(body.getValue()).contains("Polar meldet das Abo als schon beendet");
+        assertThat(body.getValue()).contains("Paddle meldet das Abo als schon beendet");
         verify(mailQuotaComponent, never()).tryReserve();
     }
 

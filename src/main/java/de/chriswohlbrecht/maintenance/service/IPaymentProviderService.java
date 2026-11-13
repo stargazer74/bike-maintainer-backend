@@ -6,21 +6,24 @@ import de.chriswohlbrecht.maintenance.component.model.ProviderSubscription;
 import java.util.Optional;
 
 /**
- * The payment provider (Polar). Every method throws
+ * The payment provider (Paddle). Every method throws
  * {@link de.chriswohlbrecht.maintenance.exception.PaymentProviderUnavailableException} if the provider cannot be
  * reached or answers unexpectedly.
  */
 public interface IPaymentProviderService {
 
     /**
-     * Starts a checkout of the subscription product for the account with the given reference.
+     * Starts a checkout of the subscription for the account with the given reference.
      *
-     * @return address of the provider's hosted checkout page
+     * @return address of the payment page with the checkout attached (the provider's default payment link)
      */
-    String createCheckout(String customerRef, String email, String successUrl, String returnUrl);
+    String createCheckout(String customerRef, String email);
 
-    /** @return short-lived address of the customer portal, empty if the provider does not know the customer */
-    Optional<String> createCustomerPortal(String customerRef, String returnUrl);
+    /**
+     * @return short-lived address of the customer portal of the subscription's customer, empty if the provider does
+     *         not know the subscription
+     */
+    Optional<String> createCustomerPortal(String subscriptionId);
 
     /** @return the subscription, empty if the provider does not know it */
     Optional<ProviderSubscription> getSubscription(String subscriptionId);

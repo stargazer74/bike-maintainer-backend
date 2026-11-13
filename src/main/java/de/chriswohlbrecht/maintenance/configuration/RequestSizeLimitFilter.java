@@ -28,12 +28,12 @@ import java.util.Map;
 class RequestSizeLimitFilter extends OncePerRequestFilter {
 
     static final long IMPORT_LIMIT = 5L * 1024 * 1024;
-    /** Polar events are a few KB; everything far above is not from Polar. */
+    /** Paddle events are a few KB; everything far above is not from Paddle. */
     static final long WEBHOOK_LIMIT = 64L * 1024;
 
     private static final Map<RequestMatcher, Long> LIMITS = Map.of(
             PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/v1/vehicles/import"), IMPORT_LIMIT,
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/v1/webhooks/polar"), WEBHOOK_LIMIT);
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/v1/webhooks/paddle"), WEBHOOK_LIMIT);
 
     private final SecurityErrorWriter errorWriter;
 

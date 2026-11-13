@@ -14,11 +14,12 @@ import org.springframework.core.env.Profiles;
 @Conditional(OperatingModeCondition.Portal.class)
 public final class PortalStartupCheck {
 
-    /** Property, environment variable and what it is, for the subscription via Polar. */
-    private static final String[][] POLAR_SETTINGS = {
-            {"bm.polar.access-token", "BM_POLAR_ACCESS_TOKEN", "organization access token of Polar"},
-            {"bm.polar.webhook-secret", "BM_POLAR_WEBHOOK_SECRET", "secret of the Polar webhook endpoint"},
-            {"bm.polar.product-id", "BM_POLAR_PRODUCT_ID", "id of the subscription product in Polar"}
+    /** Property, environment variable and what it is, for the subscription via Paddle. */
+    private static final String[][] PADDLE_SETTINGS = {
+            {"bm.paddle.api-key", "BM_PADDLE_API_KEY", "API key of Paddle"},
+            {"bm.paddle.webhook-secret", "BM_PADDLE_WEBHOOK_SECRET", "secret key of the Paddle notification destination"},
+            {"bm.paddle.price-id", "BM_PADDLE_PRICE_ID", "id of the yearly price in Paddle"},
+            {"bm.paddle.client-token", "BM_PADDLE_CLIENT_TOKEN", "client-side token of Paddle for the payment page"}
     };
 
     public PortalStartupCheck(Environment environment) {
@@ -31,10 +32,10 @@ public final class PortalStartupCheck {
                     + "(length of the free trial in days)");
         }
         if (!environment.acceptsProfiles(Profiles.of("local"))) {
-            for (String[] polar : POLAR_SETTINGS) {
-                if (isBlank(environment.getProperty(polar[0]))) {
-                    throw new IllegalStateException(polar[1] + " must be set in portal mode (" + polar[2]
-                            + "; the profile local starts without Polar, checkout then answers 503)");
+            for (String[] paddle : PADDLE_SETTINGS) {
+                if (isBlank(environment.getProperty(paddle[0]))) {
+                    throw new IllegalStateException(paddle[1] + " must be set in portal mode (" + paddle[2]
+                            + "; the profile local starts without Paddle, checkout then answers 503)");
                 }
             }
         }

@@ -83,14 +83,14 @@ Requirements: Java 25.
 | `BM_WEBSITE_URL` | public website (portal only), e.g. `https://www.example.com`; the app links to it and to its legal notice and privacy policy. Unset = no links; anything but an http(s) address stops the startup |
 | `BM_ALTCHA_HMAC_KEY` | secret for the registration captcha, e.g. `openssl rand -hex 32` |
 | `BM_SUBSCRIPTION_TRIAL_DAYS` | length of the free trial in days (portal); no default, the value is a decision of the deployment |
-| `BM_POLAR_ACCESS_TOKEN`, `BM_POLAR_WEBHOOK_SECRET`, `BM_POLAR_PRODUCT_ID` | subscription via Polar (portal): organization access token, `whsec_…` secret of the webhook endpoint `https://<app>/api/v1/webhooks/polar`, id of the yearly product |
-| `BM_POLAR_API_URL` | Polar API, default `https://api.polar.sh`; `https://sandbox-api.polar.sh` for the sandbox |
-| `BM_POLAR_EARLY_END_ENABLED` | `true` = a subscription cancelled after its first year is ended automatically one month after the cancellation and the rest of its last payment refunded pro rata (§ 309 no. 9 BGB); needs the token scopes `orders:read` and `refunds:write`. Default `false`: the admins only get an email and do it by hand in Polar |
+| `BM_PADDLE_API_KEY`, `BM_PADDLE_WEBHOOK_SECRET`, `BM_PADDLE_PRICE_ID`, `BM_PADDLE_CLIENT_TOKEN` | subscription via Paddle (portal): API key, `pdl_ntfset_…` secret key of the notification destination `https://<app>/api/v1/webhooks/paddle`, id of the yearly price, client-side token for the payment page (public, handed to the web app by `GET /api/v1/config`) |
+| `BM_PADDLE_API_URL` | Paddle API, default `https://api.paddle.com`; `https://sandbox-api.paddle.com` for the sandbox (the payment page then runs Paddle.js in the sandbox too) |
+| `BM_EARLY_END_ENABLED` | `true` = a subscription cancelled after its first year is ended automatically one month after the cancellation and the rest of its last payment refunded pro rata (§ 309 no. 9 BGB); needs the API key permissions `transaction.read` and `adjustment.write`. Default `false`: the admins only get an email and do it by hand in Paddle |
 | `LOGGING_STRUCTURED_FORMAT_CONSOLE` | `ecs` for JSON log lines (portal operation, collected by the monitoring); unset = readable text |
 
 In portal mode the backend refuses to start without `BM_ALTCHA_HMAC_KEY` and `BM_SUBSCRIPTION_TRIAL_DAYS`, and
-without `SPRING_MAIL_HOST` and the three `BM_POLAR_*` settings unless the Spring profile `local` is active (there the
-checkout answers 503 without Polar). At most `bm.mail.daily-limit` (100) emails are sent per day; unverified accounts are
+without `SPRING_MAIL_HOST` and the four `BM_PADDLE_*` keys above unless the Spring profile `local` is active (there the
+checkout answers 503 without Paddle). At most `bm.mail.daily-limit` (100) emails are sent per day; unverified accounts are
 deleted after 7 days. Expired accounts (trial or paid period over) are deleted 12 months after their access ended
 (`bm.retention.period`), never without a notice by email 30 days before (`bm.retention.notice-period`, at most
 `bm.retention.notice-daily-limit` (50) notices per day, not counted towards the mail limit); logging in after the
@@ -115,16 +115,21 @@ network. Backend and database publish no ports. The compose files, `.env.example
    SMTP login unless `BM_MAIL_FROM` is set.
 3. **`BM_PUBLIC_URL`:** the address users open (e.g. `https://app.example.com`); email links point there.
 4. **Captcha:** `BM_ALTCHA_HMAC_KEY` (`openssl rand -hex 32`).
-5. **Subscription:** `BM_SUBSCRIPTION_TRIAL_DAYS` and the `BM_POLAR_*` settings. In Polar, create the yearly product
-   and a webhook endpoint for `https://<app>/api/v1/webhooks/polar` with the `subscription.*` events (format raw); the
-   backend only uses an event as a trigger and fetches the current state of the subscription from Polar. Polar only
-   learns the email address (for the invoice) and a random customer reference, never the internal account id.
-   The access token needs `checkouts:write`, `customer_sessions:write`, `subscriptions:read`/`subscriptions:write`
-   and, with
-   `BM_POLAR_EARLY_END_ENABLED=true`, also `orders:read` and `refunds:write`. The early end runs nightly
-   (`bm.cleanup.cron`): revoke the subscription, refund the days after the end pro rata of the last payment's net
-   amount (Polar adds the tax), email the admins; after `bm.polar.early-end.max-attempts` (3) failed nights, or when
-   Polar reports something unexpected, the admins are asked by email to finish it by hand.
+5. **Subscription:** `BM_SUBSCRIPTION_TRIAL_DAYS` and the `BM_PADDLE_*` settings. In Paddle, create the product
+   with a yearly price in EUR, set the **default payment link** to `https://<app>/abo/bezahlen` (the payment page of
+   the web app, the only page that loads Paddle.js; Paddle also sends customers there to update their payment
+   method), approve the website, and add a notification destination for `https://<app>/api/v1/webhooks/paddle` with
+   the `subscription.*` events; the backend only uses an event as a trigger and fetches the current state of the
+   subscription from Paddle. Paddle only learns the email address (for the invoice) and a random customer reference,
+   never the internal account id. The API key needs `customer.write`, `transaction.write`,
+   `customer_portal_session.write`, `subscription.read`/`subscription.write` and, for the refunds (early end, account
+   deletion after the first year), `transaction.read` and `adjustment.read`/`adjustment.write`. The early end runs
+   nightly with `BM_EARLY_END_ENABLED=true` (`bm.cleanup.cron`): cancel the subscription immediately, refund the
+   days after the end pro rata of the last payment's net amount (Paddle adds the tax), email the admins; after
+   `bm.subscription.early-end.max-attempts` (3) failed nights, or when Paddle reports something unexpected, the admins
+   are asked by email to finish it by hand. Deleting an account cancels its subscription immediately; after the first
+   year the rest from the day of deletion is refunded the same way. Refunds above Paddle's automatic approval limit
+   stay pending until Paddle approves them.
 
 Further accounts register themselves (email verification required); admins manage roles and lock accounts under
 `/admin/nutzer` in the web app.

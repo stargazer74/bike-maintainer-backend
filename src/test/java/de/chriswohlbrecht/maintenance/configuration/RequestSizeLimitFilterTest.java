@@ -68,7 +68,7 @@ class RequestSizeLimitFilterTest {
     @Test
     void webhookAboveItsLimit_isRejected() throws Exception {
         int webhookLimit = (int) RequestSizeLimitFilter.WEBHOOK_LIMIT;
-        MockHttpServletRequest tooLarge = new MockHttpServletRequest("POST", "/api/v1/webhooks/polar");
+        MockHttpServletRequest tooLarge = new MockHttpServletRequest("POST", "/api/v1/webhooks/paddle");
         tooLarge.setContent(new byte[webhookLimit + 1]);
         MockHttpServletResponse response = new MockHttpServletResponse();
         AtomicInteger calls = new AtomicInteger();
@@ -78,7 +78,7 @@ class RequestSizeLimitFilterTest {
         assertThat(response.getStatus()).isEqualTo(413);
         assertThat(calls).hasValue(0);
         FilterChain readAll = (req, res) -> req.getInputStream().readAllBytes();
-        assertThatThrownBy(() -> filter.doFilter(chunked("/api/v1/webhooks/polar", new byte[webhookLimit + 1]),
+        assertThatThrownBy(() -> filter.doFilter(chunked("/api/v1/webhooks/paddle", new byte[webhookLimit + 1]),
                 new MockHttpServletResponse(), readAll)).isInstanceOf(PayloadTooLargeException.class);
     }
 

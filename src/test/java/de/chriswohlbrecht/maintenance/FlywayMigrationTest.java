@@ -37,7 +37,7 @@ class FlywayMigrationTest {
     void appliesAllMigrationsSuccessfully() {
         MigrationInfo[] appliedMigrations = flyway.info().applied();
 
-        assertThat(appliedMigrations).hasSize(16);
+        assertThat(appliedMigrations).hasSize(17);
         assertThat(appliedMigrations[0].getDescription()).isEqualTo("init schema");
         assertThat(appliedMigrations[0].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[1].getDescription()).isEqualTo("vehicle model year required");
@@ -70,6 +70,40 @@ class FlywayMigrationTest {
         assertThat(appliedMigrations[14].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[15].getDescription()).isEqualTo("subscription review fixes");
         assertThat(appliedMigrations[15].getState()).isEqualTo(MigrationState.SUCCESS);
+        assertThat(appliedMigrations[16].getDescription()).isEqualTo("payment provider paddle");
+        assertThat(appliedMigrations[16].getState()).isEqualTo(MigrationState.SUCCESS);
+    }
+
+    /** V17 (backend#155): the Polar subscriptions were sandbox test data and go; the customer references stay. */
+    @Test
+    void v17RemovesThePolarSubscriptions() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(
+                "jdbc:h2:mem:migration-" + UUID.randomUUID() + ";MODE=MariaDB;DB_CLOSE_DELAY=-1", "sa", "");
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .placeholders(Map.of("initialAdminEmail", "admin@localhost"))
+                .target("16")
+                .load()
+                .migrate();
+        JdbcTemplate before = new JdbcTemplate(dataSource);
+        before.update("INSERT INTO app_user (id, email, display_name, role, email_verified, billing_customer_ref)"
+                + " VALUES (101, 'rider@example.org', NULL, 'USER', TRUE, 'ref-1')");
+        before.update("INSERT INTO subscription (user_id, provider, external_id, status, updated_at) VALUES"
+                + " (101, 'POLAR', 'polar_1', 'ACTIVE', TIMESTAMP '2026-11-01 10:00:00'),"
+                + " (101, 'PADDLE', 'sub_1', 'ACTIVE', TIMESTAMP '2026-11-02 10:00:00')");
+
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .placeholders(Map.of("initialAdminEmail", "admin@localhost"))
+                .load()
+                .migrate();
+
+        JdbcTemplate after = new JdbcTemplate(dataSource);
+        assertThat(after.queryForList("SELECT external_id FROM subscription", String.class)).containsExactly("sub_1");
+        assertThat(after.queryForObject("SELECT billing_customer_ref FROM app_user WHERE id = 101", String.class))
+                .isEqualTo("ref-1");
     }
 
     /**
@@ -94,7 +128,7 @@ class FlywayMigrationTest {
                 + " (103, 'unverified@example.org', NULL, 'USER', FALSE, NULL),"
                 + " (104, NULL, 'Anna', 'USER', FALSE, NULL)");
         before.update("INSERT INTO subscription (user_id, provider, external_id, status, updated_at)"
-                + " VALUES (102, 'POLAR', 'sub_1', 'ACTIVE', TIMESTAMP '2026-11-01 10:00:00')");
+                + " VALUES (102, 'PADDLE', 'sub_1', 'ACTIVE', TIMESTAMP '2026-11-01 10:00:00')");
 
         Flyway.configure()
                 .dataSource(dataSource)

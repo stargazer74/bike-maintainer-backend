@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/** Replaces Polar in the portal Cucumber context: subscriptions are set by the steps, nothing leaves the test. */
+/** Replaces Paddle in the portal Cucumber context: subscriptions are set by the steps, nothing leaves the test. */
 @Primary
 public class FakePaymentProviderService implements IPaymentProviderService {
 
@@ -21,15 +21,15 @@ public class FakePaymentProviderService implements IPaymentProviderService {
     private final List<String> revoked = new CopyOnWriteArrayList<>();
 
     @Override
-    public String createCheckout(String customerRef, String email, String successUrl, String returnUrl) {
+    public String createCheckout(String customerRef, String email) {
         knownCustomers.add(customerRef);
-        return "https://polar.test/checkout/" + customerRef;
+        return "https://app.example.test/abo/bezahlen?_ptxn=txn_" + customerRef;
     }
 
     @Override
-    public Optional<String> createCustomerPortal(String customerRef, String returnUrl) {
-        return knownCustomers.contains(customerRef)
-                ? Optional.of("https://polar.test/portal/" + customerRef) : Optional.empty();
+    public Optional<String> createCustomerPortal(String subscriptionId) {
+        return subscriptions.containsKey(subscriptionId)
+                ? Optional.of("https://customer-portal.paddle.test/" + subscriptionId) : Optional.empty();
     }
 
     @Override

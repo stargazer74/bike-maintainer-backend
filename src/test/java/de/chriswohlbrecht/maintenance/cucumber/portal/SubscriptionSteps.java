@@ -50,7 +50,7 @@ public class SubscriptionSteps {
     private void subscription(String email, SubscriptionStatus status, LocalDate paidUntil) {
         subscriptionRepository.save(Subscription.builder()
                 .user(user(email))
-                .provider(SubscriptionProvider.POLAR)
+                .provider(SubscriptionProvider.PADDLE)
                 .externalId("sub_" + UUID.randomUUID())
                 .status(status)
                 .paidUntil(paidUntil)
