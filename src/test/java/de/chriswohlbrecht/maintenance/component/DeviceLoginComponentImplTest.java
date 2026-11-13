@@ -9,6 +9,7 @@ import de.chriswohlbrecht.maintenance.component.model.SessionUser;
 import de.chriswohlbrecht.maintenance.configuration.SecurityProperties;
 import de.chriswohlbrecht.maintenance.exception.AccountUnusableException;
 import de.chriswohlbrecht.maintenance.exception.AuthenticationFailedException;
+import de.chriswohlbrecht.maintenance.exception.InvalidTokenException;
 import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
 import de.chriswohlbrecht.maintenance.mapper.UserMapperImpl;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
@@ -189,6 +190,41 @@ class DeviceLoginComponentImplTest {
         assertThat(meterRegistry.counter("bm.auth.device_session", "result", "success").count()).isEqualTo(1.0);
         // The app renews its session instead of logging in again: that counts as a login for the retention.
         verify(accountRetentionComponent).keepAfterLogin(user);
+    }
+
+    @Test
+    void exchangeStoresTheNextTokenTheAppChose() {
+        String next = "N".repeat(43);
+        DeviceLogin device = device(NOW.minusDays(3));
+        when(deviceLoginRepository.findByTokenHash(SecureTokenHelper.hash(TOKEN))).thenReturn(Optional.of(device));
+        when(deviceLoginRepository.findByTokenHash(SecureTokenHelper.hash(next))).thenReturn(Optional.empty());
+        when(deviceLoginRepository.findByPreviousTokenHash(SecureTokenHelper.hash(next))).thenReturn(Optional.empty());
+        when(deviceLoginRepository.rotate(3L, SecureTokenHelper.hash(TOKEN), SecureTokenHelper.hash(next), NOW))
+                .thenReturn(1);
+
+        DeviceLoginResponse response = component.exchange(sessionRequest().nextDeviceToken(next), httpRequest,
+                httpResponse);
+
+        assertThat(response.getDeviceToken()).isEqualTo(next);
+    }
+
+    @Test
+    void nextTokenThatIsNotNewIsRejectedBeforeAnythingChanges() {
+        String known = "K".repeat(43);
+        when(deviceLoginRepository.findByTokenHash(SecureTokenHelper.hash(known))).thenReturn(Optional.empty());
+        when(deviceLoginRepository.findByPreviousTokenHash(SecureTokenHelper.hash(known)))
+                .thenReturn(Optional.of(device(NOW.minusDays(3))));
+
+        assertThatThrownBy(() -> component.exchange(sessionRequest().nextDeviceToken(TOKEN), httpRequest, httpResponse))
+                .isInstanceOf(InvalidTokenException.class);
+        assertThatThrownBy(() -> component.exchange(sessionRequest().nextDeviceToken(known), httpRequest, httpResponse))
+                .isInstanceOf(InvalidTokenException.class);
+
+        verify(deviceLoginRepository, never()).rotate(any(), any(), any(), any());
+        verify(deviceLoginRepository, never()).delete(any());
+        verifyNoInteractions(sessionComponent);
+        assertThat(meterRegistry.counter("bm.auth.device_session", "result", "next_token_unusable").count())
+                .isEqualTo(2.0);
     }
 
     @Test

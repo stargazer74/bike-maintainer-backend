@@ -10,6 +10,7 @@ import de.chriswohlbrecht.maintenance.configuration.OperatingModeCondition;
 import de.chriswohlbrecht.maintenance.configuration.SecurityProperties;
 import de.chriswohlbrecht.maintenance.exception.AccountUnusableException;
 import de.chriswohlbrecht.maintenance.exception.AuthenticationFailedException;
+import de.chriswohlbrecht.maintenance.exception.InvalidTokenException;
 import de.chriswohlbrecht.maintenance.exception.TooManyRequestsException;
 import de.chriswohlbrecht.maintenance.mapper.UserMapper;
 import de.chriswohlbrecht.maintenance.persistence.model.AppUser;
@@ -133,6 +134,8 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
     public DeviceLoginResponse exchange(DeviceSessionRequest request, HttpServletRequest httpRequest,
                                         HttpServletResponse httpResponse) {
         String hash = SecureTokenHelper.hash(request.getDeviceToken());
+        String next = request.getNextDeviceToken();
+        requireUsableNextToken(next, request.getDeviceToken());
         Optional<DeviceLogin> found = deviceLoginRepository.findByTokenHash(hash);
         if (found.isEmpty()) {
             Optional<DeviceLogin> reused = deviceLoginRepository.findByPreviousTokenHash(hash);
@@ -153,7 +156,8 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
             throw rejected("invalid");
         }
 
-        String token = SecureTokenHelper.generate();
+        // Chosen by the app and stored there before sending: a lost answer then does not cost the login (#164).
+        String token = next != null ? next : SecureTokenHelper.generate();
         if (deviceLoginRepository.rotate(device.getId(), hash, SecureTokenHelper.hash(token), now) != 1) {
             // Another request exchanged the same token a moment earlier; that one keeps the device.
             throw rejected("invalid");
@@ -212,6 +216,24 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
     public int deleteUnused() {
         return deviceLoginRepository.deleteUnusedSince(
                 LocalDateTime.now(clock).minus(securityProperties.deviceLoginIdleTimeout()));
+    }
+
+    /**
+     * A client-chosen next token must be new: not the token it replaces and not the current or previous token of any
+     * device (the unique keys would fail later, and a known token must never come back). Its format is checked by the
+     * request validation. 256 random bits cannot be guessed, so this answer reveals nothing.
+     */
+    private void requireUsableNextToken(String next, String current) {
+        if (next == null) {
+            return;
+        }
+        String nextHash = SecureTokenHelper.hash(next);
+        if (next.equals(current)
+                || deviceLoginRepository.findByTokenHash(nextHash).isPresent()
+                || deviceLoginRepository.findByPreviousTokenHash(nextHash).isPresent()) {
+            meterRegistry.counter(SESSION_METRIC, "result", "next_token_unusable").increment();
+            throw new InvalidTokenException("The next device token is not usable");
+        }
     }
 
     /**
