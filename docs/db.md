@@ -50,6 +50,7 @@ The diagram in `db-schema.drawio` shows the same schema.
 | V9 | `device_login` (apps that stay logged in) |
 | V10 | `vehicle_specification` (target values), `measurement_valve`, `measurement_brakes`, `measurement_chain`, `measurement_tires` |
 | V14 | `app_user.deletion_notice_sent_at`, `app_user.keep_until` (deletion of expired accounts) |
+| V18 | `maintenance_log.client_entry_id` (unique per vehicle; repeated creates from the app's offline queue) |
 
 **Initial admin (V4).** The migration creates one `ADMIN` account whose email comes from the Flyway placeholder `initialAdminEmail` (`BM_INITIAL_ADMIN_EMAIL`, default `admin@localhost`; stored trimmed and lower-cased). All vehicles that existed before user accounts are assigned to it. The placeholder is only read when V4 runs, so `BM_INITIAL_ADMIN_EMAIL` must be set **before** the first start of that version; changing it later does not rename the account. The password cannot be hashed in SQL: the account starts without one, and on every startup `InitialAdminComponentImpl` sets `BM_INITIAL_ADMIN_PASSWORD` (BCrypt) if the account still has no password. An existing password is never overwritten.
 
@@ -125,6 +126,7 @@ One row per maintenance/workshop visit on a vehicle — what was checked/replace
 | `notes` | VARCHAR(1000) | Optional free-text notes about the visit |
 | `labor_cost` | DECIMAL(10,2), nullable | Labor cost of the visit |
 | `currency` | VARCHAR(3) | Currency of `labor_cost` and of the material prices; taken from the user's currency when the entry is created |
+| `client_entry_id` | CHAR(36), nullable, UNIQUE with `vehicle_id` | UUID sent by a client (app offline queue) with a new entry; a resent create with the same id returns this entry instead of a duplicate. Never changed |
 | `created_at` | TIMESTAMP | Row creation time |
 
 A single visit typically covers several tasks (e.g. an oil change combined with a valve clearance check) with the same date and mileage — which of the `maintenance_task`s were covered is recorded in `maintenance_log_task`, not on this table directly.

@@ -35,6 +35,7 @@ public interface MaintenanceLogMapper {
     @Mapping(target = "vehicle", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "currency", ignore = true)
+    @Mapping(target = "clientEntryId", ignore = true)
     void updateEntityFromRequest(MaintenanceLogRequest request, @MappingTarget MaintenanceLog log);
 
     @Mapping(target = "id", ignore = true)

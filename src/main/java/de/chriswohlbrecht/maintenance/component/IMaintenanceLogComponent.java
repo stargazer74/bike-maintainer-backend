@@ -3,6 +3,7 @@ package de.chriswohlbrecht.maintenance.component;
 import de.chriswohlbrecht.maintenance.api.model.CostSummaryEntry;
 import de.chriswohlbrecht.maintenance.api.model.Currency;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
+import de.chriswohlbrecht.maintenance.component.model.LogCreation;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
 
@@ -16,7 +17,11 @@ public interface IMaintenanceLogComponent {
 
     Optional<MaintenanceLogResponse> getMaintenanceLog(Long vehicleId, Long logId);
 
-    Optional<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request);
+    /**
+     * Creates the log, or returns the existing one if the vehicle already has a log with the request's
+     * {@code clientEntryId}. Empty for unknown and foreign vehicles.
+     */
+    Optional<LogCreation> createMaintenanceLog(Long vehicleId, MaintenanceLogRequest request);
 
     /**
      * Like {@link #createMaintenanceLog(Long, MaintenanceLogRequest)}, but the costs are in {@code currency} instead of

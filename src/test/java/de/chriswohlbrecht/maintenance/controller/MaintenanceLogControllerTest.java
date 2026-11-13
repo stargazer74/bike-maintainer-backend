@@ -4,6 +4,7 @@ import de.chriswohlbrecht.maintenance.api.handler.MaintenanceLogsApi;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogRequest;
 import de.chriswohlbrecht.maintenance.api.model.MaintenanceLogResponse;
 import de.chriswohlbrecht.maintenance.component.IMaintenanceLogComponent;
+import de.chriswohlbrecht.maintenance.component.model.LogCreation;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
 import de.chriswohlbrecht.maintenance.exception.InvalidLogReferenceException;
 import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
@@ -121,6 +122,24 @@ class MaintenanceLogControllerTest {
 
     /**
      * Test case for createMaintenanceLog.
+     * Verifies that a resent entry (known clientEntryId) answers 200 with the existing log.
+     */
+    @Test
+    void testCreateMaintenanceLogWithKnownClientEntryIdShouldReturnOk() throws Exception {
+        MaintenanceLogRequest request = logRequest().mileageAtPerformed(12000);
+        MaintenanceLogResponse response = Instancio.create(MaintenanceLogResponse.class).id(20L).vehicleId(1L);
+        when(maintenanceLogComponent.createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class)))
+                .thenReturn(Optional.of(new LogCreation(response, false)));
+
+        mockMvc.perform(post(MaintenanceLogsApi.PATH_CREATE_MAINTENANCE_LOG, 1L)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(20));
+    }
+
+    /**
+     * Test case for createMaintenanceLog.
      * Verifies that a new log is created with a 201 CREATED response.
      */
     @Test
@@ -130,7 +149,7 @@ class MaintenanceLogControllerTest {
         MaintenanceLogRequest request = logRequest().mileageAtPerformed(12000);
         MaintenanceLogResponse response = Instancio.create(MaintenanceLogResponse.class).id(20L).vehicleId(1L);
         when(maintenanceLogComponent.createMaintenanceLog(eq(1L), any(MaintenanceLogRequest.class)))
-                .thenReturn(Optional.of(response));
+                .thenReturn(Optional.of(new LogCreation(response, true)));
 
         mockMvc.perform(post(MaintenanceLogsApi.PATH_CREATE_MAINTENANCE_LOG, 1L)
                         .contentType("application/json")

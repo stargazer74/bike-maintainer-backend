@@ -16,10 +16,13 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "maintenance_log")
@@ -59,6 +62,14 @@ public class MaintenanceLog {
     @Builder.Default
     @Column(nullable = false, length = 3)
     private String currency = "EUR";
+
+    /**
+     * UUID the client sent when creating the log, if any; unique per vehicle, so a resent create finds this log
+     * instead of creating a second one. Never changed after creation.
+     */
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "client_entry_id", length = 36, updatable = false, columnDefinition = "CHAR(36)")
+    private UUID clientEntryId;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

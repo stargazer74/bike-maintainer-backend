@@ -13,6 +13,7 @@ import de.chriswohlbrecht.maintenance.component.helper.MaintenanceCostHelper;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportEntry;
 import de.chriswohlbrecht.maintenance.component.helper.MaintenanceReportPdfHelper;
 import de.chriswohlbrecht.maintenance.component.model.MaintenanceReport;
+import de.chriswohlbrecht.maintenance.component.model.LogCreation;
 import de.chriswohlbrecht.maintenance.exception.InvalidLogReferenceException;
 import de.chriswohlbrecht.maintenance.exception.InvalidMaterialException;
 import de.chriswohlbrecht.maintenance.exception.InvalidTaskReferenceException;
@@ -49,6 +50,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -163,6 +165,7 @@ class MaintenanceLogComponentImplTest {
         return Instancio.of(MaintenanceLogRequest.class)
                 .set(Select.field(MaintenanceLogRequest::getMaterials), List.of())
                 .set(Select.field(MaintenanceLogRequest::getLaborCost), null)
+                .set(Select.field(MaintenanceLogRequest::getClientEntryId), null)
                 .create();
     }
 
@@ -245,11 +248,12 @@ class MaintenanceLogComponentImplTest {
         });
         when(maintenanceLogTaskRepository.findAllByLog_Id(20L)).thenReturn(List.of());
 
-        Optional<MaintenanceLogResponse> result = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
+        Optional<LogCreation> result = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
 
         assertThat(result).isPresent();
-        assertThat(result.get().getId()).isEqualTo(20L);
-        assertThat(result.get().getVehicleId()).isEqualTo(vehicle.getId());
+        assertThat(result.get().created()).isTrue();
+        assertThat(result.get().log().getId()).isEqualTo(20L);
+        assertThat(result.get().log().getVehicleId()).isEqualTo(vehicle.getId());
         verify(maintenanceLogTaskRepository, never()).save(any());
         verify(maintenanceLogTaskRepository, never()).deleteAllByLog_Id(any());
     }
@@ -349,7 +353,7 @@ class MaintenanceLogComponentImplTest {
         });
         when(maintenanceLogTaskRepository.findAllByLog_Id(20L)).thenReturn(List.of());
 
-        Optional<MaintenanceLogResponse> result = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
+        Optional<LogCreation> result = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
 
         assertThat(result).isPresent();
         verify(maintenanceLogTaskRepository).save(argThat(link ->
@@ -380,7 +384,7 @@ class MaintenanceLogComponentImplTest {
                 .newTasks(List.of()).mileageAtPerformed(12000);
         when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
 
-        Optional<MaintenanceLogResponse> result = maintenanceLogComponent.createMaintenanceLog(99L, request);
+        Optional<LogCreation> result = maintenanceLogComponent.createMaintenanceLog(99L, request);
 
         assertThat(result).isEmpty();
         verify(maintenanceLogRepository, never()).save(any());
@@ -676,7 +680,7 @@ class MaintenanceLogComponentImplTest {
                 capturedMaterials());
 
         MaintenanceLogResponse response = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request)
-                .orElseThrow();
+                .orElseThrow().log();
 
         assertThat(capturedMaterials()).extracting(MaintenanceLogMaterial::getName, MaintenanceLogMaterial::getPosition,
                         material -> material.getTask() == null ? null : material.getTask().getId(),
@@ -886,5 +890,56 @@ class MaintenanceLogComponentImplTest {
 
         assertThat(maintenanceLogComponent.getCostSummary(99L)).isEmpty();
         verify(maintenanceLogRepository, never()).findAllByVehicle_Id(any());
+    }
+
+    @Test
+    void createMaintenanceLog_knownClientEntryId_returnsTheExistingLogWithoutCreating() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        UUID entry = UUID.fromString("5b2c3f8e-1d4a-4c1e-9f00-000000000001");
+        MaintenanceLogRequest request = new MaintenanceLogRequest(LocalDate.of(2026, 3, 1), 8600).clientEntryId(entry);
+        MaintenanceLog existing = MaintenanceLog.builder().id(20L).vehicle(vehicle)
+                .performedAt(LocalDate.of(2026, 3, 1)).mileageAtPerformed(8600).clientEntryId(entry).build();
+        when(vehicleRepository.findLockedByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findByVehicle_IdAndClientEntryId(vehicle.getId(), entry))
+                .thenReturn(Optional.of(existing));
+
+        Optional<LogCreation> result = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
+
+        assertThat(result).get().extracting(LogCreation::created).isEqualTo(false);
+        assertThat(result.get().log().getId()).isEqualTo(20L);
+        assertThat(result.get().log().getClientEntryId()).isEqualTo(entry);
+        verify(maintenanceLogRepository, never()).save(any());
+    }
+
+    @Test
+    void createMaintenanceLog_newClientEntryId_isStoredWithTheLog() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        UUID entry = UUID.fromString("5b2c3f8e-1d4a-4c1e-9f00-000000000002");
+        MaintenanceLogRequest request = new MaintenanceLogRequest(LocalDate.of(2026, 3, 1), 8600).clientEntryId(entry);
+        when(vehicleRepository.findLockedByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceLogRepository.findByVehicle_IdAndClientEntryId(vehicle.getId(), entry))
+                .thenReturn(Optional.empty());
+        when(maintenanceLogRepository.save(any(MaintenanceLog.class))).thenAnswer(invocation -> {
+            MaintenanceLog toSave = invocation.getArgument(0);
+            toSave.setId(21L);
+            return toSave;
+        });
+
+        Optional<LogCreation> result = maintenanceLogComponent.createMaintenanceLog(vehicle.getId(), request);
+
+        assertThat(result).get().extracting(LogCreation::created).isEqualTo(true);
+        verify(maintenanceLogRepository).save(argThat(log -> entry.equals(log.getClientEntryId())));
+    }
+
+    @Test
+    void createMaintenanceLog_clientEntryIdOnForeignVehicle_isEmpty() {
+        MaintenanceLogRequest request = new MaintenanceLogRequest(LocalDate.of(2026, 3, 1), 8600)
+                .clientEntryId(UUID.fromString("5b2c3f8e-1d4a-4c1e-9f00-000000000003"));
+        when(vehicleRepository.findLockedByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
+
+        assertThat(maintenanceLogComponent.createMaintenanceLog(99L, request)).isEmpty();
+        verify(maintenanceLogRepository, never()).findByVehicle_IdAndClientEntryId(any(), any());
+        verify(maintenanceLogRepository, never()).save(any());
     }
 }

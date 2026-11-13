@@ -41,7 +41,8 @@ public class MaintenanceLogController implements MaintenanceLogsApi {
     public ResponseEntity<MaintenanceLogResponse> createMaintenanceLog(Long vehicleId,
                                                                          MaintenanceLogRequest maintenanceLogRequest) {
         return maintenanceLogComponent.createMaintenanceLog(vehicleId, maintenanceLogRequest)
-                .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
+                .map(result -> ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                        .body(result.log()))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
