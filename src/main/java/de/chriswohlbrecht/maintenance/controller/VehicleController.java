@@ -1,6 +1,7 @@
 package de.chriswohlbrecht.maintenance.controller;
 
 import de.chriswohlbrecht.maintenance.api.handler.VehiclesApi;
+import de.chriswohlbrecht.maintenance.api.model.MileageRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleRequest;
 import de.chriswohlbrecht.maintenance.api.model.VehicleResponse;
 import de.chriswohlbrecht.maintenance.component.IVehicleComponent;
@@ -37,6 +38,13 @@ public class VehicleController implements VehiclesApi {
     @Override
     public ResponseEntity<VehicleResponse> updateVehicle(Long vehicleId, VehicleRequest vehicleRequest) {
         return vehicleComponent.updateVehicle(vehicleId, vehicleRequest)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @Override
+    public ResponseEntity<VehicleResponse> updateMileage(Long vehicleId, MileageRequest mileageRequest) {
+        return vehicleComponent.updateMileage(vehicleId, mileageRequest.getMileage())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

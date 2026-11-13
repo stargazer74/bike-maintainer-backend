@@ -16,5 +16,12 @@ public interface IVehicleComponent {
 
     Optional<VehicleResponse> updateVehicle(Long vehicleId, VehicleRequest request);
 
+    /**
+     * Raises only the current mileage; the same value changes nothing. Empty for unknown and foreign vehicles.
+     *
+     * @throws de.chriswohlbrecht.maintenance.exception.MileageBelowCurrentException if below the current mileage
+     */
+    Optional<VehicleResponse> updateMileage(Long vehicleId, int mileage);
+
     boolean deleteVehicle(Long vehicleId);
 }

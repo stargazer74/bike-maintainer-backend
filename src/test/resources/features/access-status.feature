@@ -49,6 +49,7 @@ Feature: Access status – trial, subscription and read-only accounts (portal mo
       | PUT    | /api/v1/vehicles/{bike}/maintenance-tasks/{oil} | { "name": "Oil", "intervalKm": 5000 }                                                                       |
       | POST   | /api/v1/vehicles/{bike}/maintenance-logs     | { "performedAt": "2026-01-10", "mileageAtPerformed": 1500, "performedTaskIds": [] }                            |
       | PUT    | /api/v1/vehicles/{bike}/specifications       | { "cylinders": 2 }                                                                                             |
+      | PUT    | /api/v1/vehicles/{bike}/mileage              | { "mileage": 3000 }                                                                                            |
 
   Scenario: A read-only account cannot download worksheets or import vehicles
     Given a GET request is sent to "/api/v1/vehicles/{bike}/export"

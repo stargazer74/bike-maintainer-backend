@@ -161,3 +161,54 @@ Feature: Vehicle management
       | negative mileage      | "MOTORCYCLE" | 2021      | "2021-01-01" | -1      |
       | invalid date          | "MOTORCYCLE" | 2021      | "2021-13-45" | 5000    |
       | missing date          | "MOTORCYCLE" | 2021      | null         | 5000    |
+
+  Scenario: Raising the mileage changes only the mileage
+    Given a vehicle "mileage" exists with body:
+      """
+      { "name": "Tenere", "type": "MOTORCYCLE", "make": "Yamaha", "modelYear": 2021, "firstRegistrationDate": "2021-05-01", "currentMileage": 24000 }
+      """
+    When a PUT request is sent to "/api/v1/vehicles/{mileage}/mileage" with body:
+      """
+      { "mileage": 24500 }
+      """
+    Then the response status code is 200
+    And the JSON response field "currentMileage" equals "24500"
+    And the JSON response field "name" equals "Tenere"
+    And the JSON response field "make" equals "Yamaha"
+
+  Scenario: Sending the same mileage again changes nothing
+    Given a vehicle "same" exists with body:
+      """
+      { "name": "Same", "type": "CAR", "modelYear": 2020, "firstRegistrationDate": "2020-01-01", "currentMileage": 5000 }
+      """
+    When a PUT request is sent to "/api/v1/vehicles/{same}/mileage" with body:
+      """
+      { "mileage": 5000 }
+      """
+    Then the response status code is 200
+    And the JSON response field "currentMileage" equals "5000"
+
+  Scenario: A mileage below the current one is rejected
+    Given a vehicle "lower" exists with body:
+      """
+      { "name": "Lower", "type": "CAR", "modelYear": 2020, "firstRegistrationDate": "2020-01-01", "currentMileage": 5000 }
+      """
+    When a PUT request is sent to "/api/v1/vehicles/{lower}/mileage" with body:
+      """
+      { "mileage": 4999 }
+      """
+    Then the response status code is 409
+    And the JSON response field "code" equals "MILEAGE_BELOW_CURRENT"
+    When a GET request is sent to "/api/v1/vehicles/{lower}"
+    Then the JSON response field "currentMileage" equals "5000"
+
+  Scenario: A negative mileage is rejected
+    Given a vehicle "negative" exists with body:
+      """
+      { "name": "Negative", "type": "CAR", "modelYear": 2020, "firstRegistrationDate": "2020-01-01", "currentMileage": 5000 }
+      """
+    When a PUT request is sent to "/api/v1/vehicles/{negative}/mileage" with body:
+      """
+      { "mileage": -1 }
+      """
+    Then the response status code is 400

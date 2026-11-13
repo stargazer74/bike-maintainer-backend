@@ -56,6 +56,13 @@ Feature: Users only see and change their own vehicles
       """
     Then the response status code is 404
 
+  Scenario: Raising the mileage of another user's vehicle answers 404
+    When a PUT request is sent to "/api/v1/vehicles/{alicesBike}/mileage" with body:
+      """
+      { "mileage": 99999 }
+      """
+    Then the response status code is 404
+
   Scenario: Adding tasks or logs to another user's vehicle answers 404
     When a POST request is sent to "/api/v1/vehicles/{alicesBike}/maintenance-tasks" with body:
       """
