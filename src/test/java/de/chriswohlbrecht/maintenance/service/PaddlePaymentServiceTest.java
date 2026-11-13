@@ -191,6 +191,17 @@ class PaddlePaymentServiceTest {
         assertThat(subscription.currency()).isNull();
     }
 
+    /** A price that is not a number is a broken answer, not a crash. */
+    @Test
+    void subscriptionWithAnInvalidPriceIsAProviderProblem() {
+        server.expect(requestTo(API + "/subscriptions/sub_1"))
+                .andRespond(withSuccess(SUBSCRIPTION.replace("\"amount\":\"1499\"", "\"amount\":\"14.99\""),
+                        MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> service.getSubscription("sub_1"))
+                .isInstanceOf(PaymentProviderUnavailableException.class);
+    }
+
     @Test
     void unknownSubscriptionIsEmptyAndErrorsAreProviderProblems() {
         server.expect(requestTo(API + "/subscriptions/sub_x")).andRespond(withStatus(HttpStatus.NOT_FOUND));

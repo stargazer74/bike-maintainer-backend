@@ -265,7 +265,7 @@ public class PaddlePaymentService implements IPaymentProviderService {
                 dateTime(subscription.path("started_at")),
                 dateTime(period.path("starts_at")),
                 null,
-                price.path("amount").isString() ? Long.parseLong(price.path("amount").asString()) : null,
+                price.path("amount").isMissingNode() || price.path("amount").isNull() ? null : amount(price, "amount"),
                 subscription.path("currency_code").isString() ? subscription.path("currency_code").asString() : null);
     }
 
