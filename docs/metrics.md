@@ -52,6 +52,10 @@ Namen oder freie Pfade.
 
 Im Portal setzt `portal/compose.yaml` `LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`: jede Logzeile ist ECS-JSON
 (`log.level`, `log.logger`, `message`, …). Während einer Anfrage enthält sie zusätzlich `http.method` und
-`http.route` – das Pfad-Muster wie `/api/v1/vehicles/{vehicleId}`, nie die konkrete URL oder Query-Parameter.
+`http.route` – das Pfad-Muster wie `/api/v1/vehicles/{vehicleId}`, nie die konkrete URL oder Query-Parameter –
+sowie `traceId` und `spanId` (Micrometer Tracing). Die `traceId` übernimmt das Backend aus dem W3C-Header
+`traceparent`, den das nginx des Frontends setzt; dessen Zugriffs-Log enthält dieselbe ID als `trace_id=…`. So
+findet die Suche nach einer Trace-ID alle Zeilen einer Anfrage in beiden Logs. Ohne den Header (z. B. direkter
+Aufruf) erzeugt das Backend eine eigene. Spans werden nirgendwohin exportiert.
 Ohne die Variable (Haushalt, lokale Entwicklung) bleibt es bei lesbaren Textzeilen. Logs enthalten keine
 E-Mail-Adressen, Tokens oder Passwörter.
