@@ -144,8 +144,9 @@ only available in this profile. `./mvnw spring-boot:run` and the development
 Metrics in Prometheus format at `/actuator/prometheus` on the **management port 8081** only (not reachable through
 the proxy); list and meaning in [`docs/metrics.md`](docs/metrics.md). With `LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`
 every log line is ECS JSON; during a request it carries `http.method` and the route pattern `http.route`
-(e.g. `/api/v1/vehicles/{vehicleId}`), never the concrete URL or query string. Logs never contain email addresses,
-tokens or passwords.
+(e.g. `/api/v1/vehicles/{vehicleId}`), never the concrete URL or query string, plus `traceId`/`spanId` (Micrometer
+Tracing, Brave). The trace ID is taken over from the W3C `traceparent` header set by the frontend's nginx, which logs
+the same ID as `trace_id=…`; spans are not exported. Logs never contain email addresses, tokens or passwords.
 
 ## Static analysis
 
