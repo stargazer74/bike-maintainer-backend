@@ -1,7 +1,9 @@
 # Geräte-Anmeldung („angemeldet bleiben“) – Design
 
-Stand: 2026-11-06 · Epic stargazer74/bike-maintainer-backend#104, Teilprojekt A der Android-App (Teilprojekt B: Android-App Version 1, eigene Spec) · Tickets:
-stargazer74/bike-maintainer-api#25, stargazer74/bike-maintainer-backend#103, stargazer74/bike-maintainer-frontend#79
+Stand: 2026-11-06, nachgezogen 2026-11-18 (Token-Tausch mit von der App gewähltem Token #164, Widerruf bei
+Deaktivierung #9, Kontoaufbewahrung #140) · Epic stargazer74/bike-maintainer-backend#104, Teilprojekt A der
+Android-App (Teilprojekt B: Android-App Version 1, eigene Spec) · Tickets: stargazer74/bike-maintainer-api#25,
+stargazer74/bike-maintainer-backend#103, stargazer74/bike-maintainer-frontend#79
 
 ## Ziel
 
@@ -24,21 +26,25 @@ Wartungen) aktuelle Daten vom Server holen.
 - **Kein Bearer-Token bei jeder Anfrage.** Das Geräte-Token wird nur gegen eine normale Sitzung getauscht (Cookie +
   CSRF wie in der Web-App); es gibt keine zweite Sicherheitskette.
 - **Die Web-App benutzt keine Geräte-Tokens** und erscheint nicht in der Geräteliste.
-- Nicht enthalten: Geräte-Widerruf bei Admin-Deaktivierung (kommt mit stargazer74/bike-maintainer-backend#9; bis dahin
-  lehnt `device-session` deaktivierte Konten ab), Push-Benachrichtigungen, Anmeldung per Biometrie.
+- Nicht enthalten: Push-Benachrichtigungen, Anmeldung per Biometrie.
 
-## Schnittstelle (API, Spec 2.10.0, additiv)
+## Schnittstelle (API, ab Spec 2.10.0, additiv; `nextDeviceToken` ab 2.20.0)
 
 | Endpunkt | Zweck | Antworten |
 |---|---|---|
 | `POST /api/v1/auth/device-login` `DeviceLoginRequest { email, password, deviceName }` | Anmeldung mit „angemeldet bleiben“ | `200 DeviceLoginResponse { user, deviceToken }` + Sitzungs-Cookie; `400`, `401`, `403` (`EMAIL_NOT_VERIFIED`, `ACCOUNT_DISABLED`), `429` wie beim Login; `404` im Haushaltsmodus |
-| `POST /api/v1/auth/device-session` `DeviceSessionRequest { deviceToken }` | neue Sitzung mit dem Geräte-Token; liefert ein **neues** Token | `200 DeviceLoginResponse` + Sitzungs-Cookie; `400`; `401` (ungültig, abgelaufen, widerrufen, wiederverwendet, Konto deaktiviert oder unbestätigt – immer dieselbe Antwort); `429`; `404` im Haushaltsmodus |
+| `POST /api/v1/auth/device-session` `DeviceSessionRequest { deviceToken, nextDeviceToken? }` | neue Sitzung mit dem Geräte-Token; liefert ein **neues** Token | `200 DeviceLoginResponse` + Sitzungs-Cookie; `400` (Validierung, oder `nextDeviceToken` nicht neu); `401` (ungültig, abgelaufen, widerrufen, wiederverwendet, Konto deaktiviert oder unbestätigt – immer dieselbe Antwort); `429`; `404` im Haushaltsmodus |
 | `GET /api/v1/auth/devices` | eigene angemeldete Geräte | `200 [ DeviceResponse { id, name, createdAt, lastUsedAt, current } ]`; `401`; `404` im Haushaltsmodus |
 | `DELETE /api/v1/auth/devices/{deviceId}` | eigenes Gerät abmelden | `204`; `401`; `404` (unbekannt, fremd oder Haushaltsmodus) |
 
-- `deviceName`: 1–100 Zeichen, vom Gerät gewählt (z. B. Modellname); wird nur angezeigt.
+- `deviceName`: 1–100 Zeichen, mindestens ein Nicht-Leerzeichen, vom Gerät gewählt (z. B. Modellname); wird
+  getrimmt und nur angezeigt.
 - `deviceToken`: 256 Bit Zufall, Base64url ohne Padding (43 Zeichen). Erscheint nur in den beiden Antworten oben,
   nie in Listen oder Logs.
+- `nextDeviceToken` (optional, seit stargazer74/bike-maintainer-backend#164): das nächste Token, von der App selbst
+  erzeugt (gleiches Format) und **vor** dem Senden gespeichert. Der Server übernimmt es statt eines eigenen und gibt
+  es zurück. Geht die Antwort verloren, kennt die App das neue Token trotzdem. Ohne das Feld erzeugt der Server das
+  Token wie bisher (ältere Apps).
 - `current`: `true` für das Gerät, mit dem die anfragende Sitzung gestartet wurde.
 - `device-login` und `device-session` brauchen keine Anmeldung, aber wie der Login ein CSRF-Token.
 - `POST /api/v1/auth/logout` aus einer Gerätesitzung widerruft zusätzlich dieses Gerät (Beschreibung ergänzen,
@@ -58,10 +64,11 @@ Tabelle `device_login`:
 | `name` | `VARCHAR(100) NOT NULL` | Gerätename |
 | `token_hash` | `CHAR(64) NOT NULL`, eindeutig | SHA-256 (hex) des aktuellen Tokens |
 | `previous_token_hash` | `CHAR(64)`, eindeutig, nullable | SHA-256 des vorherigen Tokens (Wiederverwendung erkennen) |
-| `created_at` | `DATETIME NOT NULL` | Anlage |
-| `last_used_at` | `DATETIME NOT NULL` | letzte Anmeldung oder letzter Tausch |
+| `created_at` | `TIMESTAMP NOT NULL` | Anlage |
+| `last_used_at` | `TIMESTAMP NOT NULL` | letzte Anmeldung oder letzter Tausch |
 
-Index auf `user_id`. Keine IP-Adressen, kein Ort, keine Gerätekennungen außer dem Namen.
+Index auf `user_id`; Tabelle ausdrücklich `utf8mb4` (Gerätenamen mit Emoji, ältere Datenbanken mit latin1). Keine
+IP-Adressen, kein Ort, keine Gerätekennungen außer dem Namen.
 
 ### Ablauf
 
@@ -72,26 +79,31 @@ Index auf `user_id`. Keine IP-Adressen, kein Ort, keine Gerätekennungen außer 
   Token erzeugen (`SecureRandom`), Sitzung über `ISessionComponent.startSession` starten, Geräte-ID als
   Sitzungsattribut `bm.deviceId` speichern.
 - **device-session:**
+  0. Ist `nextDeviceToken` gesetzt, muss es neu sein: nicht gleich dem vorgelegten Token und weder aktueller noch
+     vorheriger Hash irgendeines Geräts. Sonst `400` (Metrik `next_token_unusable`), bevor das vorgelegte Token
+     nachgeschlagen wird. Bei 256 Bit Zufall verrät diese Antwort nichts.
   1. Token hashen; Treffer in `token_hash` suchen.
   2. Kein Treffer, aber Treffer in `previous_token_hash`:
      - innerhalb von 60 Sekunden nach dem letzten Tausch → nur `401` (fast immer die App selbst, z. B.
        Hintergrund-Job und Vordergrund gleichzeitig); Gerät bleibt;
      - später → Gerät löschen **und** alle Sitzungen beenden, die mit ihm gestartet wurden (auch die eines Diebs,
        der die Kopie zuerst getauscht hat), `401` (Wiederverwendung).
-     Apps tauschen ein Token nach dem anderen und versuchen es nach einer `401` einmal erneut, wenn sich das
-     gespeicherte Token inzwischen geändert hat.
+     Apps tauschen ein Token nach dem anderen; hat ein anderer Teil der App inzwischen erneuert, wiederholen sie
+     nur die Anfrage mit der neuen Sitzung statt erneut zu tauschen.
   3. Kein Treffer → `401`.
   4. `last_used_at` älter als `bm.security.device-login-idle-timeout` → Gerät löschen, `401`.
   5. Konto nicht aktiv oder E-Mail nicht bestätigt → `401` (Gerät bleibt; ein reaktiviertes Konto kann es wieder
      nutzen).
-  6. Sonst: neues Token, `previous_token_hash` = alter Hash, `token_hash` = neuer Hash, `last_used_at` = jetzt; in
-     derselben Transaktion; Sitzung starten, `bm.deviceId` setzen. Eine Kontosperre wegen falscher Passwörter
-     blockiert hier nicht (das Token ist kein Rateversuch).
+  6. Sonst: neues Token (`nextDeviceToken` oder vom Server erzeugt), `previous_token_hash` = alter Hash,
+     `token_hash` = neuer Hash, `last_used_at` = jetzt; in derselben Transaktion; Sitzung starten, `bm.deviceId`
+     setzen. Der Tausch zählt als Anmeldung für die Kontoaufbewahrung (`keepAfterLogin`, backend#140). Eine
+     Kontosperre wegen falscher Passwörter blockiert hier nicht (das Token ist kein Rateversuch).
 - **Gleichzeitige Tausch-Anfragen mit demselben Token:** Die Aktualisierung läuft per bedingtem `UPDATE … WHERE
   token_hash = :alt`; nur eine Anfrage gewinnt, die andere bekommt `401` und löst **keinen** Widerruf aus (sie hat
   den aktuellen, nicht den vorherigen Hash geschickt).
-- **Bekannte Kehrseite:** Bricht die Verbindung nach dem Tausch ab, bevor die App das neue Token gespeichert hat,
-  ist das Gerät beim nächsten Versuch abgemeldet (Wiederverwendung). Bewusst in Kauf genommen.
+- **Verlorene Antwort** (backend#164): Bricht die Verbindung nach dem Tausch ab, hat die App das neue Token schon
+  gespeichert („pending“) und legt es beim nächsten Versuch zuerst vor; der Server kennt es als aktuelles Token. Ohne
+  `nextDeviceToken` (ältere Apps) gilt die frühere Kehrseite weiter: Das Gerät ist dann abgemeldet.
 
 ### Widerruf
 
@@ -100,6 +112,7 @@ Index auf `user_id`. Keine IP-Adressen, kein Ort, keine Gerätekennungen außer 
 | Logout aus einer Gerätesitzung (`bm.deviceId` gesetzt) | dieses Gerät löschen |
 | `DELETE /auth/devices/{id}` | dieses Gerät löschen und die Sitzungen des Nutzers beenden, deren Attribut `bm.deviceId` diese ID trägt (Suche über `findByPrincipalName`, wie beim Passwortwechsel) |
 | Passwort ändern, Passwort zurücksetzen | **alle** Geräte des Kontos löschen |
+| Konto durch einen Admin deaktivieren (backend#9) | **alle** Geräte des Kontos löschen |
 | Konto löschen | Geräte per `ON DELETE CASCADE` |
 | 90 Tage ohne Nutzung | `device-session` lehnt ab; der nächtliche `AccountCleanupComponent` löscht abgelaufene Geräte |
 
@@ -109,7 +122,8 @@ Index auf `user_id`. Keine IP-Adressen, kein Ort, keine Gerätekennungen außer 
   `device_session` (`POST /api/v1/auth/device-session`).
 - `SecurityConfiguration`: beide Endpunkte ohne Anmeldung erlaubt; `HouseholdSecurityConfiguration`: alle neuen
   Pfade in `PORTAL_ONLY_ENDPOINTS`.
-- Fehlerantworten von `device-session` verraten nicht, warum ein Token nicht gilt.
+- Fehlerantworten von `device-session` verraten nicht, warum ein Token nicht gilt (die `400` für ein nicht neues
+  `nextDeviceToken` betrifft nur das von der App gewählte Token).
 
 ### Einstellungen
 
@@ -120,7 +134,7 @@ Index auf `user_id`. Keine IP-Adressen, kein Ort, keine Gerätekennungen außer 
 | Metrik | Tags | Bedeutung |
 |---|---|---|
 | `bm.auth.device_login` | `result`: `success`, `bad_credentials`, `locked`, `disabled`, `unverified` | Anmeldungen mit „angemeldet bleiben“ |
-| `bm.auth.device_session` | `result`: `success`, `invalid`, `reused` | Tausch Token gegen Sitzung; `reused` = Wiederverwendung erkannt |
+| `bm.auth.device_session` | `result`: `success`, `invalid`, `reused`, `next_token_unusable` | Tausch Token gegen Sitzung; `reused` = Wiederverwendung erkannt; `next_token_unusable` = `nextDeviceToken` nicht neu (`400`) |
 | `bm.protection.rate_limited` | neue `group`-Werte `device_login`, `device_session` | |
 
 Alle Zähler ab dem Start mit 0 registriert. Logs nur mit Nutzer- und Geräte-ID; nie Token, Hash oder E-Mail.

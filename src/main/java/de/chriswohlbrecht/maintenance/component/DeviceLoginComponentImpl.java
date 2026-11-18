@@ -90,7 +90,7 @@ public class DeviceLoginComponentImpl implements IDeviceLoginComponent {
         for (String result : List.of("success", "bad_credentials", "locked", "disabled", "unverified")) {
             meterRegistry.counter(LOGIN_METRIC, "result", result);
         }
-        for (String result : List.of("success", "invalid", "reused")) {
+        for (String result : List.of("success", "invalid", "reused", "next_token_unusable")) {
             meterRegistry.counter(SESSION_METRIC, "result", result);
         }
     }
