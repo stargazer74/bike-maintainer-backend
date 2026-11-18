@@ -29,8 +29,8 @@ import java.util.regex.Pattern;
 
 /**
  * Paddle Billing API (https://developer.paddle.com/api-reference). Only sends what a checkout needs: the price, our
- * random customer reference and the email address (for the invoice) – no IP address, no internal ids. Amounts are
- * strings in the smallest unit of the currency.
+ * random customer reference, the email address (for the invoice) and the account's language (for Paddle's emails) –
+ * no IP address, no internal ids. Amounts are strings in the smallest unit of the currency.
  */
 @Slf4j
 @Service
@@ -58,8 +58,8 @@ public class PaddlePaymentService implements IPaymentProviderService {
     private final PaddleProperties paddleProperties;
 
     @Override
-    public String createCheckout(String customerRef, String email) {
-        String customerId = customerIdOf(customerRef, email);
+    public String createCheckout(String customerRef, String email, String language) {
+        String customerId = customerIdOf(customerRef, email, language);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("items", List.of(Map.of("price_id", paddleProperties.priceId(), "quantity", 1)));
         body.put("customer_id", customerId);
@@ -188,10 +188,13 @@ public class PaddlePaymentService implements IPaymentProviderService {
 
     /**
      * Paddle keeps one customer per email address: a second checkout with the same address reuses it (409 names the
-     * existing one). Our reference travels on the transaction, not on the customer.
+     * existing one). Our reference travels on the transaction, not on the customer. The customer's locale is the
+     * language of the receipts and subscription emails Paddle sends; an existing customer gets the account's current
+     * language, as it may have changed since the first checkout.
      */
-    private String customerIdOf(String customerRef, String email) {
-        Map<String, Object> body = Map.of("email", email, "custom_data", Map.of(CUSTOMER_REF_KEY, customerRef));
+    private String customerIdOf(String customerRef, String email, String language) {
+        Map<String, Object> body = Map.of("email", email, "custom_data", Map.of(CUSTOMER_REF_KEY, customerRef),
+                "locale", language);
         try {
             return requiredText(data(paddleRestClient.post()
                     .uri("/customers")
@@ -203,12 +206,28 @@ public class PaddlePaymentService implements IPaymentProviderService {
             if (e.getStatusCode() == HttpStatus.CONFLICT && e.getResponseBodyAsString().contains(CUSTOMER_EXISTS)) {
                 Matcher matcher = CUSTOMER_ID.matcher(e.getResponseBodyAsString());
                 if (matcher.find()) {
-                    return matcher.group();
+                    String customerId = matcher.group();
+                    updateLocale(customerId, language);
+                    return customerId;
                 }
             }
             throw unavailable("create customer", e);
         } catch (RestClientException e) {
             throw unavailable("create customer", e);
+        }
+    }
+
+    /** Only the language of Paddle's emails; failing to set it does not stop the purchase. */
+    private void updateLocale(String customerId, String language) {
+        try {
+            paddleRestClient.patch()
+                    .uri("/customers/{id}", customerId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("locale", language))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException e) {
+            log.warn("Paddle: update customer locale failed, emails keep the previous language: {}", failure(e));
         }
     }
 
@@ -323,9 +342,13 @@ public class PaddlePaymentService implements IPaymentProviderService {
     }
 
     private static PaymentProviderUnavailableException unavailable(String action, RestClientException e) {
-        // Never the message: it contains Paddle's response body, which may repeat the customer's email address.
-        log.warn("Paddle: {} failed: {}", action, e instanceof RestClientResponseException response
-                ? "HTTP " + response.getStatusCode().value() : e.getClass().getSimpleName());
+        log.warn("Paddle: {} failed: {}", action, failure(e));
         return new PaymentProviderUnavailableException("Paddle: " + action + " failed", e);
+    }
+
+    /** Never the message: it contains Paddle's response body, which may repeat the customer's email address. */
+    private static String failure(RestClientException e) {
+        return e instanceof RestClientResponseException response
+                ? "HTTP " + response.getStatusCode().value() : e.getClass().getSimpleName();
     }
 }

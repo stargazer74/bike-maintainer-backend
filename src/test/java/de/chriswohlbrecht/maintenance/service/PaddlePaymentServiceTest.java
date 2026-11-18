@@ -51,13 +51,14 @@ class PaddlePaymentServiceTest {
                 new PaddleProperties(API, "key", "pdl_ntfset_secret", "pri_1", "test_token"));
     }
 
-    /** Only price, our random reference and the email address – no IP, no internal id. */
+    /** Only price, our random reference, the email address and the language – no IP, no internal id. */
     @Test
     void createCheckoutSendsOnlyWhatTheCheckoutNeeds() {
         server.expect(requestTo(API + "/customers"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(jsonPath("$.email").value("rider@example.org"))
                 .andExpect(jsonPath("$.custom_data.bm_customer_ref").value("ref-1"))
+                .andExpect(jsonPath("$.locale").value("de"))
                 .andRespond(withSuccess("{\"data\":{\"id\":\"ctm_1\"}}", MediaType.APPLICATION_JSON));
         server.expect(requestTo(API + "/transactions"))
                 .andExpect(method(HttpMethod.POST))
@@ -69,25 +70,49 @@ class PaddlePaymentServiceTest {
                 .andRespond(withSuccess("{\"data\":{\"id\":\"txn_1\",\"checkout\":{\"url\":"
                         + "\"https://app.example.org/abo/bezahlen?_ptxn=txn_1\"}}}", MediaType.APPLICATION_JSON));
 
-        assertThat(service.createCheckout("ref-1", "rider@example.org"))
+        assertThat(service.createCheckout("ref-1", "rider@example.org", "de"))
                 .isEqualTo("https://app.example.org/abo/bezahlen?_ptxn=txn_1");
         server.verify();
     }
 
-    /** Paddle keeps one customer per email address: the existing one named in the 409 is reused. */
+    private static final String CUSTOMER_EXISTS = "{\"error\":{\"type\":\"request_error\",\"code\":\"customer_already_exists\","
+            + "\"detail\":\"Customer email conflicts with existing customer ID ctm_01ghbk4xjn4qdsmstcwzgcgg35.\"}}";
+
+    /**
+     * Paddle keeps one customer per email address: the existing one named in the 409 is reused and gets the account's
+     * current language, which may have changed since the first checkout.
+     */
     @Test
-    void createCheckoutReusesTheExistingCustomer() {
+    void createCheckoutReusesTheExistingCustomerWithTheCurrentLanguage() {
         server.expect(requestTo(API + "/customers"))
-                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
-                        .body("{\"error\":{\"type\":\"request_error\",\"code\":\"customer_already_exists\","
-                                + "\"detail\":\"Customer email conflicts with existing customer ID "
-                                + "ctm_01ghbk4xjn4qdsmstcwzgcgg35.\"}}"));
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(CUSTOMER_EXISTS));
+        server.expect(requestTo(API + "/customers/ctm_01ghbk4xjn4qdsmstcwzgcgg35"))
+                .andExpect(method(HttpMethod.PATCH))
+                .andExpect(jsonPath("$.locale").value("en"))
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andRespond(withSuccess("{\"data\":{\"id\":\"ctm_01ghbk4xjn4qdsmstcwzgcgg35\"}}",
+                        MediaType.APPLICATION_JSON));
         server.expect(requestTo(API + "/transactions"))
                 .andExpect(jsonPath("$.customer_id").value("ctm_01ghbk4xjn4qdsmstcwzgcgg35"))
                 .andRespond(withSuccess("{\"data\":{\"id\":\"txn_1\",\"checkout\":{\"url\":\"https://pay\"}}}",
                         MediaType.APPLICATION_JSON));
 
-        assertThat(service.createCheckout("ref-1", "rider@example.org")).isEqualTo("https://pay");
+        assertThat(service.createCheckout("ref-1", "rider@example.org", "en")).isEqualTo("https://pay");
+        server.verify();
+    }
+
+    /** The language of Paddle's emails is no reason to stop a purchase. */
+    @Test
+    void failingLanguageUpdateDoesNotStopTheCheckout() {
+        server.expect(requestTo(API + "/customers"))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(CUSTOMER_EXISTS));
+        server.expect(requestTo(API + "/customers/ctm_01ghbk4xjn4qdsmstcwzgcgg35")).andRespond(withServerError());
+        server.expect(requestTo(API + "/transactions"))
+                .andRespond(withSuccess("{\"data\":{\"id\":\"txn_1\",\"checkout\":{\"url\":\"https://pay\"}}}",
+                        MediaType.APPLICATION_JSON));
+
+        assertThat(service.createCheckout("ref-1", "rider@example.org", "de")).isEqualTo("https://pay");
+        server.verify();
     }
 
     @Test
@@ -95,17 +120,17 @@ class PaddlePaymentServiceTest {
         server.expect(requestTo(API + "/customers"))
                 .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
                         .body("{\"error\":{\"code\":\"customer_already_exists\",\"detail\":\"no id\"}}"));
-        assertThatThrownBy(() -> service.createCheckout("ref-1", "a@b.c"))
+        assertThatThrownBy(() -> service.createCheckout("ref-1", "a@b.c", "de"))
                 .isInstanceOf(PaymentProviderUnavailableException.class);
 
         server.reset();
         server.expect(requestTo(API + "/customers")).andRespond(withStatus(HttpStatus.BAD_REQUEST));
-        assertThatThrownBy(() -> service.createCheckout("ref-1", "a@b.c"))
+        assertThatThrownBy(() -> service.createCheckout("ref-1", "a@b.c", "de"))
                 .isInstanceOf(PaymentProviderUnavailableException.class);
 
         server.reset();
         server.expect(requestTo(API + "/customers")).andRespond(withServerError());
-        assertThatThrownBy(() -> service.createCheckout("ref-1", "a@b.c"))
+        assertThatThrownBy(() -> service.createCheckout("ref-1", "a@b.c", "de"))
                 .isInstanceOf(PaymentProviderUnavailableException.class);
     }
 
@@ -118,7 +143,7 @@ class PaddlePaymentServiceTest {
                 .andRespond(withSuccess("{\"data\":{\"id\":\"txn_1\",\"checkout\":{\"url\":null}}}",
                         MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> service.createCheckout("ref-1", "a@b.c"))
+        assertThatThrownBy(() -> service.createCheckout("ref-1", "a@b.c", "de"))
                 .isInstanceOf(PaymentProviderUnavailableException.class);
     }
 
@@ -127,7 +152,7 @@ class PaddlePaymentServiceTest {
         server.expect(requestTo(API + "/customers"))
                 .andRespond(withSuccess("{\"meta\":{}}", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> service.createCheckout("ref-1", "a@b.c"))
+        assertThatThrownBy(() -> service.createCheckout("ref-1", "a@b.c", "de"))
                 .isInstanceOf(PaymentProviderUnavailableException.class);
     }
 

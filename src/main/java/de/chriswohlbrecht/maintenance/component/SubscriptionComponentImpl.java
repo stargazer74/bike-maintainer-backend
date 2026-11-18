@@ -114,7 +114,7 @@ public class SubscriptionComponentImpl implements ISubscriptionComponent {
         }
         String customerRef = customerRefOf(user);
         try {
-            String url = paymentProviderService.createCheckout(customerRef, user.getEmail());
+            String url = paymentProviderService.createCheckout(customerRef, user.getEmail(), user.getLanguage());
             meterRegistry.counter(CHECKOUT_METRIC, "result", "started").increment();
             log.info("User {} started a checkout", user.getId());
             return url;

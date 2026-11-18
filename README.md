@@ -120,8 +120,9 @@ network. Backend and database publish no ports. The compose files, `.env.example
    the web app, the only page that loads Paddle.js; Paddle also sends customers there to update their payment
    method), approve the website, and add a notification destination for `https://<app>/api/v1/webhooks/paddle` with
    the `subscription.*` events; the backend only uses an event as a trigger and fetches the current state of the
-   subscription from Paddle. Paddle only learns the email address (for the invoice) and a random customer reference,
-   never the internal account id. The API key needs `customer.write`, `transaction.write`,
+   subscription from Paddle. Paddle only learns the email address (for the invoice), the account's language (`de`/`en`,
+   the language of Paddle's receipts and subscription emails; updated on every checkout) and a random customer
+   reference, never the internal account id. The API key needs `customer.write`, `transaction.write`,
    `customer_portal_session.write`, `subscription.read`/`subscription.write` and, for the refunds (early end, account
    deletion after the first year), `transaction.read` and `adjustment.read`/`adjustment.write`. The early end runs
    nightly with `BM_EARLY_END_ENABLED=true` (`bm.cleanup.cron`): cancel the subscription immediately, refund the

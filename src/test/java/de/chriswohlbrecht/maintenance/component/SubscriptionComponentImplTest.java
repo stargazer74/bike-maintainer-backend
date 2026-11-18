@@ -87,7 +87,7 @@ class SubscriptionComponentImplTest {
                 cancellationNoticeComponent, earlyEndComponent, appUserRepository, subscriptionRepository,
                 new PaddleProperties("https://api", "key", SECRET, "pri_1", "test_token"), new JsonMapper(),
                 Clock.fixed(NOW, ZoneOffset.UTC), meterRegistry, TransactionOperations.withoutTransaction());
-        user = AppUser.builder().id(7L).email("rider@example.org").role(UserRole.USER).build();
+        user = AppUser.builder().id(7L).email("rider@example.org").role(UserRole.USER).language("en").build();
         lenient().when(subscriptionRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
     }
 
@@ -98,14 +98,14 @@ class SubscriptionComponentImplTest {
         ArgumentCaptor<String> created = ArgumentCaptor.forClass(String.class);
         when(appUserRepository.setBillingCustomerRefIfMissing(eq(7L), created.capture())).thenReturn(1);
         when(appUserRepository.findBillingCustomerRefById(7L)).thenAnswer(call -> Optional.of(created.getValue()));
-        when(paymentProviderService.createCheckout(anyString(), eq("rider@example.org")))
+        when(paymentProviderService.createCheckout(anyString(), eq("rider@example.org"), eq("en")))
                 .thenReturn("https://app.example.org/abo/bezahlen?_ptxn=txn_1");
 
         assertThat(component.startCheckout()).isEqualTo("https://app.example.org/abo/bezahlen?_ptxn=txn_1");
 
         assertThat(created.getValue()).hasSize(36).isNotEqualTo(String.valueOf(user.getId()));
         assertThat(user.getBillingCustomerRef()).isEqualTo(created.getValue());
-        verify(paymentProviderService).createCheckout(eq(created.getValue()), any());
+        verify(paymentProviderService).createCheckout(eq(created.getValue()), any(), eq("en"));
         assertThat(meterRegistry.counter(SubscriptionComponentImpl.CHECKOUT_METRIC, "result", "started").count())
                 .isEqualTo(1.0);
     }
@@ -115,7 +115,7 @@ class SubscriptionComponentImplTest {
         user.setBillingCustomerRef("ref-1");
         when(currentUserComponent.getCurrentUser()).thenReturn(user);
         when(accessComponent.accessOf(user)).thenReturn(new Access(AccessStatus.EXPIRED, null, true));
-        when(paymentProviderService.createCheckout(eq("ref-1"), any())).thenReturn("https://c");
+        when(paymentProviderService.createCheckout(eq("ref-1"), any(), any())).thenReturn("https://c");
 
         component.startCheckout();
 
@@ -129,7 +129,7 @@ class SubscriptionComponentImplTest {
         when(accessComponent.accessOf(user)).thenReturn(new Access(AccessStatus.TRIAL, null, false));
         when(appUserRepository.setBillingCustomerRefIfMissing(eq(7L), anyString())).thenReturn(0);
         when(appUserRepository.findBillingCustomerRefById(7L)).thenReturn(Optional.of("ref-first"));
-        when(paymentProviderService.createCheckout(eq("ref-first"), any())).thenReturn("https://c");
+        when(paymentProviderService.createCheckout(eq("ref-first"), any(), any())).thenReturn("https://c");
 
         assertThat(component.startCheckout()).isEqualTo("https://c");
         assertThat(user.getBillingCustomerRef()).isEqualTo("ref-first");
@@ -149,7 +149,7 @@ class SubscriptionComponentImplTest {
         user.setBillingCustomerRef("ref-1");
         when(currentUserComponent.getCurrentUser()).thenReturn(user);
         when(accessComponent.accessOf(user)).thenReturn(new Access(AccessStatus.TRIAL, null, false));
-        when(paymentProviderService.createCheckout(any(), any()))
+        when(paymentProviderService.createCheckout(any(), any(), any()))
                 .thenThrow(new PaymentProviderUnavailableException("down"));
 
         assertThatThrownBy(component::startCheckout).isInstanceOf(PaymentProviderUnavailableException.class);
