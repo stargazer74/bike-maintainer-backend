@@ -21,7 +21,7 @@ public class FakePaymentProviderService implements IPaymentProviderService {
     private final List<String> revoked = new CopyOnWriteArrayList<>();
 
     @Override
-    public String createCheckout(String customerRef, String email) {
+    public String createCheckout(String customerRef, String email, String language) {
         knownCustomers.add(customerRef);
         return "https://app.example.test/abo/bezahlen?_ptxn=txn_" + customerRef;
     }

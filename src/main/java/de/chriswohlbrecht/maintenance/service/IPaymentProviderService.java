@@ -15,9 +15,10 @@ public interface IPaymentProviderService {
     /**
      * Starts a checkout of the subscription for the account with the given reference.
      *
+     * @param language language of the account (de, en): the provider sends its receipts and subscription emails in it
      * @return address of the payment page with the checkout attached (the provider's default payment link)
      */
-    String createCheckout(String customerRef, String email);
+    String createCheckout(String customerRef, String email, String language);
 
     /**
      * @return short-lived address of the customer portal of the subscription's customer, empty if the provider does
