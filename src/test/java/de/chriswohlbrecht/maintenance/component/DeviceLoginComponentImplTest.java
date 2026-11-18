@@ -89,7 +89,7 @@ class DeviceLoginComponentImplTest {
         for (String result : new String[]{"success", "bad_credentials", "locked", "disabled", "unverified"}) {
             assertThat(meterRegistry.counter("bm.auth.device_login", "result", result).count()).isZero();
         }
-        for (String result : new String[]{"success", "invalid", "reused"}) {
+        for (String result : new String[]{"success", "invalid", "reused", "next_token_unusable"}) {
             assertThat(meterRegistry.find("bm.auth.device_session").tag("result", result).counter()).isNotNull();
         }
     }
