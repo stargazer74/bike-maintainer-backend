@@ -92,6 +92,13 @@ public class AuthSteps {
         scenarioContext.setLastResponse(login(email, password));
     }
 
+    @When("I log in as {string} with password {string} {int} times")
+    public void iLogInAsWithPasswordTimes(String email, String password, int times) {
+        for (int i = 0; i < times; i++) {
+            scenarioContext.setLastResponse(login(email, password));
+        }
+    }
+
     @When("I fail to log in as {string} {int} times")
     public void iFailToLogIn(String email, int times) {
         for (int i = 0; i < times; i++) {

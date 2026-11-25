@@ -54,6 +54,16 @@ public class RateLimitComponentImpl implements IRateLimitComponent {
         }
     }
 
+    @Override
+    public void refund(String key) {
+        RateLimitWindow current = windows.get(key);
+        if (current != null) {
+            synchronized (current) {
+                current.decrement();
+            }
+        }
+    }
+
     private void cleanupOccasionally(Instant now) {
         if (callsSinceCleanup.incrementAndGet() >= CLEANUP_INTERVAL) {
             callsSinceCleanup.set(0);

@@ -25,6 +25,13 @@ public final class RateLimitWindow {
         count++;
     }
 
+    /** Takes back one attempt; never below zero. */
+    public void decrement() {
+        if (count > 0) {
+            count--;
+        }
+    }
+
     public boolean isExpired(Instant now, Duration window) {
         return !now.isBefore(start.plus(window));
     }

@@ -162,6 +162,13 @@ Feature: Authentication
     Then the response status code is 429
     And the response header "Retry-After" contains "9"
 
+  Scenario: Successful logins do not count towards the rate limit
+    Given a verified user "rider@example.org" with password "correct-horse-battery" exists
+    And the client IP is "198.51.100.220"
+    When I log in as "rider@example.org" with password "correct-horse-battery" 12 times
+    And I log in as "rider@example.org" with password "wrong-password"
+    Then the response status code is 401
+
   Scenario: Account is locked after too many failed logins, even from another IP
     Given a verified user "rider@example.org" with password "correct-horse-battery" exists
     And the client IP is "198.51.100.201"

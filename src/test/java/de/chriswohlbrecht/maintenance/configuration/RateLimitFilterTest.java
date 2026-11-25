@@ -1,6 +1,8 @@
 package de.chriswohlbrecht.maintenance.configuration;
 
 import de.chriswohlbrecht.maintenance.component.IRateLimitComponent;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.mock.web.MockFilterChain;
@@ -13,6 +15,7 @@ import java.util.Optional;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,5 +42,32 @@ class RateLimitFilterTest {
         filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
 
         verify(rateLimitComponent).tryConsume(eq(group), eq(path + "|203.0.113.7"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "/api/v1/auth/login, 200, true",
+            "/api/v1/auth/login, 401, false",
+            "/api/v1/auth/login, 403, false",
+            "/api/v1/auth/device-login, 201, true",
+            "/api/v1/auth/device-login, 401, false",
+            "/api/v1/auth/register, 201, false",
+            "/api/v1/auth/password-reset/request, 204, false"
+    })
+    void refundsOnlySuccessfulLogins(String path, int status, boolean refunded) throws Exception {
+        IRateLimitComponent rateLimitComponent = mock(IRateLimitComponent.class);
+        when(rateLimitComponent.tryConsume(anyString(), anyString())).thenReturn(Optional.empty());
+        RateLimitFilter filter = new RateLimitFilter(rateLimitComponent, new SecurityErrorWriter(new JsonMapper()));
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+        request.setRemoteAddr("203.0.113.7");
+        FilterChain chain = (req, res) -> ((HttpServletResponse) res).setStatus(status);
+
+        filter.doFilter(request, new MockHttpServletResponse(), chain);
+
+        if (refunded) {
+            verify(rateLimitComponent).refund(path + "|203.0.113.7");
+        } else {
+            verify(rateLimitComponent, never()).refund(anyString());
+        }
     }
 }
