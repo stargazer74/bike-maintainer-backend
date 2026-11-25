@@ -17,7 +17,7 @@ public interface IAuthComponent {
      */
     UserResponse login(LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse);
 
-    /** Invalidates the session and the CSRF token. */
+    /** Invalidates the session and replaces the CSRF token with a fresh one. */
     void logout(HttpServletRequest httpRequest, HttpServletResponse httpResponse);
 
     UserResponse getCurrentUser();

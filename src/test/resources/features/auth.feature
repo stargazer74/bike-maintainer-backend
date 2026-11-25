@@ -123,6 +123,17 @@ Feature: Authentication
     When a GET request is sent to "/api/v1/auth/me"
     Then the response status code is 401
 
+  Scenario: Logout issues a fresh CSRF token, so the next login works at once
+    Given a verified user "rider@example.org" with password "correct-horse-battery" exists
+    When I log in as "rider@example.org" with password "correct-horse-battery"
+    And I remember the "XSRF-TOKEN" cookie as "beforeLogout"
+    And I log out
+    Then the response status code is 204
+    And the client has a "XSRF-TOKEN" cookie
+    And the "XSRF-TOKEN" cookie differs from "beforeLogout"
+    When I log in as "rider@example.org" with password "correct-horse-battery"
+    Then the response status code is 200
+
   Scenario: Logout requires login
     When I log out
     Then the response status code is 401

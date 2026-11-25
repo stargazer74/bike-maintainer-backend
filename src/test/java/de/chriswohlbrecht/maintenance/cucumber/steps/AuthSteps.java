@@ -109,6 +109,16 @@ public class AuthSteps {
         assertThat(apiClient.hasCookie(name)).as("cookie %s", name).isTrue();
     }
 
+    @When("I remember the {string} cookie as {string}")
+    public void iRememberTheCookieAs(String name, String alias) {
+        scenarioContext.storeText(alias, apiClient.getCookie(name));
+    }
+
+    @Then("the {string} cookie differs from {string}")
+    public void theCookieDiffersFrom(String name, String alias) {
+        assertThat(apiClient.getCookie(name)).as("cookie %s", name).isNotEqualTo(scenarioContext.resolveText(alias));
+    }
+
     private EntityExchangeResult<byte[]> login(String email, String password) {
         return apiClient.post("/api/v1/auth/login",
                 "{\"email\": \"" + email + "\", \"password\": \"" + password + "\"}");

@@ -109,6 +109,10 @@ public class ApiClient {
         return cookies.containsKey(name);
     }
 
+    public String getCookie(String name) {
+        return cookies.get(name);
+    }
+
     private EntityExchangeResult<byte[]> exchange(HttpMethod method, String path, String jsonBody,
                                                   boolean withCsrfToken) {
         return exchange(restTestClient.method(method).uri(path), jsonBody, withCsrfToken);

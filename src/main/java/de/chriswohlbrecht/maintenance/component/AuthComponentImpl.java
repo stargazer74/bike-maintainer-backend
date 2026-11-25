@@ -21,7 +21,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
-import org.springframework.security.web.csrf.CsrfLogoutHandler;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,7 +68,9 @@ public class AuthComponentImpl implements IAuthComponent {
             }
         }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        new CsrfLogoutHandler(csrfTokenRepository).logout(httpRequest, httpResponse, authentication);
+        // A fresh token instead of none: the SPA stays on the page and logs in again without reloading, and a
+        // missing cookie would make that first login fail on CSRF (#184). The old token is replaced all the same.
+        csrfTokenRepository.saveToken(csrfTokenRepository.generateToken(httpRequest), httpRequest, httpResponse);
         new SecurityContextLogoutHandler().logout(httpRequest, httpResponse, authentication);
     }
 
