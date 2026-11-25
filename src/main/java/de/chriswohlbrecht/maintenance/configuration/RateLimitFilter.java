@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.UrlPathHelper;
 
@@ -15,12 +16,13 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Limits public, brute-forceable auth endpoints per client IP. Runs before CSRF and authentication so that
- * every attempt counts. The client IP is {@link HttpServletRequest#getRemoteAddr()}, which Tomcat's
- * RemoteIpValve (forward-headers-strategy=native) derives from X-Forwarded-For only for trusted internal
- * proxies.
+ * every attempt counts; successful logins are taken back afterwards. The client IP is
+ * {@link HttpServletRequest#getRemoteAddr()}, which Tomcat's RemoteIpValve (forward-headers-strategy=native)
+ * derives from X-Forwarded-For only for trusted internal proxies.
  *
  * <p>Not a Spring bean on purpose: as a bean, Spring Boot would also register it as a plain servlet filter.
  */
@@ -40,6 +42,13 @@ class RateLimitFilter extends OncePerRequestFilter {
             "POST /api/v1/auth/device-login", "device_login",
             "POST /api/v1/auth/device-session", "device_session");
 
+    /**
+     * Groups whose successful attempts (2xx) are taken back after the request: a successful login is no guess, and
+     * counting it locks out a household that logs in and out a few times. Still counted up front, so parallel
+     * requests cannot slip past the limit; failed logins also count towards the account lockout.
+     */
+    static final Set<String> REFUNDED_ON_SUCCESS = Set.of("login", "device_login");
+
     private final IRateLimitComponent rateLimitComponent;
     private final SecurityErrorWriter errorWriter;
 
@@ -56,15 +65,18 @@ class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        Optional<Duration> retryAfter = rateLimitComponent.tryConsume(
-                LIMITED_REQUESTS.get(request.getMethod() + " " + decodedPath(request)),
-                decodedPath(request) + "|" + request.getRemoteAddr());
+        String group = LIMITED_REQUESTS.get(request.getMethod() + " " + decodedPath(request));
+        String key = decodedPath(request) + "|" + request.getRemoteAddr();
+        Optional<Duration> retryAfter = rateLimitComponent.tryConsume(group, key);
         if (retryAfter.isPresent()) {
             response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(ErrorResponses.retryAfterSeconds(retryAfter.get())));
             errorWriter.write(request, response, HttpStatus.TOO_MANY_REQUESTS, "Too many attempts, try again later");
             return;
         }
         chain.doFilter(request, response);
+        if (REFUNDED_ON_SUCCESS.contains(group) && HttpStatusCode.valueOf(response.getStatus()).is2xxSuccessful()) {
+            rateLimitComponent.refund(key);
+        }
     }
 
     /**

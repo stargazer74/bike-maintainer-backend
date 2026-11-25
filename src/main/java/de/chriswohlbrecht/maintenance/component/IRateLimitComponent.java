@@ -14,4 +14,12 @@ public interface IRateLimitComponent {
      * @return empty if the attempt is allowed, otherwise the time until the next attempt is allowed
      */
     Optional<Duration> tryConsume(String group, String key);
+
+    /**
+     * Takes back one attempt that {@link #tryConsume} counted for the key, e.g. because the login succeeded and
+     * was therefore no guess. Never goes below zero; does nothing for an unknown or expired key.
+     *
+     * @param key bucket key as passed to {@link #tryConsume}
+     */
+    void refund(String key);
 }

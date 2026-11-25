@@ -58,6 +58,34 @@ class RateLimitComponentImplTest {
         assertThat(rateLimit.tryConsume("login", "login|1.2.3.4")).isEmpty();
     }
 
+    @Test
+    void refund_takesBackOneAttempt() {
+        consume("login|1.2.3.4", 3);
+
+        rateLimit.refund("login|1.2.3.4");
+
+        assertThat(rateLimit.tryConsume("login", "login|1.2.3.4")).isEmpty();
+        assertThat(rateLimit.tryConsume("login", "login|1.2.3.4")).isPresent();
+    }
+
+    @Test
+    void refund_neverGoesBelowZero() {
+        consume("login|1.2.3.4", 1);
+        rateLimit.refund("login|1.2.3.4");
+        rateLimit.refund("login|1.2.3.4");
+
+        consume("login|1.2.3.4", 3);
+        assertThat(rateLimit.tryConsume("login", "login|1.2.3.4")).isPresent();
+    }
+
+    @Test
+    void refund_unknownKey_doesNothing() {
+        rateLimit.refund("login|9.9.9.9");
+
+        consume("login|9.9.9.9", 3);
+        assertThat(rateLimit.tryConsume("login", "login|9.9.9.9")).isPresent();
+    }
+
     private void consume(String key, int times) {
         for (int i = 0; i < times; i++) {
             assertThat(rateLimit.tryConsume("login", key)).isEmpty();

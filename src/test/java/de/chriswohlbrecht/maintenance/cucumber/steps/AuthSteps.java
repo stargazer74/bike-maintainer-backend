@@ -92,6 +92,13 @@ public class AuthSteps {
         scenarioContext.setLastResponse(login(email, password));
     }
 
+    @When("I log in as {string} with password {string} {int} times")
+    public void iLogInAsWithPasswordTimes(String email, String password, int times) {
+        for (int i = 0; i < times; i++) {
+            scenarioContext.setLastResponse(login(email, password));
+        }
+    }
+
     @When("I fail to log in as {string} {int} times")
     public void iFailToLogIn(String email, int times) {
         for (int i = 0; i < times; i++) {
@@ -107,6 +114,16 @@ public class AuthSteps {
     @Then("the client has a {string} cookie")
     public void theClientHasACookie(String name) {
         assertThat(apiClient.hasCookie(name)).as("cookie %s", name).isTrue();
+    }
+
+    @When("I remember the {string} cookie as {string}")
+    public void iRememberTheCookieAs(String name, String alias) {
+        scenarioContext.storeText(alias, apiClient.getCookie(name));
+    }
+
+    @Then("the {string} cookie differs from {string}")
+    public void theCookieDiffersFrom(String name, String alias) {
+        assertThat(apiClient.getCookie(name)).as("cookie %s", name).isNotEqualTo(scenarioContext.resolveText(alias));
     }
 
     private EntityExchangeResult<byte[]> login(String email, String password) {
