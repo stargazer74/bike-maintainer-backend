@@ -27,7 +27,9 @@ public class TemplateTaskFactory {
                                         LocalDate lastDoneDate) {
         Integer firstDueKm = task.firstDueKm();
         if (lastDoneKm != null && task.intervalKm() != null) {
-            firstDueKm = lastDoneKm + task.intervalKm();
+            // lastDoneKm is capped at the vehicle's mileage, but that is client data too: add in long and
+            // saturate, so an absurd mileage can never wrap around into a negative due point.
+            firstDueKm = (int) Math.min((long) lastDoneKm + task.intervalKm(), Integer.MAX_VALUE);
         }
         Integer firstDueMonths = task.firstDueMonths();
         if (lastDoneDate != null && task.intervalMonths() != null) {

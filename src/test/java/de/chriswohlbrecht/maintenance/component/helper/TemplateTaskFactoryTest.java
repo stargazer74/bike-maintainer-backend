@@ -34,6 +34,16 @@ class TemplateTaskFactoryTest {
     }
 
     @Test
+    void firstDueKmSaturatesInsteadOfOverflowing() {
+        CatalogTask task = task("engine-oil", 12000, null, null, null, List.of());
+
+        MaintenanceTaskRequest request = factory.build(task, DICTIONARY, Locale.GERMANY, REGISTRATION,
+                Integer.MAX_VALUE - 1, null);
+
+        assertThat(request.getFirstDueKm()).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
     void firstDueKmIsLastDoneKmPlusInterval() {
         CatalogTask task = task("engine-oil", 12000, 24, 1000, 3, List.of());
 
