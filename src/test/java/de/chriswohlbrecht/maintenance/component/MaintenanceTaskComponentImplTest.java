@@ -280,6 +280,22 @@ class MaintenanceTaskComponentImplTest {
     }
 
     @Test
+    void updateMaintenanceTask_keepsExistingTemplateKey() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceTask existing = Instancio.create(MaintenanceTask.class);
+        existing.setVehicle(vehicle);
+        existing.setTemplateKey("engine-oil");
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceTaskRepository.findByIdAndVehicle_Id(existing.getId(), vehicle.getId())).thenReturn(Optional.of(existing));
+        when(maintenanceTaskRepository.save(existing)).thenReturn(existing);
+
+        maintenanceTaskComponent.updateMaintenanceTask(vehicle.getId(), existing.getId(), request);
+
+        assertThat(existing.getTemplateKey()).isEqualTo("engine-oil");
+    }
+
+    @Test
     void updateMaintenanceTask_withoutIntervalAndNotOneTime_throwsInvalidMaintenanceIntervalException() {
         Vehicle vehicle = Instancio.create(Vehicle.class);
         MaintenanceTask existing = Instancio.create(MaintenanceTask.class);

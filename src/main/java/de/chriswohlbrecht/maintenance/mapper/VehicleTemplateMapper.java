@@ -6,13 +6,13 @@ import de.chriswohlbrecht.maintenance.api.model.VehicleTemplateSourceQuality;
 import de.chriswohlbrecht.maintenance.api.model.VehicleTemplateSourceResponse;
 import de.chriswohlbrecht.maintenance.api.model.VehicleTemplateSummaryResponse;
 import de.chriswohlbrecht.maintenance.api.model.VehicleTemplateTaskResponse;
+import de.chriswohlbrecht.maintenance.component.helper.TemplateTexts;
 import de.chriswohlbrecht.maintenance.component.model.template.CatalogDetail;
 import de.chriswohlbrecht.maintenance.component.model.template.CatalogDictionary;
 import de.chriswohlbrecht.maintenance.component.model.template.CatalogSource;
 import de.chriswohlbrecht.maintenance.component.model.template.CatalogSourceKind;
 import de.chriswohlbrecht.maintenance.component.model.template.CatalogTask;
 import de.chriswohlbrecht.maintenance.component.model.template.CatalogTemplate;
-import de.chriswohlbrecht.maintenance.component.model.template.DictionaryTask;
 import de.chriswohlbrecht.maintenance.component.model.template.LocalizedText;
 import org.mapstruct.Context;
 import org.mapstruct.Mapper;
@@ -70,26 +70,15 @@ public interface VehicleTemplateMapper {
         return text == null ? null : text.in(texts.locale());
     }
 
-    /** Override of the template, else the dictionary. */
     default String taskName(CatalogTask task, Texts texts) {
-        if (task.name() != null) {
-            return task.name().in(texts.locale());
-        }
-        return dictionaryTask(task, texts).name().in(texts.locale());
+        return TemplateTexts.taskName(task, texts.dictionary(), texts.locale());
     }
 
     default String taskDescription(CatalogTask task, Texts texts) {
-        if (task.description() != null) {
-            return task.description().in(texts.locale());
-        }
-        return text(dictionaryTask(task, texts).description(), texts);
+        return TemplateTexts.taskDescription(task, texts.dictionary(), texts.locale());
     }
 
     default String detailLabel(CatalogDetail detail, Texts texts) {
-        return texts.dictionary().details().get(detail.label()).in(texts.locale());
-    }
-
-    private DictionaryTask dictionaryTask(CatalogTask task, Texts texts) {
-        return texts.dictionary().tasks().get(task.key());
+        return TemplateTexts.detailLabel(detail, texts.dictionary(), texts.locale());
     }
 }
