@@ -5,8 +5,8 @@ import java.util.List;
 /**
  * One maintenance task of a template.
  *
- * @param oneTime never {@code null}
  * @param key                   key into {@link CatalogDictionary#tasks()}
+ * @param oneTime               never {@code null}
  * @param name                  overrides the name of the dictionary, may be {@code null}
  * @param description           overrides the description of the dictionary, may be {@code null}
  * @param plausibilityException reason for a value outside the plausible range, may be {@code null}

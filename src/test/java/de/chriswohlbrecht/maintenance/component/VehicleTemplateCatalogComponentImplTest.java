@@ -141,4 +141,13 @@ class VehicleTemplateCatalogComponentImplTest {
         assertThat(new VehicleTemplateProperties(null).location()).isEqualTo("classpath*:vehicle-templates/");
         assertThat(new VehicleTemplateProperties(" ").location()).isEqualTo("classpath*:vehicle-templates/");
     }
+
+    @Test
+    void loadsTheRealCatalogOfTheArtifact() {
+        VehicleTemplateCatalogComponentImpl catalog =
+                new VehicleTemplateCatalogComponentImpl(new VehicleTemplateProperties(null));
+
+        assertThat(catalog.templates()).isNotEmpty();
+        assertThat(catalog.dictionary().tasks()).containsKey("engine-oil");
+    }
 }
