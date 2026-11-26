@@ -27,7 +27,7 @@ class VehicleTemplateCatalogComponentImplTest {
         VehicleTemplateCatalogComponentImpl catalog = load("valid");
 
         assertThat(catalog.templates()).extracting(CatalogTemplate::id)
-                .containsExactly("honda-cb500f-2019", "honda-cb650r-2019", "honda-cb650r-2021",
+                .containsExactly("honda-a-cb650r-2021", "honda-cb500f-2019", "honda-cb650r-2019",
                         "kawasaki-z900-2017", "moto-guzzi-v7-2012");
         assertThat(catalog.find("honda-cb650r-2019")).isPresent();
         assertThat(catalog.find("nope")).isEmpty();

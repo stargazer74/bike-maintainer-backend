@@ -53,25 +53,24 @@ class VehicleTemplateComponentImplTest {
         assertThat(ids(component.search("moto guzzi", null, "v7", null))).containsExactly("moto-guzzi-v7-2012");
         assertThat(ids(component.search("MOTO-GUZZI", null, "V 7", null))).containsExactly("moto-guzzi-v7-2012");
         assertThat(ids(component.search("Honda", null, "CB 650 R", null)))
-                .containsExactly("honda-cb650r-2019", "honda-cb650r-2021");
+                .containsExactly("honda-cb650r-2019", "honda-a-cb650r-2021");
     }
 
     @Test
     void filtersByYearAndType() {
         assertThat(ids(component.search("Honda", null, "CB650", 2020))).containsExactly("honda-cb650r-2019");
         assertThat(ids(component.search("Honda", null, "CB650", 2018))).isEmpty();
-        assertThat(ids(component.search("Honda", null, "CB650", 2021))).containsExactly("honda-cb650r-2021");
-        assertThat(ids(component.search("Honda", null, "CB650", 2018))).isEmpty();
+        assertThat(ids(component.search("Honda", null, "CB650", 2021))).containsExactly("honda-a-cb650r-2021");
         assertThat(ids(component.search("Moto Guzzi", null, null, 2030))).containsExactly("moto-guzzi-v7-2012");
         assertThat(ids(component.search("Honda", VehicleType.CAR, null, null))).isEmpty();
         assertThat(ids(component.search("Honda", VehicleType.MOTORCYCLE, "CB650", null)))
-                .containsExactly("honda-cb650r-2019", "honda-cb650r-2021");
+                .containsExactly("honda-cb650r-2019", "honda-a-cb650r-2021");
     }
 
     @Test
-    void sortsByMakeThenModelThenFirstYear() {
+    void sortsByModelThenFirstYear() {
         assertThat(ids(component.search("Honda", null, null, null)))
-                .containsExactly("honda-cb500f-2019", "honda-cb650r-2019", "honda-cb650r-2021");
+                .containsExactly("honda-cb500f-2019", "honda-cb650r-2019", "honda-a-cb650r-2021");
     }
 
     @Test
