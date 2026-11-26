@@ -1,0 +1,17 @@
+id: kawasaki-z900-2017
+type: MOTORCYCLE
+make: Kawasaki
+model: Z900
+years: { from: 2017, to: 2019 }
+market: EU
+sources:
+  - id: portal
+    kind: REPAIR_PORTAL
+    title: Test portal
+    url: https://example.com/portal
+    retrieved: 2026-01-04
+tasks:
+  - key: engine-oil
+    intervalKm: 99999
+    plausibilityException: Test reason for the exception
+    sources: [portal]

@@ -1,0 +1,6 @@
+tasks:
+  engine-oil:
+    name: { de: Testöl wechseln, en: Change test oil }
+    description: { de: Das Öl erneuern., en: Renew the oil. }
+details:
+  oil: { de: Öl, en: Oil }
