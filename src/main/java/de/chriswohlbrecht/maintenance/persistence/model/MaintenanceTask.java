@@ -68,4 +68,11 @@ public class MaintenanceTask {
      */
     @Column(name = "created_by_log_id")
     private Long createdByLogId;
+
+    /**
+     * Vehicle templates: key of the template task this one was created from, {@code null} for own tasks. Makes
+     * applying a template again idempotent.
+     */
+    @Column(name = "template_key", length = 100)
+    private String templateKey;
 }

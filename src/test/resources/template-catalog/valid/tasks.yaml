@@ -1,0 +1,25 @@
+tasks:
+  engine-oil:
+    name: { de: Testöl wechseln, en: Change test oil }
+    description:
+      de: Das Öl erneuern.
+      en: Renew the oil.
+    plausible:
+      MOTORCYCLE: { intervalKm: [1000, 30000], intervalMonths: [6, 36] }
+  brake-fluid:
+    name: { de: Testflüssigkeit wechseln, en: Change test fluid }
+    description:
+      de: Die Flüssigkeit erneuern.
+      en: Renew the fluid.
+  break-in-service:
+    name: { de: Testinspektion, en: Test inspection }
+    description:
+      de: Einmalige Prüfung.
+      en: One-off check.
+details:
+  oil:
+    de: Öl
+    en: Oil
+  fluid:
+    de: Flüssigkeit
+    en: Fluid

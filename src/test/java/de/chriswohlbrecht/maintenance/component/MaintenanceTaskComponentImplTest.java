@@ -181,6 +181,39 @@ class MaintenanceTaskComponentImplTest {
     }
 
     @Test
+    void createMaintenanceTask_withTemplateKey_storesItAndReturnsIt() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceTaskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> {
+            MaintenanceTask toSave = invocation.getArgument(0);
+            toSave.setId(10L);
+            return toSave;
+        });
+
+        Optional<MaintenanceTaskResponse> result =
+                maintenanceTaskComponent.createMaintenanceTask(vehicle.getId(), request, "engine-oil");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getTemplateKey()).isEqualTo("engine-oil");
+        ArgumentCaptor<MaintenanceTask> saved = ArgumentCaptor.forClass(MaintenanceTask.class);
+        verify(maintenanceTaskRepository).save(saved.capture());
+        assertThat(saved.getValue().getTemplateKey()).isEqualTo("engine-oil");
+    }
+
+    @Test
+    void createMaintenanceTask_withoutTemplateKey_hasNone() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceTaskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Optional<MaintenanceTaskResponse> result = maintenanceTaskComponent.createMaintenanceTask(vehicle.getId(), request);
+
+        assertThat(result.orElseThrow().getTemplateKey()).isNull();
+    }
+
+    @Test
     void createMaintenanceTask_vehicleNotFound_returnsEmptyOptionalAndDoesNotSave() {
         MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
         when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());
@@ -244,6 +277,22 @@ class MaintenanceTaskComponentImplTest {
         assertThat(result).isPresent();
         assertThat(result.get().getName()).isEqualTo(request.getName());
         assertThat(existing.getName()).isEqualTo(request.getName());
+    }
+
+    @Test
+    void updateMaintenanceTask_keepsExistingTemplateKey() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceTask existing = Instancio.create(MaintenanceTask.class);
+        existing.setVehicle(vehicle);
+        existing.setTemplateKey("engine-oil");
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceTaskRepository.findByIdAndVehicle_Id(existing.getId(), vehicle.getId())).thenReturn(Optional.of(existing));
+        when(maintenanceTaskRepository.save(existing)).thenReturn(existing);
+
+        maintenanceTaskComponent.updateMaintenanceTask(vehicle.getId(), existing.getId(), request);
+
+        assertThat(existing.getTemplateKey()).isEqualTo("engine-oil");
     }
 
     @Test

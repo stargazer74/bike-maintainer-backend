@@ -37,7 +37,7 @@ class FlywayMigrationTest {
     void appliesAllMigrationsSuccessfully() {
         MigrationInfo[] appliedMigrations = flyway.info().applied();
 
-        assertThat(appliedMigrations).hasSize(18);
+        assertThat(appliedMigrations).hasSize(19);
         assertThat(appliedMigrations[0].getDescription()).isEqualTo("init schema");
         assertThat(appliedMigrations[0].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[1].getDescription()).isEqualTo("vehicle model year required");
@@ -74,6 +74,8 @@ class FlywayMigrationTest {
         assertThat(appliedMigrations[16].getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(appliedMigrations[17].getDescription()).isEqualTo("maintenance log client entry id");
         assertThat(appliedMigrations[17].getState()).isEqualTo(MigrationState.SUCCESS);
+        assertThat(appliedMigrations[18].getDescription()).isEqualTo("maintenance task template key");
+        assertThat(appliedMigrations[18].getState()).isEqualTo(MigrationState.SUCCESS);
     }
 
     /** V17 (backend#155): the Polar subscriptions were sandbox test data and go; the customer references stay. */

@@ -1,0 +1,17 @@
+id: acme-roadster-2001
+type: MOTORCYCLE
+make: Acme
+model: Roadster
+years: { from: 2001, to: 2003 }
+market: EU
+
+sources:
+  - id: manual
+    kind: MANUFACTURER
+    title: Acme test manual
+    locator: p. 1
+    retrieved: 2026-01-02
+tasks:
+  - key: engine-oil
+    intervalKm: 5000
+    sources: [manual]

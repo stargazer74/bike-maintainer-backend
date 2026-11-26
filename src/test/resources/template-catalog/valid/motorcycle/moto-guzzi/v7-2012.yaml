@@ -1,0 +1,21 @@
+id: moto-guzzi-v7-2012
+type: MOTORCYCLE
+make: Moto Guzzi
+model: V7
+aliases: ["V 7"]
+years: { from: 2012 }
+market: EU
+sources:
+  - id: manual
+    kind: MANUFACTURER
+    title: Test manual two
+    url: https://example.com/manual-two
+    retrieved: 2026-01-03
+tasks:
+  - key: brake-fluid
+    intervalMonths: 24
+    sources: [manual]
+    name: { de: Eigene Bremsflüssigkeit, en: Own brake fluid }
+    description: { de: Eigene Beschreibung, en: Own description }
+    details:
+      - { label: fluid, value: "Test fluid", sources: [manual] }

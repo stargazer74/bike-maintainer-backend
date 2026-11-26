@@ -69,6 +69,30 @@ jobs:
         working-directory: .ci/bike-maintainer-api
         run: mvn -B -ntp install
 
+      # The vehicle-template catalog (YAML files) is consumed as Maven artifact as well, built from the templates repo
+      # the same way: same-named branch if it exists, else main. Its catalog validation runs in its own CI.
+      - name: Select templates branch
+        id: templates-branch
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          if git ls-remote --exit-code --heads https://github.com/stargazer74/bike-maintainer-templates.git "$BRANCH" > /dev/null; then
+            echo "ref=$BRANCH" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out vehicle-template catalog (${{ steps.templates-branch.outputs.ref }})
+        uses: actions/checkout@v7
+        with:
+          repository: stargazer74/bike-maintainer-templates
+          ref: ${{ steps.templates-branch.outputs.ref }}
+          path: .ci/bike-maintainer-templates
+
+      - name: Install vehicle-template catalog into the local Maven repository
+        working-directory: .ci/bike-maintainer-templates
+        run: mvn -B -ntp install -DskipTests
+
       # Release builds carry the tag version (info.app.version, JAR name); all other builds keep the pom version.
       - name: Set release version from tag
         if: startsWith(github.ref, 'refs/tags/v')

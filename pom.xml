@@ -53,6 +53,7 @@
 
         <!-- internal API versions -->
         <maintenance-api.version>0.0.1-SNAPSHOT</maintenance-api.version>
+        <vehicle-templates.version>0.0.1-SNAPSHOT</vehicle-templates.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -180,6 +181,19 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- Vehicle-template catalog (YAML files on the classpath, Epic #150) and the parser for it; version of the
+             YAML module comes from the Spring Boot BOM -->
+        <dependency>
+            <groupId>de.chris-wohlbrecht</groupId>
+            <artifactId>vehicle-templates</artifactId>
+            <version>${vehicle-templates.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>tools.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
         </dependency>
 
         <dependency>

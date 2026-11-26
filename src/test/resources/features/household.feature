@@ -242,3 +242,16 @@ Feature: Household mode – profile selection instead of login
       | /api/v1/subscription/checkout         |
       | /api/v1/subscription/customer-portal  |
       | /api/v1/webhooks/paddle                |
+
+  Scenario: A profile applies a vehicle template
+    Given I have selected a new profile "Anna"
+    And a vehicle "guzzi" exists with body:
+      """
+      { "name": "Guzzi", "type": "MOTORCYCLE", "modelYear": 2020, "firstRegistrationDate": "2020-03-01", "currentMileage": 5000 }
+      """
+    When a POST request is sent to "/api/v1/vehicles/{guzzi}/template" with body:
+      """
+      { "templateId": "moto-guzzi-v7-2012", "tasks": [ { "key": "brake-fluid" } ] }
+      """
+    Then the response status code is 200
+    And the JSON response field "created" equals "1"

@@ -97,7 +97,8 @@ class VehicleExportComponentImplTest {
         when(vehicleComponent.getVehicle(VEHICLE_ID)).thenReturn(Optional.of(vehicle()));
         when(maintenanceTaskComponent.listMaintenanceTasks(VEHICLE_ID)).thenReturn(Optional.of(List.of(
                 new MaintenanceTaskResponse().id(30L).name("Kette").intervalKm(1000).active(true),
-                new MaintenanceTaskResponse().id(12L).name("Oel").intervalMonths(12).active(false))));
+                new MaintenanceTaskResponse().id(12L).name("Oel").intervalMonths(12).active(false)
+                        .templateKey("engine-oil"))));
         MaintenanceLogResponse later = new MaintenanceLogResponse().id(1L).performedAt(LocalDate.of(2026, 8, 1))
                 .mileageAtPerformed(9000).currency(Currency.CHF)
                 .performedTaskIds(List.of(30L, 12L))
@@ -126,9 +127,10 @@ class VehicleExportComponentImplTest {
         assertThat(exported.getName()).isEqualTo("Die Rote");
         assertThat(exported.getSpecifications().getCylinders()).isEqualTo(2);
         assertThat(exported.getMaintenanceTasks()).extracting(ExportedMaintenanceTask::getRef,
-                        ExportedMaintenanceTask::getName, ExportedMaintenanceTask::getActive)
-                .containsExactly(tuple("t1", "Oel", false),
-                        tuple("t2", "Kette", true));
+                        ExportedMaintenanceTask::getName, ExportedMaintenanceTask::getActive,
+                        ExportedMaintenanceTask::getTemplateKey)
+                .containsExactly(tuple("t1", "Oel", false, "engine-oil"),
+                        tuple("t2", "Kette", true, null));
         assertThat(exported.getMaintenanceLogs()).extracting(ExportedMaintenanceLog::getMileageAtPerformed)
                 .containsExactly(8000, 8000, 9000);
         ExportedMaintenanceLog last = exported.getMaintenanceLogs().get(2);
@@ -187,7 +189,7 @@ class VehicleExportComponentImplTest {
         ExportedVehicle vehicle = exportedVehicle()
                 .specifications(new VehicleSpecifications().cylinders(4))
                 .maintenanceTasks(List.of(
-                        new ExportedMaintenanceTask().ref("oil").name("Oel").intervalKm(6000),
+                        new ExportedMaintenanceTask().ref("oil").name("Oel").intervalKm(6000).templateKey("engine-oil"),
                         new ExportedMaintenanceTask().ref("chain").name("Kette").intervalKm(1000)))
                 .maintenanceLogs(List.of(new ExportedMaintenanceLog()
                         .performedAt(LocalDate.of(2026, 4, 1)).mileageAtPerformed(18000).currency(Currency.CHF)
@@ -198,7 +200,7 @@ class VehicleExportComponentImplTest {
                                 new ExportedMaintenanceMaterial().name("Lappen").quantity(BigDecimal.ONE)
                                         .unit(MaterialUnit.PIECE)))));
         when(vehicleComponent.createVehicle(any())).thenReturn(new VehicleResponse().id(VEHICLE_ID).name("Die Rote"));
-        when(maintenanceTaskComponent.createMaintenanceTask(eq(VEHICLE_ID), any()))
+        when(maintenanceTaskComponent.createMaintenanceTask(eq(VEHICLE_ID), any(), any()))
                 .thenReturn(Optional.of(new MaintenanceTaskResponse().id(101L)))
                 .thenReturn(Optional.of(new MaintenanceTaskResponse().id(102L)));
 
@@ -210,10 +212,12 @@ class VehicleExportComponentImplTest {
         assertThat(vehicleRequest.getValue().getName()).isEqualTo("Die Rote");
         verify(measurementComponent).updateVehicleSpecifications(VEHICLE_ID, new VehicleSpecifications().cylinders(4));
         ArgumentCaptor<MaintenanceTaskRequest> taskRequests = ArgumentCaptor.forClass(MaintenanceTaskRequest.class);
+        ArgumentCaptor<String> taskKeys = ArgumentCaptor.forClass(String.class);
         verify(maintenanceTaskComponent, times(2))
-                .createMaintenanceTask(eq(VEHICLE_ID), taskRequests.capture());
+                .createMaintenanceTask(eq(VEHICLE_ID), taskRequests.capture(), taskKeys.capture());
         assertThat(taskRequests.getAllValues()).extracting(MaintenanceTaskRequest::getName)
                 .containsExactly("Oel", "Kette");
+        assertThat(taskKeys.getAllValues()).containsExactly("engine-oil", null);
         ArgumentCaptor<MaintenanceLogRequest> logRequest = ArgumentCaptor.forClass(MaintenanceLogRequest.class);
         verify(maintenanceLogComponent).createMaintenanceLog(eq(VEHICLE_ID), logRequest.capture(), eq(Currency.CHF),
                 eq(Set.of()));
@@ -233,7 +237,7 @@ class VehicleExportComponentImplTest {
                         .performedTaskRefs(new LinkedHashSet<>(List.of("mirror", "planned")))
                         .createdTaskRefs(Set.of("mirror"))));
         when(vehicleComponent.createVehicle(any())).thenReturn(new VehicleResponse().id(VEHICLE_ID));
-        when(maintenanceTaskComponent.createMaintenanceTask(eq(VEHICLE_ID), any()))
+        when(maintenanceTaskComponent.createMaintenanceTask(eq(VEHICLE_ID), any(), any()))
                 .thenReturn(Optional.of(new MaintenanceTaskResponse().id(101L)))
                 .thenReturn(Optional.of(new MaintenanceTaskResponse().id(102L)));
 
@@ -301,7 +305,7 @@ class VehicleExportComponentImplTest {
         ExportedVehicle vehicle = exportedVehicle().maintenanceTasks(List.of(
                 new ExportedMaintenanceTask().ref("a").name("Ohne Intervall")));
         when(vehicleComponent.createVehicle(any())).thenReturn(new VehicleResponse().id(VEHICLE_ID));
-        when(maintenanceTaskComponent.createMaintenanceTask(eq(VEHICLE_ID), any()))
+        when(maintenanceTaskComponent.createMaintenanceTask(eq(VEHICLE_ID), any(), any()))
                 .thenThrow(new InvalidMaintenanceIntervalException("no interval"));
 
         assertThatThrownBy(() -> component.importVehicle(file(vehicle)))
