@@ -1,0 +1,16 @@
+id: honda-cb500f-2019
+type: MOTORCYCLE
+make: Honda
+model: CB500F
+aliases: [Test Hornet]
+years: { from: 2019, to: 2021 }
+market: EU
+sources:
+  - id: manual
+    kind: MANUFACTURER
+    title: Test manual three
+    retrieved: 2026-01-05
+tasks:
+  - key: brake-fluid
+    intervalMonths: 24
+    sources: [manual]

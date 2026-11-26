@@ -1,0 +1,15 @@
+id: honda-cb650r-2021
+type: MOTORCYCLE
+make: Honda
+model: CB650R
+years: { from: 2021 }
+market: EU
+sources:
+  - id: manual
+    kind: MANUFACTURER
+    title: Test manual four
+    retrieved: 2026-01-06
+tasks:
+  - key: brake-fluid
+    intervalMonths: 24
+    sources: [manual]

@@ -52,18 +52,36 @@ class VehicleTemplateComponentImplTest {
     void findsMakeAndModelRegardlessOfSpelling() {
         assertThat(ids(component.search("moto guzzi", null, "v7", null))).containsExactly("moto-guzzi-v7-2012");
         assertThat(ids(component.search("MOTO-GUZZI", null, "V 7", null))).containsExactly("moto-guzzi-v7-2012");
-        assertThat(ids(component.search("Honda", null, "CB 650 R", null))).containsExactly("honda-cb650r-2019");
+        assertThat(ids(component.search("Honda", null, "CB 650 R", null)))
+                .containsExactly("honda-cb650r-2019", "honda-cb650r-2021");
     }
 
     @Test
     void filtersByYearAndType() {
         assertThat(ids(component.search("Honda", null, "CB650", 2020))).containsExactly("honda-cb650r-2019");
         assertThat(ids(component.search("Honda", null, "CB650", 2018))).isEmpty();
-        assertThat(ids(component.search("Honda", null, "CB650", 2021))).isEmpty();
+        assertThat(ids(component.search("Honda", null, "CB650", 2021))).containsExactly("honda-cb650r-2021");
+        assertThat(ids(component.search("Honda", null, "CB650", 2018))).isEmpty();
         assertThat(ids(component.search("Moto Guzzi", null, null, 2030))).containsExactly("moto-guzzi-v7-2012");
         assertThat(ids(component.search("Honda", VehicleType.CAR, null, null))).isEmpty();
-        assertThat(ids(component.search("Honda", VehicleType.MOTORCYCLE, null, null)))
-                .containsExactly("honda-cb650r-2019");
+        assertThat(ids(component.search("Honda", VehicleType.MOTORCYCLE, "CB650", null)))
+                .containsExactly("honda-cb650r-2019", "honda-cb650r-2021");
+    }
+
+    @Test
+    void sortsByMakeThenModelThenFirstYear() {
+        assertThat(ids(component.search("Honda", null, null, null)))
+                .containsExactly("honda-cb500f-2019", "honda-cb650r-2019", "honda-cb650r-2021");
+    }
+
+    @Test
+    void findsByAliasOnly() {
+        assertThat(ids(component.search("Honda", null, "hornet", null))).containsExactly("honda-cb500f-2019");
+    }
+
+    @Test
+    void modelThatMatchesNothingFindsNothing() {
+        assertThat(component.search("Honda", null, "gold wing", null)).isEmpty();
     }
 
     @Test
@@ -75,7 +93,7 @@ class VehicleTemplateComponentImplTest {
 
     @Test
     void summaryCarriesQualityAndTaskCount() {
-        VehicleTemplateSummaryResponse honda = component.search("Honda", null, null, null).getFirst();
+        VehicleTemplateSummaryResponse honda = component.search("Honda", null, "CB650", 2019).getFirst();
         assertThat(honda.getSourceQuality()).isEqualTo(VehicleTemplateSourceQuality.MANUFACTURER);
         assertThat(honda.getTaskCount()).isEqualTo(2);
         assertThat(honda.getYearFrom()).isEqualTo(2019);
