@@ -42,6 +42,15 @@ class VehicleTemplateControllerTest {
     }
 
     @Test
+    void search_doesNotServeYaml() throws Exception {
+        when(vehicleTemplateComponent.search(eq("honda"), any(), any(), any())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/vehicle-templates").param("make", "honda")
+                        .accept("application/yaml"))
+                .andExpect(status().isNotAcceptable());
+    }
+
+    @Test
     void search_withoutMake_isBadRequest() throws Exception {
         mockMvc.perform(get("/api/v1/vehicle-templates"))
                 .andExpect(status().isBadRequest());

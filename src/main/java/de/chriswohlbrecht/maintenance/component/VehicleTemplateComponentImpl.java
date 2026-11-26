@@ -158,8 +158,10 @@ public class VehicleTemplateComponentImpl implements IVehicleTemplateComponent {
                 throw new InvalidTemplateRequestException("lastDoneKm is above the current mileage");
             }
             LocalDate lastDoneDate = selected.getLastDoneDate();
+            // The server runs in UTC while clients send their local date: tolerate one day so users
+            // east of UTC are not rejected shortly after local midnight.
             if (lastDoneDate != null
-                    && (lastDoneDate.isAfter(today) || lastDoneDate.isBefore(vehicle.getFirstRegistrationDate()))) {
+                    && (lastDoneDate.isAfter(today.plusDays(1)) || lastDoneDate.isBefore(vehicle.getFirstRegistrationDate()))) {
                 throw new InvalidTemplateRequestException(
                         "lastDoneDate is in the future or before the first registration");
             }

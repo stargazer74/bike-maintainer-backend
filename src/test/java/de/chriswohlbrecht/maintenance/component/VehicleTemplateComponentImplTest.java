@@ -303,7 +303,7 @@ class VehicleTemplateComponentImplTest {
         assertInvalid(selected("unknown-key", null, null));
         assertInvalid(selected("engine-oil", null, null), selected("engine-oil", null, null));
         assertInvalid(selected("engine-oil", 40001, null));
-        assertInvalid(selected("engine-oil", null, LocalDate.of(2026, 10, 30)));
+        assertInvalid(selected("engine-oil", null, LocalDate.of(2026, 10, 31)));
         assertInvalid(selected("engine-oil", null, LocalDate.of(2012, 3, 31)));
         verifyNoInteractions(maintenanceTaskComponent);
     }
@@ -313,7 +313,7 @@ class VehicleTemplateComponentImplTest {
         ownVehicle();
 
         ApplyTemplateResponse response = component.apply(VEHICLE_ID, applyRequest(
-                selected("engine-oil", 40000, LocalDate.of(2026, 10, 29)),
+                selected("engine-oil", 40000, LocalDate.of(2026, 10, 30)),
                 selected("break-in-service", null, LocalDate.of(2012, 4, 1)))).orElseThrow();
 
         assertThat(response.getCreated()).isEqualTo(2);
