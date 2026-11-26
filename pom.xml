@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.2</version>
+        <version>4.2.0</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>de.chris-wohlbrecht</groupId>
@@ -30,14 +30,14 @@
         <java.version>25</java.version>
         <!-- Overrides Spring Boot's managed version: 3.5.10 has CVE-2026-119210, -119276, -119280, -119281 (#117). -->
         <mariadb.version>3.5.11</mariadb.version>
-        <cucumber.version>8.0.4</cucumber.version>
+        <cucumber.version>8.1.0</cucumber.version>
         <openapi-generator-maven-plugin.version>7.27.0</openapi-generator-maven-plugin.version>
         <maven-remote-resources-plugin.version>3.3.0</maven-remote-resources-plugin.version>
         <openapitools-jackson-databind-nullable.version>0.2.13</openapitools-jackson-databind-nullable.version>
-        <springdoc.version>3.2.0</springdoc.version>
+        <springdoc.version>3.2.1</springdoc.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <archunit-junit5.version>1.5.1</archunit-junit5.version>
-        <instancio-junit.version>6.2.1</instancio-junit.version>
+        <instancio-junit.version>6.2.2</instancio-junit.version>
         <pdfbox.version>3.0.8</pdfbox.version>
         <qrcodegen.version>1.8.0</qrcodegen.version>
         <altcha.version>2.1.1</altcha.version>
@@ -492,7 +492,8 @@
                                 <oas3>true</oas3>
                                 <useJodaTime>false</useJodaTime>
                                 <useSpringfox>false</useSpringfox>
-                                <useSpringBoot3>true</useSpringBoot3>
+                                <useSpringBoot4>true</useSpringBoot4>
+                                <useJackson3>true</useJackson3>
                                 <dateLibrary>java8</dateLibrary>
                                 <reactive>false</reactive>
                                 <useTags>true</useTags>
