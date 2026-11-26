@@ -120,7 +120,7 @@ public class VehicleExportComponentImpl implements IVehicleExportComponent {
         for (int i = 0; i < tasks.size(); i++) {
             ExportedMaintenanceTask task = tasks.get(i);
             Long taskId = at("vehicle.maintenanceTasks[" + i + "]", () -> maintenanceTaskComponent
-                    .createMaintenanceTask(vehicleId, vehicleExportMapper.toTaskRequest(task))
+                    .createMaintenanceTask(vehicleId, vehicleExportMapper.toTaskRequest(task), task.getTemplateKey())
                     .orElseThrow()
                     .getId());
             taskIds.put(task.getRef(), taskId);

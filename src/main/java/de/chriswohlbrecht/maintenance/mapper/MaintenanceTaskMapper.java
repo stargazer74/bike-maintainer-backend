@@ -13,6 +13,7 @@ public interface MaintenanceTaskMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "vehicle", ignore = true)
     @Mapping(target = "createdByLogId", ignore = true)
+    @Mapping(target = "templateKey", ignore = true)
     MaintenanceTask toEntity(MaintenanceTaskRequest request);
 
     @Mapping(target = "vehicleId", source = "vehicle.id")
@@ -21,5 +22,6 @@ public interface MaintenanceTaskMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "vehicle", ignore = true)
     @Mapping(target = "createdByLogId", ignore = true)
+    @Mapping(target = "templateKey", ignore = true)
     void updateEntityFromRequest(MaintenanceTaskRequest request, @MappingTarget MaintenanceTask task);
 }

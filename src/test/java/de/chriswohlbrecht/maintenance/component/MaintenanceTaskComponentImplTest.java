@@ -181,6 +181,39 @@ class MaintenanceTaskComponentImplTest {
     }
 
     @Test
+    void createMaintenanceTask_withTemplateKey_storesItAndReturnsIt() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceTaskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> {
+            MaintenanceTask toSave = invocation.getArgument(0);
+            toSave.setId(10L);
+            return toSave;
+        });
+
+        Optional<MaintenanceTaskResponse> result =
+                maintenanceTaskComponent.createMaintenanceTask(vehicle.getId(), request, "engine-oil");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getTemplateKey()).isEqualTo("engine-oil");
+        ArgumentCaptor<MaintenanceTask> saved = ArgumentCaptor.forClass(MaintenanceTask.class);
+        verify(maintenanceTaskRepository).save(saved.capture());
+        assertThat(saved.getValue().getTemplateKey()).isEqualTo("engine-oil");
+    }
+
+    @Test
+    void createMaintenanceTask_withoutTemplateKey_hasNone() {
+        Vehicle vehicle = Instancio.create(Vehicle.class);
+        MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
+        when(vehicleRepository.findByIdAndUser_Id(vehicle.getId(), USER_ID)).thenReturn(Optional.of(vehicle));
+        when(maintenanceTaskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Optional<MaintenanceTaskResponse> result = maintenanceTaskComponent.createMaintenanceTask(vehicle.getId(), request);
+
+        assertThat(result.orElseThrow().getTemplateKey()).isNull();
+    }
+
+    @Test
     void createMaintenanceTask_vehicleNotFound_returnsEmptyOptionalAndDoesNotSave() {
         MaintenanceTaskRequest request = Instancio.create(MaintenanceTaskRequest.class);
         when(vehicleRepository.findByIdAndUser_Id(99L, USER_ID)).thenReturn(Optional.empty());

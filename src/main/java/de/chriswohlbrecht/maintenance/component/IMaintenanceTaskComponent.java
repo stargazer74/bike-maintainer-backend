@@ -15,6 +15,10 @@ public interface IMaintenanceTaskComponent {
 
     Optional<MaintenanceTaskResponse> createMaintenanceTask(Long vehicleId, MaintenanceTaskRequest request);
 
+    /** As above, but remembers which template task the new task comes from ({@code null} for none). */
+    Optional<MaintenanceTaskResponse> createMaintenanceTask(Long vehicleId, MaintenanceTaskRequest request,
+                                                            String templateKey);
+
     Optional<MaintenanceTaskResponse> updateMaintenanceTask(Long vehicleId, Long taskId, MaintenanceTaskRequest request);
 
     boolean deleteMaintenanceTask(Long vehicleId, Long taskId);

@@ -157,11 +157,19 @@ public class MaintenanceTaskComponentImpl implements IMaintenanceTaskComponent {
     @Override
     @Transactional
     public Optional<MaintenanceTaskResponse> createMaintenanceTask(Long vehicleId, MaintenanceTaskRequest request) {
+        return createMaintenanceTask(vehicleId, request, null);
+    }
+
+    @Override
+    @Transactional
+    public Optional<MaintenanceTaskResponse> createMaintenanceTask(Long vehicleId, MaintenanceTaskRequest request,
+                                                                   String templateKey) {
         accessComponent.requireWriteAccess();
         return findOwnVehicle(vehicleId).map(vehicle -> {
             validateInterval(request);
             MaintenanceTask task = maintenanceTaskMapper.toEntity(request);
             task.setVehicle(vehicle);
+            task.setTemplateKey(templateKey);
             MaintenanceTask saved = maintenanceTaskRepository.save(task);
             return toResponseWithStatus(saved, vehicle, logsByTaskId(vehicleId));
         });
